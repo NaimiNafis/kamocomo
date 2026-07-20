@@ -8,5 +8,34 @@
     "loading": "Loading…",
     "retry": "Retry",
     "close": "Close"
+  },
+  "onboarding": {
+    "title": "A little about you",
+    "subtitle": "Helps us understand who visits the river. Takes five seconds.",
+    "nationality": "Where are you visiting from?",
+    "nationalityOptions": {
+      "japan": "Japan",
+      "asia": "Asia",
+      "europe": "Europe",
+      "americas": "Americas",
+      "other": "Other"
+    },
+    "ageRange": "Age",
+    "ageRangeOptions": {
+      "under18": "Under 18",
+      "18-24": "18–24",
+      "25-34": "25–34",
+      "35-44": "35–44",
+      "45-59": "45–59",
+      "60plus": "60+"
+    },
+    "gender": "Gender",
+    "genderOptions": {
+      "female": "Female",
+      "male": "Male",
+      "other": "Other",
+      "unspecified": "Prefer not to say"
+    },
+    "continue": "Continue"
   }
 }

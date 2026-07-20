@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useIdentityStore } from '../store/identityStore';
 import { MainMap } from '../screens/MainMap/MainMap';
 import { ToukouMap } from '../screens/ToukouMap/ToukouMap';
 import { Archive } from '../screens/Archive/Archive';
@@ -15,6 +17,12 @@ import { DuckScan } from '../screens/Duck/DuckScan';
  *   /duck/scan           `?spot=<qr_token>` geofenced stamp scan
  */
 export function App() {
+  useEffect(() => {
+    // Established once regardless of entry route -- a duck-spot QR can be
+    // someone's very first touch of the app (Appendix A.2b).
+    void useIdentityStore.getState().init();
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>

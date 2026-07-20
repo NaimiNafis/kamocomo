@@ -8,6 +8,8 @@ import {
   setHomeView,
 } from '../../lib/cesium';
 import { Intro, type IntroPhase } from '../Intro/Intro';
+import { Onboarding } from '../Onboarding/Onboarding';
+import { needsOnboarding, useIdentityStore } from '../../store/identityStore';
 
 configureCesiumIon();
 
@@ -32,6 +34,9 @@ export function MainMap() {
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
+  const identityStatus = useIdentityStore((s) => s.status);
+  const profile = useIdentityStore((s) => s.profile);
+  const completeOnboarding = useIdentityStore((s) => s.completeOnboarding);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -89,10 +94,14 @@ export function MainMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const showOnboarding =
+    introPhase === 'done' && identityStatus === 'ready' && needsOnboarding(profile);
+
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" data-testid="cesium-globe" />
       {introPhase !== 'done' && <Intro phase={introPhase} onSkip={() => skipRef.current()} />}
+      {showOnboarding && <Onboarding onComplete={(fields) => void completeOnboarding(fields)} />}
     </div>
   );
 }

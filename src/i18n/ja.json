@@ -8,5 +8,34 @@
     "loading": "読み込み中…",
     "retry": "再試行",
     "close": "閉じる"
+  },
+  "onboarding": {
+    "title": "少しだけ教えてください",
+    "subtitle": "鴨川を訪れる人を知るために。5秒で終わります。",
+    "nationality": "どちらから来ましたか?",
+    "nationalityOptions": {
+      "japan": "日本",
+      "asia": "アジア",
+      "europe": "ヨーロッパ",
+      "americas": "南北アメリカ",
+      "other": "その他"
+    },
+    "ageRange": "年齢",
+    "ageRangeOptions": {
+      "under18": "18歳未満",
+      "18-24": "18〜24歳",
+      "25-34": "25〜34歳",
+      "35-44": "35〜44歳",
+      "45-59": "45〜59歳",
+      "60plus": "60歳以上"
+    },
+    "gender": "性別",
+    "genderOptions": {
+      "female": "女性",
+      "male": "男性",
+      "other": "その他",
+      "unspecified": "回答しない"
+    },
+    "continue": "続ける"
   }
 }

@@ -23,7 +23,7 @@ export const MAX_ZOOM_DISTANCE_M = 20_000; // keep it from zooming out to a glob
 const MAX_PITCH_RADIANS = Cesium.Math.toRadians(-35);
 
 export function getCesiumIonToken(): string | undefined {
-  return import.meta.env.VITE_CESIUM_ION_TOKEN as string | undefined;
+  return import.meta.env.VITE_CESIUM_ION_TOKEN;
 }
 
 /** Call once before creating any Viewer. */
