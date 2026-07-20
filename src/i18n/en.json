@@ -40,7 +40,22 @@
   },
   "mainMap": {
     "tutorialButton": "Tutorial",
+    "archiveButton": "Archive",
     "back": "Back to map"
+  },
+  "archive": {
+    "title": "Archive",
+    "subtitle": "How the river has been used, over time.",
+    "loading": "Loading the archive…",
+    "error": "Couldn't load the archive.",
+    "empty": "Nothing here yet. Activities will collect here over time.",
+    "posts_one": "{{count}} post",
+    "posts_other": "{{count}} posts",
+    "backToArchive": "Back to archive",
+    "history": "Full history",
+    "noSubs": "No additions yet.",
+    "archivedBadge": "Archived",
+    "notFound": "This activity is no longer available."
   },
   "toukou": {
     "title": "Activity web",

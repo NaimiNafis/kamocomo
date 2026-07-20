@@ -184,14 +184,23 @@ export function MainMap() {
       {showChrome && (
         <>
           <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between p-4">
-            <button
-              type="button"
-              onClick={openTutorial}
-              aria-label={t('mainMap.tutorialButton')}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-kamo-ink/15 bg-kamo-stone/90 font-display text-base text-kamo-ink shadow-sm backdrop-blur"
-            >
-              ?
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openTutorial}
+                aria-label={t('mainMap.tutorialButton')}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-kamo-ink/15 bg-kamo-stone/90 font-display text-base text-kamo-ink shadow-sm backdrop-blur"
+              >
+                ?
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/archive')}
+                className="rounded-full border border-kamo-ink/15 bg-kamo-stone/90 px-3 py-1.5 font-ui text-xs text-kamo-ink shadow-sm backdrop-blur"
+              >
+                {t('mainMap.archiveButton')}
+              </button>
+            </div>
             <LanguageToggle />
           </div>
 

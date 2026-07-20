@@ -351,7 +351,7 @@ export function ToukouMap() {
                   onDislike={() => void handleVote(node, -1)}
                   onAddSub={() => setComposer({ mode: 'sub', parentId: node.id })}
                   onReport={() => void handleReport(node)}
-                  onViewArchived={() => navigate('/archive')}
+                  onViewArchived={() => navigate(`/archive?main=${node.id}`)}
                 />
               </div>
             );

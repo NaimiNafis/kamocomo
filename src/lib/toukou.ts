@@ -69,6 +69,12 @@ function lighten(hex: string, amount: number): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+/** The desaturated shade used for sub activities (§5.5) -- shared so the
+ * archive colors subs the same way the toukou web does. */
+export function subShade(hex: string): string {
+  return lighten(hex, 0.45);
+}
+
 // =========================================================================
 // Graph fetch
 // =========================================================================
@@ -116,7 +122,7 @@ export async function fetchToukouGraph(userId: string): Promise<ToukouGraph> {
       id: row.id,
       kind: row.kind,
       parentId: row.parent_id,
-      color: row.kind === 'main' ? baseColor : lighten(baseColor, 0.45),
+      color: row.kind === 'main' ? baseColor : subShade(baseColor),
       photoUrl: row.photo_url,
       phrase: row.phrase,
       likes: row.likes,
