@@ -39,7 +39,38 @@
     "continue": "Continue"
   },
   "mainMap": {
-    "tutorialButton": "Tutorial"
+    "tutorialButton": "Tutorial",
+    "back": "Back to map"
+  },
+  "toukou": {
+    "title": "Activity web",
+    "loading": "Loading the web…",
+    "error": "Couldn't load activities.",
+    "empty": "No activities yet. Be the first to post one.",
+    "createMain": "Post an activity",
+    "nextGathering": "Next gathering in {{days}}d {{hours}}h",
+    "nextGatheringSoon": "Next gathering starting soon",
+    "noGathering": "No gathering scheduled yet",
+    "addSub": "Add to this activity",
+    "viewArchived": "See earlier posts",
+    "like": "Like",
+    "dislike": "Dislike",
+    "report": "Report",
+    "reported": "Reported"
+  },
+  "composer": {
+    "mainTitle": "Post an activity",
+    "subTitle": "Add to this activity",
+    "activityType": "What are you doing?",
+    "phrase": "Say something",
+    "phrasePlaceholder": "e.g. I write here because it's calm",
+    "addPhoto": "Add a photo",
+    "changePhoto": "Change photo",
+    "photoOptional": "Photo optional",
+    "submit": "Post",
+    "submitting": "Posting…",
+    "cancel": "Cancel",
+    "error": "Couldn't post. Try again."
   },
   "mapStyle": {
     "photoreal": "Photoreal",
