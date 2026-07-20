@@ -108,36 +108,80 @@ export function applyKyotoCameraConstraints(viewer: Cesium.Viewer): () => void {
   return () => viewer.scene.postRender.removeEventListener(onPostRender);
 }
 
-/** The default/home camera view: an overview of Kyoto centered on the Kamogawa. */
-export function setKyotoHomeView(viewer: Cesium.Viewer): void {
-  viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(
-      KAMOGAWA_DELTA.longitude,
-      KAMOGAWA_DELTA.latitude - 0.05,
-      15000,
-    ),
-    orientation: {
-      heading: 0,
-      pitch: Cesium.Math.toRadians(-55),
-      roll: 0,
-    },
+interface CameraView {
+  destination: Cesium.Cartesian3;
+  orientation: {
+    heading: number;
+    pitch: number;
+    roll: number;
+  };
+}
+
+/** The resting/home view: arrived at the Kamogawa Delta (§5.1's flight destination). */
+const HERO_VIEW: CameraView = {
+  destination: Cesium.Cartesian3.fromDegrees(
+    KAMOGAWA_DELTA.longitude,
+    KAMOGAWA_DELTA.latitude - 0.02,
+    4500,
+  ),
+  orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+};
+
+/** Whole-Earth view — the intro's starting point, Japan already toward center. */
+const EARTH_VIEW: CameraView = {
+  destination: Cesium.Cartesian3.fromDegrees(138, 20, 20_000_000),
+  orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+};
+
+/** Japan-scale overview — first stop of the intro flight. */
+const JAPAN_VIEW: CameraView = {
+  destination: Cesium.Cartesian3.fromDegrees(137.5, 36.5, 1_600_000),
+  orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+};
+
+/** Kyoto-scale overview — second stop of the intro flight. */
+const KYOTO_OVERVIEW_VIEW: CameraView = {
+  destination: Cesium.Cartesian3.fromDegrees(
+    KAMOGAWA_DELTA.longitude,
+    KAMOGAWA_DELTA.latitude,
+    80_000,
+  ),
+  orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+};
+
+/** Instantly places the camera at the resting home view (no animation). */
+export function setHomeView(viewer: Cesium.Viewer): void {
+  viewer.camera.setView(HERO_VIEW);
+}
+
+function flyToStep(viewer: Cesium.Viewer, view: CameraView, duration: number): Promise<void> {
+  return new Promise((resolve) => {
+    viewer.camera.flyTo({
+      ...view,
+      duration,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
+      complete: () => resolve(),
+      cancel: () => resolve(),
+    });
   });
 }
 
-/** Flies from the current view to the Kamogawa hero viewpoint (§5.1 intro sequence). */
-export function flyToKamogawaHero(viewer: Cesium.Viewer, durationSeconds = 4): void {
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(
-      KAMOGAWA_DELTA.longitude,
-      KAMOGAWA_DELTA.latitude - 0.02,
-      4000,
-    ),
-    orientation: {
-      heading: 0,
-      pitch: Cesium.Math.toRadians(-50),
-      roll: 0,
-    },
-    duration: durationSeconds,
-    easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
-  });
+/**
+ * §5.1 intro flight: Earth -> Japan -> Kyoto -> Kamogawa Delta, ~4s total.
+ * Starts from EARTH_VIEW instantly (the reveal happens in the overlay, not
+ * here), then flies through each waypoint. Pass a `signal` and flip
+ * `signal.cancelled = true` (alongside `viewer.camera.cancelFlight()`) to
+ * stop the sequence early, e.g. for the intro's Skip button.
+ */
+export async function flyIntroSequence(
+  viewer: Cesium.Viewer,
+  signal: { cancelled: boolean },
+): Promise<void> {
+  viewer.camera.setView(EARTH_VIEW);
+  if (signal.cancelled) return;
+  await flyToStep(viewer, JAPAN_VIEW, 1.3);
+  if (signal.cancelled) return;
+  await flyToStep(viewer, KYOTO_OVERVIEW_VIEW, 1.3);
+  if (signal.cancelled) return;
+  await flyToStep(viewer, HERO_VIEW, 1.4);
 }
