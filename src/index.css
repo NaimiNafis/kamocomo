@@ -1,0 +1,39 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+
+/* Map the §4.1/§4.2 spec tokens into Tailwind's theme so utilities like
+   bg-kamo-river, text-kamo-ink, font-display exist without renaming them. */
+@theme {
+  --color-kamo-indigo: var(--kamo-indigo);
+  --color-kamo-river: var(--kamo-river);
+  --color-kamo-moss: var(--kamo-moss);
+  --color-kamo-stone: var(--kamo-stone);
+  --color-kamo-sand: var(--kamo-sand);
+  --color-kamo-sunset: var(--kamo-sunset);
+  --color-kamo-ink: var(--kamo-ink);
+
+  --font-display: var(--kamo-font-display);
+  --font-ui: var(--kamo-font-ui);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--kamo-stone);
+  color: var(--kamo-ink);
+  font-family: var(--kamo-font-ui);
+  font-feature-settings: 'palt' 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--kamo-font-display);
+}

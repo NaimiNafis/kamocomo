@@ -1,0 +1,20 @@
+/*
+ * Design tokens — Virtual Kamogawa, §4.1/§4.2 of the architecture doc.
+ * Raw custom properties live here under their spec names (--kamo-*) so any
+ * plain CSS can use them directly; vite.config.ts + index.css wire the color
+ * ones into Tailwind's theme so utility classes (bg-kamo-river, etc.) work too.
+ */
+:root {
+  /* §4.1 color — "river, stone, dusk" */
+  --kamo-indigo: #2e3a59;
+  --kamo-river: #6e8ca0;
+  --kamo-moss: #7c8c5a;
+  --kamo-stone: #e9e4d8;
+  --kamo-sand: #d8c7a8;
+  --kamo-sunset: #e0885e;
+  --kamo-ink: #1c1c1a;
+
+  /* §4.2 typography */
+  --kamo-font-display: 'Shippori Mincho', serif;
+  --kamo-font-ui: 'Noto Sans JP', 'Inter', sans-serif;
+}

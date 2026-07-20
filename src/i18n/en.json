@@ -1,0 +1,12 @@
+{
+  "app": {
+    "title": "Virtual Kamogawa",
+    "catchphrase": "Let's keep protecting everyone's Kamogawa"
+  },
+  "common": {
+    "skip": "Skip",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "close": "Close"
+  }
+}
