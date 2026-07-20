@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import * as Cesium from 'cesium';
 import {
   VIEWER_OPTIONS,
   applyKyotoCameraConstraints,
   configureCesiumIon,
+  createMarkerLayers,
   flyIntroSequence,
   locateAndMarkVisitor,
   setHomeView,
   setMapStyle as applyMapStyle,
+  setupMarkerTapHandler,
   type MapStyle,
+  type MarkerPoint,
 } from '../../lib/cesium';
+import { fetchMainActivityMarkers, subscribeToNewMainActivities } from '../../lib/activities';
+import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
 import { Intro, type IntroPhase } from '../Intro/Intro';
 import { Onboarding } from '../Onboarding/Onboarding';
 import { Tutorial } from '../Tutorial/Tutorial';
@@ -38,6 +44,7 @@ const CATCHPHRASE_HOLD_MS = 1900;
  */
 export function MainMap() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const constraintsCleanupRef = useRef<(() => void) | null>(null);
@@ -57,6 +64,30 @@ export function MainMap() {
     const v = new Cesium.Viewer(containerRef.current, VIEWER_OPTIONS);
     viewerRef.current = v;
     locateAndMarkVisitor(v);
+
+    // §5.3/§5.4 markers: exclamation from main activities, duck from duck
+    // spots. Realtime keeps the activity set current without a reload.
+    const markerLayers = createMarkerLayers(v);
+    const removeTapHandler = setupMarkerTapHandler(v, (kind) => {
+      navigate(kind === 'activity' ? '/toukou' : '/duck');
+    });
+
+    let activityPoints: MarkerPoint[] = [];
+    void fetchMainActivityMarkers().then((points) => {
+      if (v.isDestroyed()) return;
+      activityPoints = points;
+      markerLayers.setActivities(activityPoints);
+    });
+    void fetchActiveDuckSpotMarkers().then((points) => {
+      if (v.isDestroyed()) return;
+      markerLayers.setDuckSpots(points);
+    });
+    const unsubscribeActivityInserts = subscribeToNewMainActivities((marker) => {
+      if (v.isDestroyed()) return;
+      if (activityPoints.some((p) => p.id === marker.id)) return;
+      activityPoints = [...activityPoints, marker];
+      markerLayers.setActivities(activityPoints);
+    });
 
     const signal = { cancelled: false };
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -110,10 +141,14 @@ export function MainMap() {
     return () => {
       timers.forEach(clearTimeout);
       constraintsCleanupRef.current?.();
+      unsubscribeActivityInserts();
+      removeTapHandler();
+      markerLayers.dispose();
       v.destroy();
       viewerRef.current = null;
     };
     // Runs once: the intro plays out (or is skipped) exactly once per mount.
+    // navigate() is a stable reference from react-router, safe to omit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

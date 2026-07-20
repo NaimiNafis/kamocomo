@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import exclamationIconUrl from '../../img/marks/exclamation.svg?url';
+import duckIconUrl from '../../img/marks/duck.svg?url';
 
 /**
  * §8.1 — Cesium cost control. The camera is locked to a bounding rectangle
@@ -261,4 +263,108 @@ export function locateAndMarkVisitor(viewer: Cesium.Viewer): void {
     fallback,
     { timeout: 8000, maximumAge: 60_000 },
   );
+}
+
+// =========================================================================
+// §5.3/§4.4 markers -- exclamation (main activities) and duck (duck spots)
+// =========================================================================
+
+const MARKER_PIXEL_SIZE = 30;
+
+export interface MarkerPoint {
+  id: string;
+  lat: number;
+  lng: number;
+}
+
+export type MarkerKind = 'activity' | 'duckSpot';
+
+function configureClustering(dataSource: Cesium.CustomDataSource): void {
+  const clustering = dataSource.clustering;
+  clustering.enabled = true;
+  clustering.pixelRange = 60;
+  clustering.minimumClusterSize = 2;
+  clustering.clusterEvent.addEventListener((entities, cluster) => {
+    cluster.label.show = true;
+    cluster.label.text = entities.length.toLocaleString();
+    cluster.label.font = '600 14px "Noto Sans JP", sans-serif';
+    cluster.label.fillColor = kamoColor('--kamo-stone');
+    cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
+    cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
+  });
+}
+
+function setMarkerPoints(
+  dataSource: Cesium.CustomDataSource,
+  kind: MarkerKind,
+  iconUrl: string,
+  points: MarkerPoint[],
+): void {
+  dataSource.entities.removeAll();
+  for (const point of points) {
+    dataSource.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(point.lng, point.lat),
+      billboard: {
+        image: iconUrl,
+        width: MARKER_PIXEL_SIZE,
+        height: MARKER_PIXEL_SIZE,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      properties: { markerKind: kind, refId: point.id },
+    });
+  }
+}
+
+export interface MarkerLayers {
+  setActivities(points: MarkerPoint[]): void;
+  setDuckSpots(points: MarkerPoint[]): void;
+  dispose(): void;
+}
+
+/** Creates the two clustered marker layers for a Viewer (§5.3: exclamation
+ * markers from main activities, duck markers from duck spots). */
+export function createMarkerLayers(viewer: Cesium.Viewer): MarkerLayers {
+  const activitySource = new Cesium.CustomDataSource('activities');
+  const duckSource = new Cesium.CustomDataSource('duckSpots');
+  configureClustering(activitySource);
+  configureClustering(duckSource);
+  viewer.dataSources.add(activitySource);
+  viewer.dataSources.add(duckSource);
+
+  return {
+    setActivities: (points) => setMarkerPoints(activitySource, 'activity', exclamationIconUrl, points),
+    setDuckSpots: (points) => setMarkerPoints(duckSource, 'duckSpot', duckIconUrl, points),
+    dispose: () => {
+      viewer.dataSources.remove(activitySource, true);
+      viewer.dataSources.remove(duckSource, true);
+    },
+  };
+}
+
+/**
+ * Wires marker taps to route handlers (§5.3: tap exclamation -> /toukou, tap
+ * duck -> /duck). Clustered picks don't carry marker properties and are
+ * ignored -- pinch/scroll to zoom is the way to break a cluster apart.
+ */
+export function setupMarkerTapHandler(
+  viewer: Cesium.Viewer,
+  onTap: (kind: MarkerKind, refId: string) => void,
+): () => void {
+  const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+
+  handler.setInputAction((event: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
+    const picked: unknown = viewer.scene.pick(event.position);
+    if (!Cesium.defined(picked)) return;
+
+    const entity = (picked as { id?: Cesium.Entity }).id;
+    const properties = entity?.properties;
+    if (!properties) return;
+
+    const kind = properties.markerKind?.getValue() as MarkerKind | undefined;
+    const refId = properties.refId?.getValue() as string | undefined;
+    if (kind && refId) onTap(kind, refId);
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  return () => handler.destroy();
 }
