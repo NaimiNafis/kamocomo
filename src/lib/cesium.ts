@@ -185,3 +185,80 @@ export async function flyIntroSequence(
   if (signal.cancelled) return;
   await flyToStep(viewer, HERO_VIEW, 1.4);
 }
+
+// =========================================================================
+// §5.3 main map overlay chrome
+// =========================================================================
+
+export type MapStyle = 'photoreal' | 'flat';
+
+/** Swaps the base imagery layer between Cesium ion's photoreal aerial imagery
+ * and a plain OpenStreetMap layer (§5.3: "photoreal <-> flat imagery for now"). */
+export function setMapStyle(viewer: Cesium.Viewer, style: MapStyle): void {
+  viewer.imageryLayers.removeAll();
+  const layer =
+    style === 'photoreal'
+      ? Cesium.ImageryLayer.fromWorldImagery({})
+      : new Cesium.ImageryLayer(new Cesium.OpenStreetMapImageryProvider({}));
+  viewer.imageryLayers.add(layer);
+}
+
+/** Reads a color straight from the §4.1 CSS tokens, so Cesium graphics never
+ * hardcode a hex value that could drift from tokens.css. */
+function kamoColor(cssVariable: string): Cesium.Color {
+  const hex = getComputedStyle(document.documentElement).getPropertyValue(cssVariable).trim();
+  return Cesium.Color.fromCssColorString(hex);
+}
+
+/**
+ * Adds the "you are here" marker (§5.3) -- a plain Cesium point, not an
+ * image, so it needs no asset and can't run afoul of the "no stock imagery"
+ * rule. Called once per Viewer lifetime (on mount), so it never needs to
+ * find/update a previous marker.
+ */
+export function setYouAreHereMarker(
+  viewer: Cesium.Viewer,
+  longitude: number,
+  latitude: number,
+): Cesium.Entity {
+  return viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(longitude, latitude),
+    point: {
+      pixelSize: 14,
+      color: kamoColor('--kamo-sunset'),
+      outlineColor: kamoColor('--kamo-stone'),
+      outlineWidth: 3,
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  });
+}
+
+/**
+ * Locates the visitor via the Geolocation API and drops the "you are here"
+ * marker there, falling back to the Kamogawa default when denied/unavailable
+ * (§5.3). Never throws. Geolocation resolves asynchronously and well after
+ * this call returns, so both callbacks guard against the Viewer already
+ * having been destroyed by then (e.g. React StrictMode's dev-mode double
+ * mount/cleanup, or a real unmount before the browser responds).
+ */
+export function locateAndMarkVisitor(viewer: Cesium.Viewer): void {
+  const fallback = () => {
+    if (viewer.isDestroyed()) return;
+    setYouAreHereMarker(viewer, KAMOGAWA_DELTA.longitude, KAMOGAWA_DELTA.latitude);
+  };
+
+  if (!('geolocation' in navigator)) {
+    fallback();
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      if (viewer.isDestroyed()) return;
+      setYouAreHereMarker(viewer, position.coords.longitude, position.coords.latitude);
+    },
+    fallback,
+    { timeout: 8000, maximumAge: 60_000 },
+  );
+}

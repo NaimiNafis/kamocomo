@@ -37,5 +37,40 @@
       "unspecified": "Prefer not to say"
     },
     "continue": "Continue"
+  },
+  "mainMap": {
+    "tutorialButton": "Tutorial"
+  },
+  "mapStyle": {
+    "photoreal": "Photoreal",
+    "flat": "Flat"
+  },
+  "tutorial": {
+    "heading": "How it works",
+    "mediaPlaceholder": "Photo / video",
+    "previous": "Previous",
+    "next": "Next",
+    "slides": [
+      {
+        "title": "Welcome to the Kamogawa",
+        "body": "This map shows what's happening on the riverbank right now, live."
+      },
+      {
+        "title": "Exclamation marks",
+        "body": "Tap a ! marker to see the activity happening there and who's part of it."
+      },
+      {
+        "title": "Duck marks",
+        "body": "Tap a duck to browse duck photos and find nearby stamp spots."
+      },
+      {
+        "title": "Join in",
+        "body": "Post your own activity, or add on to someone else's -- everyone's welcome."
+      },
+      {
+        "title": "Collect stamps",
+        "body": "Scan the QR code at a real duck spot along the river to earn a stamp."
+      }
+    ]
   }
 }
