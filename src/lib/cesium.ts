@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import exclamationIconUrl from '../../img/marks/exclamation.svg?url';
 import duckIconUrl from '../../img/marks/duck.svg?url';
+import { KAMOGAWA_DELTA } from './geo';
 
 /**
  * §8.1 — Cesium cost control. The camera is locked to a bounding rectangle
@@ -12,9 +13,6 @@ import duckIconUrl from '../../img/marks/duck.svg?url';
 
 // Kyoto city, wide enough to cover the full length of the Kamogawa within it.
 export const KYOTO_BOUNDS = Cesium.Rectangle.fromDegrees(135.65, 34.9, 135.85, 35.15);
-
-// Kamogawa Delta — the hero viewpoint (§5.1), used as the default/home camera target.
-export const KAMOGAWA_DELTA = { longitude: 135.772, latitude: 35.03 };
 
 export const MIN_ZOOM_DISTANCE_M = 300; // keep the camera from clipping into the ground
 export const MAX_ZOOM_DISTANCE_M = 20_000; // keep it from zooming out to a globe/space view
@@ -90,6 +88,17 @@ function clampCameraToKyotoBounds(viewer: Cesium.Viewer): void {
       roll: camera.roll,
     },
   });
+}
+
+/**
+ * §8.1 mobile performance: render at CSS resolution (not 2-3x retina) and
+ * cap the resolution scale, which cuts GPU load a lot on phones -- and, since
+ * fewer/coarser tiles load, also trims the photoreal tile billing the §8.1
+ * cost control cares about.
+ */
+export function applyMobilePerfSettings(viewer: Cesium.Viewer): void {
+  viewer.useBrowserRecommendedResolution = true;
+  viewer.resolutionScale = 1.0;
 }
 
 /**

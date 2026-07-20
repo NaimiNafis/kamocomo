@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useNavigate } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
-import { KAMOGAWA_DELTA } from '../../lib/cesium';
+import { KAMOGAWA_DELTA } from '../../lib/geo';
 import {
   clearVote,
   createMain,
@@ -20,7 +20,9 @@ import {
   type ToukouGraph,
   type ToukouNode,
 } from '../../lib/toukou';
+import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
+import { StaleBanner } from '../../components/StaleBanner';
 import { NodeCard } from './NodeCard';
 import { Composer, type ComposerResult } from './Composer';
 import { useForceGraph } from './useForceGraph';
@@ -81,13 +83,14 @@ function countdownLabel(next: KamoEvent | null, t: TFunction): string {
 export function ToukouMap() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const userId = useIdentityStore((s) => s.session?.user.id ?? null);
+  const userId = useIdentityStore((s) => s.userId);
 
   const [graph, setGraph] = useState<ToukouGraph>({ nodes: [], edges: [] });
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
   const [activeEvent, setActiveEvent] = useState<KamoEvent | null>(null);
   const [nextEvent, setNextEvent] = useState<KamoEvent | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [stale, setStale] = useState(false);
   const [composer, setComposer] = useState<ComposerState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
@@ -118,27 +121,26 @@ export function ToukouMap() {
     }
   }, [userId]);
 
-  // Initial load.
+  // Initial load. The graph is cached (falls back to the last good copy when
+  // offline, flagged stale); the compose-only data (activity types + events)
+  // is best-effort and simply absent offline, where you can't post anyway.
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
-        const [g, types, active, next] = await Promise.all([
-          fetchToukouGraph(userId),
-          fetchActivityTypes(),
-          getActiveEvent(),
-          getNextEvent(),
-        ]);
+        const graphRes = await cachedFetch(`toukou:${userId}`, () => fetchToukouGraph(userId));
         if (cancelled) return;
-        setGraph(g);
-        setActivityTypes(types);
-        setActiveEvent(active);
-        setNextEvent(next);
+        setGraph(graphRes.data);
+        setStale(graphRes.stale);
         setStatus('ready');
       } catch {
         if (!cancelled) setStatus('error');
+        return;
       }
+      void fetchActivityTypes().then((v) => !cancelled && setActivityTypes(v)).catch(() => {});
+      void getActiveEvent().then((v) => !cancelled && setActiveEvent(v)).catch(() => {});
+      void getNextEvent().then((v) => !cancelled && setNextEvent(v)).catch(() => {});
     })();
     return () => {
       cancelled = true;
@@ -357,6 +359,11 @@ export function ToukouMap() {
             );
           })}
         </div>
+      </div>
+
+      {/* Offline/stale banner */}
+      <div className="absolute inset-x-0 top-0 z-20">
+        <StaleBanner show={stale} />
       </div>
 
       {/* Top bar */}

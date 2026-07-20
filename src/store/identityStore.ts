@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { Session } from '@supabase/supabase-js';
 import {
   ensureIdentity,
   hasCompletedOnboarding,
@@ -10,7 +9,7 @@ import {
 
 interface IdentityState {
   status: 'loading' | 'ready' | 'error';
-  session: Session | null;
+  userId: string | null;
   profile: Profile | null;
   error: string | null;
   init: () => Promise<void>;
@@ -26,14 +25,14 @@ let initPromise: Promise<void> | null = null;
 /** §6 identity + §5.2 onboarding state, shared across every screen. */
 export const useIdentityStore = create<IdentityState>((set, get) => ({
   status: 'loading',
-  session: null,
+  userId: null,
   profile: null,
   error: null,
   init: () => {
     initPromise ??= (async () => {
       try {
-        const { session, profile } = await ensureIdentity();
-        set({ status: 'ready', session, profile });
+        const { userId, profile } = await ensureIdentity();
+        set({ status: 'ready', userId, profile });
       } catch (err) {
         set({ status: 'error', error: err instanceof Error ? err.message : String(err) });
       }
@@ -41,9 +40,9 @@ export const useIdentityStore = create<IdentityState>((set, get) => ({
     return initPromise;
   },
   completeOnboarding: async (fields) => {
-    const { session } = get();
-    if (!session) return;
-    const profile = await saveOnboardingProfile(session.user.id, fields);
+    const { userId } = get();
+    if (!userId) return;
+    const profile = await saveOnboardingProfile(userId, fields);
     set({ profile });
   },
 }));

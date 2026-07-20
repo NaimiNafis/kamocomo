@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import { uploadPhoto, reportContent } from './toukou';
-import { KAMOGAWA_DELTA } from './cesium';
-import { getPosition } from './geo';
+import { KAMOGAWA_DELTA, getPosition } from './geo';
 
 // =========================================================================
 // Duck photo feed (social; decoupled from stamps -- §5.7)

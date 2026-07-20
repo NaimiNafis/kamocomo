@@ -7,7 +7,9 @@ import {
   type ArchiveMainCard,
   type MainHistory,
 } from '../../lib/archive';
+import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
+import { StaleBanner } from '../../components/StaleBanner';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -59,13 +61,15 @@ function ArchiveGrid({ onOpen }: { onOpen: (id: string) => void }) {
   const isJa = i18n.language.startsWith('ja');
   const [status, setStatus] = useState<Status>('loading');
   const [mains, setMains] = useState<ArchiveMainCard[]>([]);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    fetchArchiveMains()
-      .then((data) => {
+    cachedFetch('archive:mains', fetchArchiveMains)
+      .then(({ data, stale }) => {
         if (cancelled) return;
         setMains(data);
+        setStale(stale);
         setStatus('ready');
       })
       .catch(() => !cancelled && setStatus('error'));
@@ -75,14 +79,16 @@ function ArchiveGrid({ onOpen }: { onOpen: (id: string) => void }) {
   }, []);
 
   if (status === 'loading') return <Centered>{t('archive.loading')}</Centered>;
-  if (status === 'error') return <Centered>{t('archive.error')}</Centered>;
+  if (status === 'error') return <ErrorState message={t('archive.error')} retry={t('common.retry')} />;
   if (mains.length === 0) return <Centered>{t('archive.empty')}</Centered>;
 
   return (
-    <div className="p-4">
-      <h1 className="font-display text-xl text-kamo-ink">{t('archive.title')}</h1>
-      <p className="mb-4 mt-1 font-ui text-sm text-kamo-ink/60">{t('archive.subtitle')}</p>
-      <div className="grid grid-cols-2 gap-3">
+    <>
+      <StaleBanner show={stale} />
+      <div className="p-4">
+        <h1 className="font-display text-xl text-kamo-ink">{t('archive.title')}</h1>
+        <p className="mb-4 mt-1 font-ui text-sm text-kamo-ink/60">{t('archive.subtitle')}</p>
+        <div className="grid grid-cols-2 gap-3">
         {mains.map((m) => (
           <button
             key={m.id}
@@ -107,8 +113,9 @@ function ArchiveGrid({ onOpen }: { onOpen: (id: string) => void }) {
             </div>
           </button>
         ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -117,13 +124,15 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
   const isJa = i18n.language.startsWith('ja');
   const [status, setStatus] = useState<Status>('loading');
   const [history, setHistory] = useState<MainHistory | null>(null);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    fetchMainHistory(mainId)
-      .then((data) => {
+    cachedFetch(`archive:main:${mainId}`, () => fetchMainHistory(mainId))
+      .then(({ data, stale }) => {
         if (cancelled) return;
         setHistory(data);
+        setStale(stale);
         setStatus('ready');
       })
       .catch(() => !cancelled && setStatus('error'));
@@ -133,7 +142,7 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
   }, [mainId]);
 
   if (status === 'loading') return <Centered>{t('archive.loading')}</Centered>;
-  if (status === 'error') return <Centered>{t('archive.error')}</Centered>;
+  if (status === 'error') return <ErrorState message={t('archive.error')} retry={t('common.retry')} />;
   if (!history) return <Centered>{t('archive.notFound')}</Centered>;
 
   const { main, subs } = history;
@@ -143,7 +152,9 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
     new Date(iso).toLocaleDateString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="p-4">
+    <>
+      <StaleBanner show={stale} />
+      <div className="p-4">
       <div className="overflow-hidden rounded-2xl bg-white/70 shadow-sm">
         <PhotoOrPlaceholder url={main.photoUrl} color={main.color} label={typeName} className="h-48 w-full" />
         <div className="p-4">
@@ -193,7 +204,8 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
           ))}
         </ol>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -225,6 +237,21 @@ function Centered({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-[50vh] items-center justify-center px-8 text-center font-ui text-sm text-kamo-ink/60">
       {children}
+    </div>
+  );
+}
+
+function ErrorState({ message, retry }: { message: string; retry: string }) {
+  return (
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-8 text-center">
+      <p className="font-ui text-sm text-kamo-ink/60">{message}</p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="rounded-full bg-kamo-indigo px-4 py-2 font-ui text-sm text-kamo-stone"
+      >
+        {retry}
+      </button>
     </div>
   );
 }

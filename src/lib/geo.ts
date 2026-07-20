@@ -5,6 +5,11 @@ export interface GeoPoint {
   lng: number;
 }
 
+// Kamogawa Delta — the hero coordinate (§5.1), used as the default location
+// when geolocation is unavailable. Kept here (Cesium-free) so screens can
+// import it without pulling in the heavy Cesium module.
+export const KAMOGAWA_DELTA = { longitude: 135.772, latitude: 35.03 };
+
 export class GeoError extends Error {
   reason: GeoFailure;
   constructor(reason: GeoFailure) {

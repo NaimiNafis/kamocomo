@@ -11,7 +11,9 @@ import {
   type DuckPost,
   type StampCardSlot,
 } from '../../lib/duck';
+import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
+import { StaleBanner } from '../../components/StaleBanner';
 import { StampCard } from './StampCard';
 import { Certificate } from './Certificate';
 
@@ -22,7 +24,7 @@ type Status = 'loading' | 'ready' | 'error';
 export function Duck() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const userId = useIdentityStore((s) => s.session?.user.id ?? null);
+  const userId = useIdentityStore((s) => s.userId);
 
   const [status, setStatus] = useState<Status>('loading');
   const [posts, setPosts] = useState<DuckPost[]>([]);
@@ -31,17 +33,21 @@ export function Duck() {
   const [posting, setPosting] = useState(false);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [showCertificate, setShowCertificate] = useState(false);
+  const [stale, setStale] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    Promise.all([fetchDuckPosts(), fetchStampCard(userId), fetchCertificate(userId)])
-      .then(([feed, card, cert]) => {
+    cachedFetch(`duck:${userId}`, () =>
+      Promise.all([fetchDuckPosts(), fetchStampCard(userId), fetchCertificate(userId)]),
+    )
+      .then(({ data: [feed, card, cert], stale }) => {
         if (cancelled) return;
         setPosts(feed);
         setSlots(card);
         setCertIssuedAt(cert?.issuedAt ?? null);
+        setStale(stale);
         setStatus('ready');
       })
       .catch(() => !cancelled && setStatus('error'));
@@ -84,11 +90,24 @@ export function Duck() {
         <LanguageToggle />
       </div>
 
+      <StaleBanner show={stale} />
+
       <div className="p-4">
         <h1 className="mb-3 font-display text-xl text-kamo-ink">{t('duck.title')}</h1>
 
         {status === 'loading' && <p className="font-ui text-sm text-kamo-ink/60">{t('duck.loading')}</p>}
-        {status === 'error' && <p className="font-ui text-sm text-kamo-ink/60">{t('duck.error')}</p>}
+        {status === 'error' && (
+          <div className="flex flex-col items-start gap-3">
+            <p className="font-ui text-sm text-kamo-ink/60">{t('duck.error')}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-full bg-kamo-indigo px-4 py-2 font-ui text-sm text-kamo-stone"
+            >
+              {t('common.retry')}
+            </button>
+          </div>
+        )}
 
         {status === 'ready' && (
           <>

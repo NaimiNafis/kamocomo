@@ -7,7 +7,8 @@
     "skip": "Skip",
     "loading": "Loading…",
     "retry": "Retry",
-    "close": "Close"
+    "close": "Close",
+    "offlineStale": "You're offline — showing saved content"
   },
   "onboarding": {
     "title": "A little about you",

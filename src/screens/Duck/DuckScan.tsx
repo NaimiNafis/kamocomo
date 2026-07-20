@@ -26,7 +26,7 @@ export function DuckScan() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get('spot');
-  const userId = useIdentityStore((s) => s.session?.user.id ?? null);
+  const userId = useIdentityStore((s) => s.userId);
 
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [certIssuedAt, setCertIssuedAt] = useState<string | null>(null);

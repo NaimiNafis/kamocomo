@@ -1,4 +1,3 @@
-import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 export interface Profile {
@@ -44,36 +43,51 @@ async function ensureProfileRow(userId: string): Promise<Profile> {
 }
 
 /**
- * Ensures an anonymous Supabase session exists, restoring silently if one was
- * already persisted (§6 — supabase-js itself handles the localStorage
- * persistence/restore; this only creates a session when none exists yet) and
- * that a matching `profiles` row exists.
+ * Establishes the anonymous identity (§6). Online: restores the persisted
+ * session or signs in anonymously, then ensures a `profiles` row. Offline:
+ * falls back to the cached profile so the app can still show cached content
+ * read-only instead of getting stuck. supabase-js keeps the session in
+ * localStorage itself and re-attaches it (and the real JWT) once back online,
+ * so writes resume without a re-init.
  */
-export async function ensureIdentity(): Promise<{ session: Session; profile: Profile }> {
-  const {
-    data: { session: existingSession },
-  } = await supabase.auth.getSession();
-
-  let session = existingSession;
-  if (!session) {
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error) throw error;
-    session = data.session;
-  }
-  if (!session) {
-    throw new Error('Failed to establish an anonymous session.');
-  }
-
+export async function ensureIdentity(): Promise<{ userId: string; profile: Profile }> {
   const cached = getCachedProfile();
-  if (cached && cached.id === session.user.id) {
-    // Reconcile with the server in the background without blocking the UI.
-    void ensureProfileRow(session.user.id).then(setCachedProfile).catch(() => {});
-    return { session, profile: cached };
+
+  let sessionUserId: string | null = null;
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session) {
+      sessionUserId = session.user.id;
+    } else {
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) throw error;
+      sessionUserId = data.session?.user.id ?? null;
+    }
+  } catch {
+    // offline / auth unreachable -- sessionUserId stays null
   }
 
-  const profile = await ensureProfileRow(session.user.id);
-  setCachedProfile(profile);
-  return { session, profile };
+  if (sessionUserId) {
+    if (cached && cached.id === sessionUserId) {
+      // Reconcile in the background without blocking the UI.
+      void ensureProfileRow(sessionUserId).then(setCachedProfile).catch(() => {});
+      return { userId: sessionUserId, profile: cached };
+    }
+    try {
+      const profile = await ensureProfileRow(sessionUserId);
+      setCachedProfile(profile);
+      return { userId: sessionUserId, profile };
+    } catch {
+      if (cached && cached.id === sessionUserId) return { userId: sessionUserId, profile: cached };
+      throw new Error('Failed to load profile.');
+    }
+  }
+
+  // No session reachable (offline). Use the cached identity read-only.
+  if (cached) return { userId: cached.id, profile: cached };
+  throw new Error('Failed to establish an identity.');
 }
 
 export async function saveOnboardingProfile(

@@ -5,6 +5,7 @@ import * as Cesium from 'cesium';
 import {
   VIEWER_OPTIONS,
   applyKyotoCameraConstraints,
+  applyMobilePerfSettings,
   configureCesiumIon,
   createMarkerLayers,
   flyIntroSequence,
@@ -67,6 +68,7 @@ export function MainMap() {
 
     const v = new Cesium.Viewer(containerRef.current, VIEWER_OPTIONS);
     viewerRef.current = v;
+    applyMobilePerfSettings(v);
     locateAndMarkVisitor(v);
 
     // §5.3/§5.4 markers: exclamation from main activities, duck from duck
