@@ -41,7 +41,8 @@
   "mainMap": {
     "tutorialButton": "チュートリアル",
     "archiveButton": "アーカイブ",
-    "back": "地図に戻る"
+    "back": "地図に戻る",
+    "qrWelcome": "鴨川への隠れた入口を見つけました"
   },
   "archive": {
     "title": "アーカイブ",
@@ -89,6 +90,49 @@
   "mapStyle": {
     "photoreal": "写真",
     "flat": "地図"
+  },
+  "duck": {
+    "title": "鴨川の鴨",
+    "feedTab": "写真",
+    "stampTab": "スタンプ",
+    "loading": "読み込み中…",
+    "error": "鴨ページを読み込めませんでした。",
+    "empty": "まだ鴨の写真がありません。最初の一枚を共有しましょう。",
+    "addPhoto": "鴨の写真を共有",
+    "posting": "共有中…",
+    "report": "報告",
+    "reported": "報告しました",
+    "stampCardTitle": "鴨スタンプラリー",
+    "stampProgress": "{{earned}} / 10 スポット",
+    "stampHint": "川沿いの各鴨スポットでQRを読み取ってカードを埋めましょう。",
+    "certificateLocked": "10個すべて集めると証明書が手に入ります。",
+    "certificateUnlocked": "証明書を獲得しました!",
+    "viewCertificate": "証明書を見る"
+  },
+  "scan": {
+    "locating": "現在地を確認中…",
+    "collected": "スタンプを獲得!",
+    "alreadyCollected": "取得済み",
+    "alreadyDetail": "このスポットのスタンプはすでに獲得しています。",
+    "tooFar": "鴨スポットにもっと近づいてください",
+    "tooFarDetail": "約{{distance}}m離れています。スタンプを得るには120m以内に入る必要があります。",
+    "locationNeeded": "位置情報が必要です",
+    "locationDenied": "スタンプを集めるには位置情報を許可してください。実際に川にいたことの証明になります。",
+    "locationUnavailable": "現在地を取得できませんでした。スポットの近くでもう一度お試しください。",
+    "notFound": "このスポットコードは認識できませんでした。",
+    "missingSpot": "このリンクにスポットコードがありません。",
+    "progress": "{{count}} / 10 スタンプ",
+    "certificateUnlocked": "10個すべて集めました!証明書が手に入りました。",
+    "goToDuck": "鴨ページへ",
+    "tryAgain": "もう一度"
+  },
+  "certificate": {
+    "heading": "Certificate of Completion",
+    "headingJa": "達成証明書",
+    "body": "awarded for collecting all ten duck stamps along the Kamogawa",
+    "bodyJa": "鴨川のすべての鴨スタンプを集めたことを証します",
+    "issued": "発行日 {{date}}",
+    "close": "閉じる"
   },
   "tutorial": {
     "heading": "使い方",

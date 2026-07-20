@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as Cesium from 'cesium';
 import {
   VIEWER_OPTIONS,
@@ -17,6 +17,7 @@ import {
 } from '../../lib/cesium';
 import { fetchMainActivityMarkers, subscribeToNewMainActivities } from '../../lib/activities';
 import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
+import { logQrEntry } from '../../lib/duck';
 import { Intro, type IntroPhase } from '../Intro/Intro';
 import { Onboarding } from '../Onboarding/Onboarding';
 import { Tutorial } from '../Tutorial/Tutorial';
@@ -45,6 +46,9 @@ const CATCHPHRASE_HOLD_MS = 1900;
 export function MainMap() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const qrSpot = searchParams.get('from') === 'qr' ? searchParams.get('spot') : null;
+  const qrLoggedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const constraintsCleanupRef = useRef<(() => void) | null>(null);
@@ -152,6 +156,16 @@ export function MainMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // §A.2a photogenic-spot QR entry: log the analytics row once identity is
+  // ready (a hidden-QR scan can be the visitor's very first touch). Read-only
+  // otherwise; the welcome chip below is the "you found the hidden entrance"
+  // beat.
+  useEffect(() => {
+    if (!qrSpot || identityStatus !== 'ready' || qrLoggedRef.current) return;
+    qrLoggedRef.current = true;
+    void logQrEntry(qrSpot).catch(() => {});
+  }, [qrSpot, identityStatus]);
+
   const showOnboarding =
     introPhase === 'done' && identityStatus === 'ready' && needsOnboarding(profile);
 
@@ -207,6 +221,14 @@ export function MainMap() {
           <div className="absolute bottom-4 right-4 z-10">
             <MapStyleSwitch value={mapStyle} onChange={handleMapStyleChange} />
           </div>
+
+          {qrSpot && (
+            <div className="pointer-events-none absolute inset-x-0 top-16 z-10 flex justify-center px-4">
+              <div className="rounded-full bg-kamo-sunset/90 px-4 py-1.5 font-ui text-xs text-kamo-stone shadow-md backdrop-blur">
+                🦆 {t('mainMap.qrWelcome')}
+              </div>
+            </div>
+          )}
         </>
       )}
 

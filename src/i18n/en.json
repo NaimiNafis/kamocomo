@@ -41,7 +41,8 @@
   "mainMap": {
     "tutorialButton": "Tutorial",
     "archiveButton": "Archive",
-    "back": "Back to map"
+    "back": "Back to map",
+    "qrWelcome": "You found a hidden entrance to the Kamogawa"
   },
   "archive": {
     "title": "Archive",
@@ -90,6 +91,49 @@
   "mapStyle": {
     "photoreal": "Photoreal",
     "flat": "Flat"
+  },
+  "duck": {
+    "title": "Ducks of the Kamogawa",
+    "feedTab": "Photos",
+    "stampTab": "Stamps",
+    "loading": "Loading…",
+    "error": "Couldn't load the duck page.",
+    "empty": "No duck photos yet. Share the first one.",
+    "addPhoto": "Share a duck photo",
+    "posting": "Sharing…",
+    "report": "Report",
+    "reported": "Reported",
+    "stampCardTitle": "Duck stamp rally",
+    "stampProgress": "{{earned}} / 10 spots",
+    "stampHint": "Scan the QR at each duck spot along the river to fill your card.",
+    "certificateLocked": "Collect all 10 stamps to unlock your certificate.",
+    "certificateUnlocked": "Certificate unlocked!",
+    "viewCertificate": "View certificate"
+  },
+  "scan": {
+    "locating": "Finding your location…",
+    "collected": "Stamp collected!",
+    "alreadyCollected": "Already collected",
+    "alreadyDetail": "You've already earned this spot's stamp.",
+    "tooFar": "Get closer to the duck spot",
+    "tooFarDetail": "You're about {{distance}} m away. You need to be within 120 m to collect this stamp.",
+    "locationNeeded": "Location needed",
+    "locationDenied": "Please allow location access to collect stamps — it proves you were really at the river.",
+    "locationUnavailable": "Couldn't get your location. Try again near the spot.",
+    "notFound": "This spot code wasn't recognized.",
+    "missingSpot": "No spot code in this link.",
+    "progress": "{{count}} / 10 stamps",
+    "certificateUnlocked": "You collected all 10! Your certificate is unlocked.",
+    "goToDuck": "Go to duck page",
+    "tryAgain": "Try again"
+  },
+  "certificate": {
+    "heading": "Certificate of Completion",
+    "headingJa": "達成証明書",
+    "body": "awarded for collecting all ten duck stamps along the Kamogawa",
+    "bodyJa": "鴨川のすべての鴨スタンプを集めたことを証します",
+    "issued": "Issued {{date}}",
+    "close": "Close"
   },
   "tutorial": {
     "heading": "How it works",
