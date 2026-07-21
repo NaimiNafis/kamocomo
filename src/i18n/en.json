@@ -43,7 +43,8 @@
     "tutorialButton": "Tutorial",
     "archiveButton": "Archive",
     "back": "Back to map",
-    "qrWelcome": "You found a hidden entrance to the Kamogawa"
+    "qrWelcome": "You found a hidden entrance to the Kamogawa",
+    "dragHint": "Drag to look around"
   },
   "archive": {
     "title": "Archive",

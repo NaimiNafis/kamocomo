@@ -30,8 +30,10 @@ configureCesiumIon();
 
 const HAS_SEEN_INTRO_KEY = 'hasSeenIntro';
 const HAS_SEEN_TUTORIAL_KEY = 'hasSeenTutorial';
+const HAS_SEEN_MAP_HINT_KEY = 'hasSeenMapHint';
 const TITLE_HOLD_MS = 1800;
 const CATCHPHRASE_HOLD_MS = 1900;
+const MAP_HINT_AUTO_DISMISS_MS = 4000;
 
 /**
  * Full-screen Cesium globe, constrained to Kyoto (§8.1), plus the §5.3/§5.4
@@ -59,6 +61,9 @@ export function MainMap() {
   );
   const [mapStyle, setMapStyleState] = useState<MapStyle>('photoreal');
   const [tutorialOverride, setTutorialOverride] = useState<boolean | null>(null);
+  const [mapHintDismissed, setMapHintDismissed] = useState(
+    () => localStorage.getItem(HAS_SEEN_MAP_HINT_KEY) === 'true',
+  );
   const identityStatus = useIdentityStore((s) => s.status);
   const profile = useIdentityStore((s) => s.profile);
   const completeOnboarding = useIdentityStore((s) => s.completeOnboarding);
@@ -186,6 +191,22 @@ export function MainMap() {
     setTutorialOverride(false);
   }
 
+  function dismissMapHint() {
+    if (mapHintDismissed) return;
+    localStorage.setItem(HAS_SEEN_MAP_HINT_KEY, 'true');
+    setMapHintDismissed(true);
+  }
+
+  // "Drag to look around" hint (mobile users otherwise don't discover the map
+  // is pannable): shown once, dismissed by the first map interaction or after
+  // a few seconds either way.
+  useEffect(() => {
+    if (introPhase !== 'done' || mapHintDismissed) return;
+    const timer = setTimeout(dismissMapHint, MAP_HINT_AUTO_DISMISS_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [introPhase, mapHintDismissed]);
+
   function handleMapStyleChange(style: MapStyle) {
     setMapStyleState(style);
     if (viewerRef.current) applyMapStyle(viewerRef.current, style);
@@ -195,7 +216,12 @@ export function MainMap() {
 
   return (
     <div className="relative h-full w-full">
-      <div ref={containerRef} className="h-full w-full" data-testid="cesium-globe" />
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        data-testid="cesium-globe"
+        onPointerDown={dismissMapHint}
+      />
 
       {showChrome && (
         <>
@@ -228,6 +254,23 @@ export function MainMap() {
             <div className="pointer-events-none absolute inset-x-0 top-16 z-10 flex justify-center px-4">
               <div className="rounded-full bg-kamo-sunset/90 px-4 py-1.5 font-ui text-xs text-kamo-stone shadow-md backdrop-blur">
                 🦆 {t('mainMap.qrWelcome')}
+              </div>
+            </div>
+          )}
+
+          {!mapHintDismissed && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center px-4">
+              <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-kamo-ink/80 px-4 py-2 font-ui text-xs text-kamo-stone shadow-md backdrop-blur">
+                <span aria-hidden>↔</span>
+                {t('mainMap.dragHint')}
+                <button
+                  type="button"
+                  onClick={dismissMapHint}
+                  aria-label={t('common.close')}
+                  className="opacity-70"
+                >
+                  ✕
+                </button>
               </div>
             </div>
           )}

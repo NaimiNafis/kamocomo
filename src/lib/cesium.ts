@@ -138,9 +138,11 @@ const HERO_VIEW: CameraView = {
   orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
 };
 
-/** Whole-Earth view — the intro's starting point, Japan already toward center. */
-const EARTH_VIEW: CameraView = {
-  destination: Cesium.Cartesian3.fromDegrees(138, 20, 20_000_000),
+/** Whole-Earth view — the intro's starting point, on the hemisphere OPPOSITE
+ * Japan (mid-Atlantic/South America side), so the flight visibly sweeps
+ * across the globe to reveal Japan rather than starting already facing it. */
+const FAR_SIDE_VIEW: CameraView = {
+  destination: Cesium.Cartesian3.fromDegrees(-42, 10, 20_000_000),
   orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
 };
 
@@ -178,23 +180,25 @@ function flyToStep(viewer: Cesium.Viewer, view: CameraView, duration: number): P
 }
 
 /**
- * §5.1 intro flight: Earth -> Japan -> Kyoto -> Kamogawa Delta, ~4s total.
- * Starts from EARTH_VIEW instantly (the reveal happens in the overlay, not
- * here), then flies through each waypoint. Pass a `signal` and flip
- * `signal.cancelled = true` (alongside `viewer.camera.cancelFlight()`) to
- * stop the sequence early, e.g. for the intro's Skip button.
+ * §5.1 intro flight: the far side of Earth -> Japan -> Kyoto -> Kamogawa
+ * Delta, ~5s total. Starts from FAR_SIDE_VIEW instantly (the reveal happens
+ * in the overlay, not here) so the first leg visibly sweeps across the whole
+ * globe to bring Japan into view -- more dramatic than starting already
+ * facing it. Pass a `signal` and flip `signal.cancelled = true` (alongside
+ * `viewer.camera.cancelFlight()`) to stop the sequence early, e.g. for the
+ * intro's Skip button.
  */
 export async function flyIntroSequence(
   viewer: Cesium.Viewer,
   signal: { cancelled: boolean },
 ): Promise<void> {
-  viewer.camera.setView(EARTH_VIEW);
+  viewer.camera.setView(FAR_SIDE_VIEW);
   if (signal.cancelled) return;
-  await flyToStep(viewer, JAPAN_VIEW, 1.3);
+  await flyToStep(viewer, JAPAN_VIEW, 2.2);
   if (signal.cancelled) return;
   await flyToStep(viewer, KYOTO_OVERVIEW_VIEW, 1.3);
   if (signal.cancelled) return;
-  await flyToStep(viewer, HERO_VIEW, 1.4);
+  await flyToStep(viewer, HERO_VIEW, 1.5);
 }
 
 // =========================================================================
@@ -288,21 +292,6 @@ export interface MarkerPoint {
 
 export type MarkerKind = 'activity' | 'duckSpot';
 
-function configureClustering(dataSource: Cesium.CustomDataSource): void {
-  const clustering = dataSource.clustering;
-  clustering.enabled = true;
-  clustering.pixelRange = 60;
-  clustering.minimumClusterSize = 2;
-  clustering.clusterEvent.addEventListener((entities, cluster) => {
-    cluster.label.show = true;
-    cluster.label.text = entities.length.toLocaleString();
-    cluster.label.font = '600 14px "Noto Sans JP", sans-serif';
-    cluster.label.fillColor = kamoColor('--kamo-stone');
-    cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
-    cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
-  });
-}
-
 function setMarkerPoints(
   dataSource: Cesium.CustomDataSource,
   kind: MarkerKind,
@@ -331,13 +320,16 @@ export interface MarkerLayers {
   dispose(): void;
 }
 
-/** Creates the two clustered marker layers for a Viewer (§5.3: exclamation
- * markers from main activities, duck markers from duck spots). */
+/**
+ * Creates the two marker layers for a Viewer (§5.3: exclamation markers from
+ * main activities, duck markers from duck spots). Unclustered: each marker
+ * needs to be individually tappable so it can open its own place's cinematic
+ * + toukou web, and the seeded set is small enough that overlap at the
+ * Kyoto-locked zoom range is minor.
+ */
 export function createMarkerLayers(viewer: Cesium.Viewer): MarkerLayers {
   const activitySource = new Cesium.CustomDataSource('activities');
   const duckSource = new Cesium.CustomDataSource('duckSpots');
-  configureClustering(activitySource);
-  configureClustering(duckSource);
   viewer.dataSources.add(activitySource);
   viewer.dataSources.add(duckSource);
 
@@ -352,9 +344,9 @@ export function createMarkerLayers(viewer: Cesium.Viewer): MarkerLayers {
 }
 
 /**
- * Wires marker taps to route handlers (§5.3: tap exclamation -> /toukou, tap
- * duck -> /duck). Clustered picks don't carry marker properties and are
- * ignored -- pinch/scroll to zoom is the way to break a cluster apart.
+ * Wires marker taps to a handler keyed by kind + which specific marker was
+ * tapped (its refId), so the caller can route to that place's own content
+ * rather than a single shared destination.
  */
 export function setupMarkerTapHandler(
   viewer: Cesium.Viewer,

@@ -43,7 +43,8 @@
     "tutorialButton": "チュートリアル",
     "archiveButton": "アーカイブ",
     "back": "地図に戻る",
-    "qrWelcome": "鴨川への隠れた入口を見つけました"
+    "qrWelcome": "鴨川への隠れた入口を見つけました",
+    "dragHint": "ドラッグして周りを見渡そう"
   },
   "archive": {
     "title": "アーカイブ",
