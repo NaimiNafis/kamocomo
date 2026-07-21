@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
 import { fetchCertificate, scanDuckSpot, type ScanResult } from '../../lib/duck';
-import { GeoError, getPosition, type GeoFailure } from '../../lib/geo';
+import { GeoError, getPosition, KAMOGAWA_DELTA, type GeoFailure } from '../../lib/geo';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { Certificate } from './Certificate';
 import duckMark from '../../../img/marks/duck.svg?url';
@@ -14,11 +14,20 @@ type Phase =
   | { kind: 'geo_error'; reason: GeoFailure }
   | { kind: 'result'; result: ScanResult };
 
+const DELTA_TEST_MODE_KEY = 'deltaTestModeEnabled';
+
 /**
  * §A.2b geofenced stamp scan. Ensures a session (via the app-wide identity
  * init), requires device location, and calls the server RPC that recomputes
  * the distance and awards the stamp only within 120 m -- the client never
  * grants a stamp itself.
+ *
+ * "Delta test mode" is a testing convenience: instead of the device's real
+ * GPS fix, it submits the Kamogawa Delta's own coordinates, so the flow can
+ * be exercised without physically being at the river. It doesn't weaken the
+ * server-side check (Postgres still recomputes distance from whatever point
+ * is submitted) -- it just lets you submit "I'm at the Delta" truthfully for
+ * testing, the same way spoofing device GPS would.
  */
 export function DuckScan() {
   const { t, i18n } = useTranslation();
@@ -31,18 +40,33 @@ export function DuckScan() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [certIssuedAt, setCertIssuedAt] = useState<string | null>(null);
   const [showCertificate, setShowCertificate] = useState(false);
+  const [deltaTestMode, setDeltaTestMode] = useState(
+    () => localStorage.getItem(DELTA_TEST_MODE_KEY) === 'true',
+  );
   const startedRef = useRef(false);
+
+  function toggleDeltaTestMode() {
+    setDeltaTestMode((prev) => {
+      const next = !prev;
+      localStorage.setItem(DELTA_TEST_MODE_KEY, String(next));
+      return next;
+    });
+  }
 
   const runScan = useCallback(async () => {
     if (!token) return;
     setPhase({ kind: 'locating' });
     let point;
-    try {
-      point = await getPosition();
-    } catch (err) {
-      const reason = err instanceof GeoError ? err.reason : 'unavailable';
-      setPhase({ kind: 'geo_error', reason });
-      return;
+    if (deltaTestMode) {
+      point = { lat: KAMOGAWA_DELTA.latitude, lng: KAMOGAWA_DELTA.longitude };
+    } else {
+      try {
+        point = await getPosition();
+      } catch (err) {
+        const reason = err instanceof GeoError ? err.reason : 'unavailable';
+        setPhase({ kind: 'geo_error', reason });
+        return;
+      }
     }
     try {
       const result = await scanDuckSpot(token, point.lat, point.lng);
@@ -54,7 +78,7 @@ export function DuckScan() {
     } catch {
       setPhase({ kind: 'geo_error', reason: 'unavailable' });
     }
-  }, [token, userId]);
+  }, [token, userId, deltaTestMode]);
 
   // Run once, after the session is established (a scan may be the person's
   // very first touch of the app, so wait for identity before calling the RPC).
@@ -72,6 +96,24 @@ export function DuckScan() {
         </button>
         <LanguageToggle />
       </div>
+
+      <button
+        type="button"
+        onClick={toggleDeltaTestMode}
+        aria-pressed={deltaTestMode}
+        className="mx-4 mt-3 flex items-center justify-between gap-2 rounded-full border border-kamo-ink/15 bg-kamo-sand/40 px-3 py-1.5 font-ui text-xs text-kamo-ink/70"
+      >
+        {t('scan.deltaTestMode')}
+        <span
+          className="flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors"
+          style={{ backgroundColor: deltaTestMode ? '#2E3A59' : 'rgba(28,28,26,0.2)' }}
+        >
+          <span
+            className="h-4 w-4 rounded-full bg-kamo-stone transition-transform"
+            style={{ transform: deltaTestMode ? 'translateX(16px)' : 'translateX(0)' }}
+          />
+        </span>
+      </button>
 
       <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
         {!token ? (

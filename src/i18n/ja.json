@@ -135,7 +135,8 @@
     "progress": "{{count}} / 10 スタンプ",
     "certificateUnlocked": "10個すべて集めました!証明書が手に入りました。",
     "goToDuck": "鴨ページへ",
-    "tryAgain": "もう一度"
+    "tryAgain": "もう一度",
+    "deltaTestMode": "テストモード:デルタの位置を使う"
   },
   "certificate": {
     "heading": "Certificate of Completion",

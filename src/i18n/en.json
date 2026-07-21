@@ -136,7 +136,8 @@
     "progress": "{{count}} / 10 stamps",
     "certificateUnlocked": "You collected all 10! Your certificate is unlocked.",
     "goToDuck": "Go to duck page",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "deltaTestMode": "Test mode: use Delta location"
   },
   "certificate": {
     "heading": "Certificate of Completion",
