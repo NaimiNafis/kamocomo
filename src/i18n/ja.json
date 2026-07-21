@@ -74,7 +74,15 @@
     "like": "いいね",
     "dislike": "よくないね",
     "report": "報告",
-    "reported": "報告しました"
+    "reported": "報告しました",
+    "reportTitle": "この投稿を報告",
+    "reportSubtitle": "どこが問題か教えてください。",
+    "reportReasons": {
+      "inappropriate": "不適切な内容",
+      "spam": "スパム",
+      "off_topic": "無関係な内容",
+      "other": "その他"
+    }
   },
   "composer": {
     "mainTitle": "活動を投稿",

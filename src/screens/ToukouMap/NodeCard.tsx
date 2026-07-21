@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { ToukouNode } from '../../lib/toukou';
+import placeholderPhoto from '../../../img/kamogawa/placeholder-riverbank.jpg?url';
 
 /** Dark or light text depending on the background's luminance, so phrases stay
  * legible on both saturated mains and pale subs. */
@@ -10,6 +11,22 @@ function readableText(hex: string): string {
   const b = parseInt(v.slice(4, 6), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.6 ? '#1C1C1A' : '#E9E4D8';
+}
+
+/** A single thumb glyph; the dislike button flips it upside down. */
+function ThumbIcon({ down }: { down?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="11"
+      height="11"
+      fill="currentColor"
+      aria-hidden
+      className={down ? 'rotate-180' : undefined}
+    >
+      <path d="M7 22H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3v11ZM9 22a1 1 0 0 1-1-1V10.72a1 1 0 0 1 .3-.71l6-6a1 1 0 0 1 1.06-.22c.38.14.64.5.64.9V8h4.5A2.5 2.5 0 0 1 23 10.5a2.47 2.47 0 0 1-.24 1.06l-3 6.42A2.5 2.5 0 0 1 17.5 22H9Z" />
+    </svg>
+  );
 }
 
 interface NodeCardProps {
@@ -25,8 +42,9 @@ interface NodeCardProps {
 /**
  * A single post in the toukou web (§5.5). Mains are larger and carry the `+`
  * (add-sub) affordance and, when they have overflowed subs, an "earlier posts"
- * link to the archive; subs are smaller and omit both. Photo, phrase, and a
- * like/dislike row are shared. Every card has a report button.
+ * link to the archive; subs are smaller and omit both. Photo-less posts fall
+ * back to the shared riverbank placeholder (§C6). The report button sits in
+ * the card's bottom-right corner (§C5) and opens a reason picker elsewhere.
  */
 export function NodeCard({
   node,
@@ -49,25 +67,18 @@ export function NodeCard({
 
   return (
     <div
-      className="overflow-hidden rounded-2xl shadow-lg"
+      className="relative overflow-hidden rounded-2xl shadow-lg"
       style={{ width, backgroundColor: node.color, color: textColor }}
     >
-      {node.photoUrl ? (
-        <img
-          src={node.photoUrl}
-          alt=""
-          className="block w-full object-cover"
-          style={{ height: isMain ? 84 : 60 }}
-          draggable={false}
-        />
-      ) : (
-        <div
-          className="w-full"
-          style={{ height: isMain ? 40 : 28, backgroundColor: 'rgba(255,255,255,0.12)' }}
-        />
-      )}
+      <img
+        src={node.photoUrl ?? placeholderPhoto}
+        alt=""
+        className="block w-full object-cover"
+        style={{ height: isMain ? 84 : 60 }}
+        draggable={false}
+      />
 
-      <div className="px-2 py-1.5">
+      <div className="px-2 py-1.5 pb-5">
         {node.phrase && (
           <p
             className="line-clamp-2 font-ui leading-snug"
@@ -89,7 +100,7 @@ export function NodeCard({
               color: node.myVote === 1 ? '#1C1C1A' : textColor,
             }}
           >
-            <span aria-hidden>♥</span>
+            <ThumbIcon />
             {node.likes}
           </button>
           <button
@@ -104,33 +115,22 @@ export function NodeCard({
               color: node.myVote === -1 ? '#1C1C1A' : textColor,
             }}
           >
-            <span aria-hidden>✕</span>
+            <ThumbIcon down />
             {node.dislikes}
           </button>
         </div>
 
-        <div className="mt-1 flex items-center gap-1">
-          {isMain && (
-            <button
-              type="button"
-              onClick={stop(onAddSub)}
-              aria-label={t('toukou.addSub')}
-              className="flex h-5 w-5 items-center justify-center rounded-full font-ui text-sm"
-              style={{ backgroundColor: 'rgba(255,255,255,0.85)', color: '#1C1C1A' }}
-            >
-              +
-            </button>
-          )}
+        {isMain && (
           <button
             type="button"
-            onClick={stop(onReport)}
-            aria-label={t('toukou.report')}
-            className="font-ui"
-            style={{ fontSize: 10, opacity: reported ? 1 : 0.7 }}
+            onClick={stop(onAddSub)}
+            aria-label={t('toukou.addSub')}
+            className="mt-1 flex h-5 w-5 items-center justify-center rounded-full font-ui text-sm"
+            style={{ backgroundColor: 'rgba(255,255,255,0.85)', color: '#1C1C1A' }}
           >
-            {reported ? t('toukou.reported') : '⚑'}
+            +
           </button>
-        </div>
+        )}
 
         {isMain && node.hasArchivedSubs && (
           <button
@@ -143,6 +143,20 @@ export function NodeCard({
           </button>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={stop(onReport)}
+        aria-label={reported ? t('toukou.reported') : t('toukou.report')}
+        className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full font-ui"
+        style={{
+          fontSize: 10,
+          backgroundColor: 'rgba(0,0,0,0.15)',
+          opacity: reported ? 1 : 0.7,
+        }}
+      >
+        {reported ? '✓' : '⚑'}
+      </button>
     </div>
   );
 }

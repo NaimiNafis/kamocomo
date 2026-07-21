@@ -23,16 +23,23 @@ export interface NodePosition {
   y: number;
 }
 
-const MAIN_RADIUS = 62;
-const SUB_RADIUS = 46;
+// Collision radii sized to each card's worst-case bounding *circle* (half its
+// diagonal, main ~128x190 with a photo + archived-posts line, sub ~96x134
+// with a photo) -- not just half the width. A radius that only covers the
+// width leaves cards free to slide vertically into each other, which is
+// exactly how they used to stack.
+const MAIN_RADIUS = 116;
+const SUB_RADIUS = 84;
+const LINK_DISTANCE = MAIN_RADIUS + SUB_RADIUS + 30;
 
 /**
- * Runs a d3-force simulation over the toukou graph and returns live node
- * positions centered on (0,0). Mains repel strongly (so separate clusters
- * spread apart) while subs orbit their main via the link force; collision
- * radii keep the cards from overlapping. Positions of nodes that persist
- * across a refetch are preserved so realtime updates don't reshuffle the
- * whole board.
+ * Runs a d3-force simulation over one place's toukou graph (a single main
+ * plus its subs) and returns live node positions centered on (0,0). The main
+ * is pinned at the center as the fixed hub the subs orbit via the link
+ * force; collision radii (sized to each card's full bounding circle, with
+ * multiple solver iterations for a tighter guarantee) keep every card clear
+ * of every other. Positions of nodes that persist across a refetch are
+ * preserved so realtime updates don't reshuffle the whole board.
  */
 export function useForceGraph(nodes: ToukouNode[], edges: ToukouEdge[]) {
   const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
@@ -61,13 +68,19 @@ export function useForceGraph(nodes: ToukouNode[], edges: ToukouEdge[]) {
     }
     for (const node of nodes) {
       if (!store.has(node.id)) {
+        const isMain = node.kind === 'main';
         const parentId = parentOf.get(node.id);
         const parent = parentId ? store.get(parentId) : undefined;
         store.set(node.id, {
           id: node.id,
           kind: node.kind,
-          x: (parent?.x ?? 0) + (Math.random() - 0.5) * 80,
-          y: (parent?.y ?? 0) + (Math.random() - 0.5) * 80,
+          x: isMain ? 0 : (parent?.x ?? 0) + (Math.random() - 0.5) * 80,
+          y: isMain ? 0 : (parent?.y ?? 0) + (Math.random() - 0.5) * 80,
+          // The main is the fixed hub subs orbit around (a per-place graph
+          // has exactly one); pinning it keeps the whole layout stable
+          // instead of drifting as subs are added.
+          fx: isMain ? 0 : undefined,
+          fy: isMain ? 0 : undefined,
         });
       }
     }
@@ -84,14 +97,30 @@ export function useForceGraph(nodes: ToukouNode[], edges: ToukouEdge[]) {
         'link',
         forceLink<SimNode, SimLink>(simLinks)
           .id((d) => d.id)
-          .distance(84)
+          .distance(LINK_DISTANCE)
           .strength(0.75),
       )
       .force('center', forceCenter(0, 0))
       .force(
         'collide',
-        forceCollide<SimNode>().radius((d) => (d.kind === 'main' ? MAIN_RADIUS : SUB_RADIUS)),
+        forceCollide<SimNode>()
+          .radius((d) => (d.kind === 'main' ? MAIN_RADIUS : SUB_RADIUS))
+          .strength(1)
+          .iterations(3),
       );
+
+    // Pre-warm synchronously: a dense graph (up to 21 nodes on the busiest
+    // main) takes several seconds of real-time ticking to fully separate,
+    // which otherwise shows as cards visibly jostling apart/overlapping
+    // right after opening the page. Running the solver to convergence
+    // *before* wiring up the tick listener means the very first (async,
+    // next-frame) tick already reports settled positions -- the animated
+    // loop below then only has to handle small ongoing changes (a drag, a
+    // realtime insert), not untangle from scratch. (setPositions is only
+    // ever called from that async tick callback, not synchronously here, to
+    // avoid a synchronous setState-in-effect.)
+    simulation.stop();
+    for (let i = 0; i < 150; i++) simulation.tick();
 
     simulation.on('tick', () => {
       const next = new Map<string, NodePosition>();
@@ -100,7 +129,7 @@ export function useForceGraph(nodes: ToukouNode[], edges: ToukouEdge[]) {
     });
 
     simRef.current = simulation;
-    simulation.alpha(0.9).restart();
+    simulation.alpha(0.3).restart();
 
     return () => {
       simulation.stop();

@@ -1,22 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
-import { KAMOGAWA_DELTA } from '../../lib/geo';
 import {
-  clearVote,
-  createMain,
   createSub,
-  fetchActivityTypes,
-  fetchToukouGraph,
-  getActiveEvent,
-  getNextEvent,
+  fetchPlaceGraph,
   reportContent,
+  clearVote,
   setVote,
   subscribeToToukou,
-  type ActivityType,
-  type KamoEvent,
   type ToukouGraph,
   type ToukouNode,
 } from '../../lib/toukou';
@@ -25,6 +17,7 @@ import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
 import { NodeCard } from './NodeCard';
 import { Composer, type ComposerResult } from './Composer';
+import { ReportDialog, type ReportReason } from './ReportDialog';
 import { useForceGraph } from './useForceGraph';
 
 const EDGE_OFFSET = 4000;
@@ -32,13 +25,16 @@ const MIN_SCALE = 0.4;
 const MAX_SCALE = 2;
 const FIT_PADDING = 90; // room for card size around the extreme nodes
 
-type ComposerState = { mode: 'main' } | { mode: 'sub'; parentId: string } | null;
-
 interface ViewTransform {
   tx: number;
   ty: number;
   scale: number;
 }
+
+type DragState =
+  | { kind: 'pan'; startX: number; startY: number; startTx: number; startTy: number }
+  | { kind: 'node'; id: string }
+  | { kind: 'pinch'; startDist: number; startScale: number; worldX: number; worldY: number };
 
 /** The auto-fit transform: scale + translate that frames every node in the
  * viewport, centered. Pure, so it can be derived during render each tick. */
@@ -58,43 +54,26 @@ function fitView(positions: Map<string, { x: number; y: number }>, size: { w: nu
   return { scale, tx: (-(minX + maxX) / 2) * scale, ty: (-(minY + maxY) / 2) * scale };
 }
 
-/** Location for a new main: the visitor's position, or the Kamogawa default. */
-function getCreateLocation(): Promise<{ lat: number; lng: number }> {
-  const fallback = { lat: KAMOGAWA_DELTA.latitude, lng: KAMOGAWA_DELTA.longitude };
-  return new Promise((resolve) => {
-    if (!('geolocation' in navigator)) return resolve(fallback);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(fallback),
-      { timeout: 6000, maximumAge: 60_000 },
-    );
-  });
-}
-
-/** "Next gathering in Xd Yh" from the upcoming event, localized (Appendix A.1). */
-function countdownLabel(next: KamoEvent | null, t: TFunction): string {
-  if (!next) return t('toukou.noGathering');
-  const diffMs = new Date(next.starts_at).getTime() - Date.now();
-  if (diffMs <= 0) return t('toukou.nextGatheringSoon');
-  const totalHours = Math.floor(diffMs / 3_600_000);
-  return t('toukou.nextGathering', { days: Math.floor(totalHours / 24), hours: totalHours % 24 });
-}
-
+/**
+ * One place's toukou web (§5.5/§C1): the main a visitor tapped from the map,
+ * plus its subs. Every marker links here via `?main=<id>`, so this screen
+ * always needs that id -- a direct visit without one bounces back to the map.
+ */
 export function ToukouMap() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const mainId = searchParams.get('main');
   const userId = useIdentityStore((s) => s.userId);
 
   const [graph, setGraph] = useState<ToukouGraph>({ nodes: [], edges: [] });
-  const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
-  const [activeEvent, setActiveEvent] = useState<KamoEvent | null>(null);
-  const [nextEvent, setNextEvent] = useState<KamoEvent | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading');
   const [stale, setStale] = useState(false);
-  const [composer, setComposer] = useState<ComposerState>(null);
+  const [composerParentId, setComposerParentId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
+  const [reportTarget, setReportTarget] = useState<string | null>(null);
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(graph.nodes, graph.edges);
 
@@ -106,50 +85,50 @@ export function ToukouMap() {
   // a setState effect) avoids cascading renders on every simulation tick.
   const [userView, setUserView] = useState<ViewTransform | null>(null);
   const view = userView ?? fitView(positions, size);
-  const dragState = useRef<
-    | { kind: 'pan'; startX: number; startY: number; startTx: number; startTy: number }
-    | { kind: 'node'; id: string }
-    | null
-  >(null);
+  const dragState = useRef<DragState | null>(null);
+  // Every currently-down pointer, keyed by id -- lets a second finger turn a
+  // one-finger pan into a pinch (§C3), which Cesium-style single-pointer
+  // handling didn't support before.
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  // Every marker passes a main id; a bare /toukou visit has nowhere to go.
+  useEffect(() => {
+    if (!mainId) navigate('/', { replace: true });
+  }, [mainId, navigate]);
 
   const refetchGraph = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !mainId) return;
     try {
-      setGraph(await fetchToukouGraph(userId));
+      setGraph(await fetchPlaceGraph(userId, mainId));
     } catch {
       /* keep the last good graph; realtime will retry on the next change */
     }
-  }, [userId]);
+  }, [userId, mainId]);
 
-  // Initial load. The graph is cached (falls back to the last good copy when
-  // offline, flagged stale); the compose-only data (activity types + events)
-  // is best-effort and simply absent offline, where you can't post anyway.
+  // Initial load. Cached (falls back to the last good copy when offline,
+  // flagged stale), scoped to this one place.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !mainId) return;
     let cancelled = false;
     (async () => {
       try {
-        const graphRes = await cachedFetch(`toukou:${userId}`, () => fetchToukouGraph(userId));
+        const graphRes = await cachedFetch(`toukou:${mainId}:${userId}`, () => fetchPlaceGraph(userId, mainId));
         if (cancelled) return;
         setGraph(graphRes.data);
         setStale(graphRes.stale);
-        setStatus('ready');
+        setStatus(graphRes.data.nodes.length === 0 ? 'notfound' : 'ready');
       } catch {
         if (!cancelled) setStatus('error');
-        return;
       }
-      void fetchActivityTypes().then((v) => !cancelled && setActivityTypes(v)).catch(() => {});
-      void getActiveEvent().then((v) => !cancelled && setActiveEvent(v)).catch(() => {});
-      void getNextEvent().then((v) => !cancelled && setNextEvent(v)).catch(() => {});
     })();
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, mainId]);
 
   // Realtime: debounce a whole-graph refetch on any activity/vote change.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !mainId) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = subscribeToToukou(() => {
       if (timer) clearTimeout(timer);
@@ -159,7 +138,7 @@ export function ToukouMap() {
       if (timer) clearTimeout(timer);
       unsubscribe();
     };
-  }, [userId, refetchGraph]);
+  }, [userId, mainId, refetchGraph]);
 
   // Track viewport size so (0,0) world sits at its center.
   useEffect(() => {
@@ -183,16 +162,36 @@ export function ToukouMap() {
     };
   }
 
-  function handlePointerDownBackground(e: React.PointerEvent) {
-    setUserView(view); // freeze the current frame; the user is taking control
-    dragState.current = {
-      kind: 'pan',
-      startX: e.clientX,
-      startY: e.clientY,
-      startTx: view.tx,
-      startTy: view.ty,
+  function pinchMetrics() {
+    const [a, b] = [...pointersRef.current.values()];
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
     };
+  }
+
+  function handlePointerDownBackground(e: React.PointerEvent) {
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     viewportRef.current?.setPointerCapture(e.pointerId);
+
+    if (pointersRef.current.size === 2) {
+      // A second finger landed -- switch to a pinch (zoom about the midpoint,
+      // panning with it if the fingers also drift together).
+      const { dist, midX, midY } = pinchMetrics();
+      setUserView(view);
+      const world = toWorld(midX, midY);
+      dragState.current = { kind: 'pinch', startDist: dist, startScale: view.scale, worldX: world.x, worldY: world.y };
+    } else if (pointersRef.current.size === 1) {
+      setUserView(view); // freeze the current frame; the user is taking control
+      dragState.current = {
+        kind: 'pan',
+        startX: e.clientX,
+        startY: e.clientY,
+        startTx: view.tx,
+        startTy: view.ty,
+      };
+    }
   }
 
   function handleNodePointerDown(e: React.PointerEvent, id: string) {
@@ -208,9 +207,23 @@ export function ToukouMap() {
   }
 
   function handlePointerMove(e: React.PointerEvent) {
+    if (pointersRef.current.has(e.pointerId)) {
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
     const d = dragState.current;
     if (!d) return;
-    if (d.kind === 'pan') {
+
+    if (d.kind === 'pinch') {
+      if (pointersRef.current.size < 2) return;
+      const { dist, midX, midY } = pinchMetrics();
+      const rect = viewportRef.current!.getBoundingClientRect();
+      const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, d.startScale * (dist / d.startDist)));
+      setUserView({
+        scale,
+        tx: midX - rect.left - cx - d.worldX * scale,
+        ty: midY - rect.top - cy - d.worldY * scale,
+      });
+    } else if (d.kind === 'pan') {
       setUserView((v) => ({
         scale: v?.scale ?? view.scale,
         tx: d.startTx + (e.clientX - d.startX),
@@ -223,10 +236,25 @@ export function ToukouMap() {
   }
 
   function handlePointerUp(e: React.PointerEvent) {
+    pointersRef.current.delete(e.pointerId);
     const d = dragState.current;
     if (d?.kind === 'node') endDrag(d.id);
-    dragState.current = null;
     viewportRef.current?.releasePointerCapture(e.pointerId);
+
+    if (d?.kind === 'pinch' && pointersRef.current.size === 1) {
+      // One finger lifted mid-pinch -- keep going as a plain pan with the
+      // remaining finger instead of dropping the gesture.
+      const [remaining] = [...pointersRef.current.values()];
+      dragState.current = {
+        kind: 'pan',
+        startX: remaining.x,
+        startY: remaining.y,
+        startTx: view.tx,
+        startTy: view.ty,
+      };
+    } else if (pointersRef.current.size === 0) {
+      dragState.current = null;
+    }
   }
 
   function handleWheel(e: React.WheelEvent) {
@@ -252,42 +280,30 @@ export function ToukouMap() {
     }
   }
 
-  async function handleReport(node: ToukouNode) {
-    if (!userId || reportedIds.has(node.id)) return;
-    setReportedIds((prev) => new Set(prev).add(node.id));
+  async function handleReportSubmit(reason: ReportReason) {
+    if (!userId || !reportTarget) return;
+    const id = reportTarget;
+    setReportTarget(null);
+    setReportedIds((prev) => new Set(prev).add(id));
     try {
-      await reportContent(userId, 'activity', node.id);
+      await reportContent(userId, 'activity', id, reason);
     } catch {
       /* leave it marked reported in the UI regardless */
     }
   }
 
   async function handleComposerSubmit(result: ComposerResult) {
-    if (!userId || !composer) return;
+    if (!userId || !composerParentId) return;
     setSubmitting(true);
     setSubmitError(false);
     try {
-      if (composer.mode === 'main') {
-        if (!result.activityTypeId || !activeEvent) return;
-        const loc = await getCreateLocation();
-        await createMain({
-          authorId: userId,
-          activityTypeId: result.activityTypeId,
-          eventId: activeEvent.id,
-          phrase: result.phrase,
-          photoFile: result.photoFile,
-          lat: loc.lat,
-          lng: loc.lng,
-        });
-      } else {
-        await createSub({
-          authorId: userId,
-          parentId: composer.parentId,
-          phrase: result.phrase,
-          photoFile: result.photoFile,
-        });
-      }
-      setComposer(null);
+      await createSub({
+        authorId: userId,
+        parentId: composerParentId,
+        phrase: result.phrase,
+        photoFile: result.photoFile,
+      });
+      setComposerParentId(null);
       await refetchGraph();
     } catch {
       setSubmitError(true);
@@ -307,6 +323,7 @@ export function ToukouMap() {
         onPointerDown={handlePointerDownBackground}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onWheel={handleWheel}
       >
         <div
@@ -351,8 +368,10 @@ export function ToukouMap() {
                   reported={reportedIds.has(node.id)}
                   onLike={() => void handleVote(node, 1)}
                   onDislike={() => void handleVote(node, -1)}
-                  onAddSub={() => setComposer({ mode: 'sub', parentId: node.id })}
-                  onReport={() => void handleReport(node)}
+                  onAddSub={() => setComposerParentId(node.id)}
+                  onReport={() => {
+                    if (!reportedIds.has(node.id)) setReportTarget(node.id);
+                  }}
                   onViewArchived={() => navigate(`/archive?main=${node.id}`)}
                 />
               </div>
@@ -380,7 +399,7 @@ export function ToukouMap() {
         </div>
       </div>
 
-      {/* Empty / loading / error states */}
+      {/* Loading / not-found / error states */}
       {status === 'loading' && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-ui text-sm text-kamo-ink/60">
           {t('toukou.loading')}
@@ -398,40 +417,34 @@ export function ToukouMap() {
           </button>
         </div>
       )}
-      {status === 'ready' && graph.nodes.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8 text-center font-ui text-sm text-kamo-ink/60">
-          {t('toukou.empty')}
+      {status === 'notfound' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center font-ui text-sm text-kamo-ink/60">
+          {t('archive.notFound')}
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="rounded-full bg-kamo-indigo px-4 py-2 text-kamo-stone"
+          >
+            {t('mainMap.back')}
+          </button>
         </div>
       )}
 
-      {/* Bottom bar: event-gated create-main, or the next-gathering countdown */}
-      <div className="absolute inset-x-0 bottom-0 flex justify-center p-4">
-        {activeEvent ? (
-          <button
-            type="button"
-            onClick={() => {
-              setSubmitError(false);
-              setComposer({ mode: 'main' });
-            }}
-            className="rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone shadow-lg"
-          >
-            + {t('toukou.createMain')}
-          </button>
-        ) : (
-          <div className="rounded-full bg-kamo-sand/90 px-4 py-2 font-ui text-xs text-kamo-ink shadow-sm backdrop-blur">
-            {countdownLabel(nextEvent, t)}
-          </div>
-        )}
-      </div>
-
-      {composer && (
+      {composerParentId && (
         <Composer
-          mode={composer.mode}
-          activityTypes={activityTypes}
+          mode="sub"
+          activityTypes={[]}
           submitting={submitting}
           error={submitError}
           onSubmit={(result) => void handleComposerSubmit(result)}
-          onCancel={() => setComposer(null)}
+          onCancel={() => setComposerParentId(null)}
+        />
+      )}
+
+      {reportTarget && (
+        <ReportDialog
+          onSubmit={(reason) => void handleReportSubmit(reason)}
+          onCancel={() => setReportTarget(null)}
         />
       )}
     </div>

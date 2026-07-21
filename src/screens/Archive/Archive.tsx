@@ -10,6 +10,7 @@ import {
 import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
+import placeholderPhoto from '../../../img/kamogawa/placeholder-riverbank.jpg?url';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -96,12 +97,7 @@ function ArchiveGrid({ onOpen }: { onOpen: (id: string) => void }) {
             onClick={() => onOpen(m.id)}
             className="overflow-hidden rounded-xl bg-white/70 text-left shadow-sm"
           >
-            <PhotoOrPlaceholder
-              url={m.photoUrl}
-              color={m.color}
-              label={isJa ? m.typeNameJa : m.typeNameEn}
-              className="aspect-square w-full"
-            />
+            <PhotoOrPlaceholder url={m.photoUrl} className="aspect-square w-full" />
             <div className="p-2">
               <p className="line-clamp-2 font-ui text-xs text-kamo-ink">{m.phrase}</p>
               <div className="mt-1.5 flex items-center gap-1.5">
@@ -156,7 +152,7 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
       <StaleBanner show={stale} />
       <div className="p-4">
       <div className="overflow-hidden rounded-2xl bg-white/70 shadow-sm">
-        <PhotoOrPlaceholder url={main.photoUrl} color={main.color} label={typeName} className="h-48 w-full" />
+        <PhotoOrPlaceholder url={main.photoUrl} className="h-48 w-full" />
         <div className="p-4">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: main.color }} />
@@ -185,8 +181,6 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
             <li key={s.id} className="flex gap-3 rounded-xl bg-white/60 p-2 shadow-sm">
               <PhotoOrPlaceholder
                 url={s.photoUrl}
-                color={s.color}
-                label=""
                 className="h-16 w-16 shrink-0 rounded-lg"
               />
               <div className="min-w-0 flex-1 py-0.5">
@@ -209,27 +203,17 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
   );
 }
 
-function PhotoOrPlaceholder({
-  url,
-  color,
-  label,
-  className,
-}: {
-  url: string | null;
-  color: string;
-  label: string;
-  className?: string;
-}) {
-  if (url) {
-    return <img src={url} alt="" className={`object-cover ${className ?? ''}`} draggable={false} />;
-  }
+/** A post's photo, or the shared riverbank placeholder for photo-less posts
+ * (§C6) -- the activity type is already shown alongside, so the placeholder
+ * doesn't need to repeat it. */
+function PhotoOrPlaceholder({ url, className }: { url: string | null; className?: string }) {
   return (
-    <div
-      className={`flex items-center justify-center ${className ?? ''}`}
-      style={{ backgroundColor: color }}
-    >
-      <span className="font-display text-sm text-kamo-stone/90">{label}</span>
-    </div>
+    <img
+      src={url ?? placeholderPhoto}
+      alt=""
+      className={`object-cover ${className ?? ''}`}
+      draggable={false}
+    />
   );
 }
 

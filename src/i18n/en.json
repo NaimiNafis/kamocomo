@@ -75,7 +75,15 @@
     "like": "Like",
     "dislike": "Dislike",
     "report": "Report",
-    "reported": "Reported"
+    "reported": "Reported",
+    "reportTitle": "Report this post",
+    "reportSubtitle": "Let us know what's wrong with it.",
+    "reportReasons": {
+      "inappropriate": "Inappropriate content",
+      "spam": "Spam",
+      "off_topic": "Off-topic",
+      "other": "Other"
+    }
   },
   "composer": {
     "mainTitle": "Post an activity",

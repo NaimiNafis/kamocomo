@@ -140,6 +140,82 @@ export async function fetchToukouGraph(userId: string): Promise<ToukouGraph> {
   return { nodes, edges };
 }
 
+/**
+ * Builds one place's toukou graph (§B/C1): a single main (by id) plus its
+ * non-hidden, non-archived subs -- colored, with the current user's votes and
+ * whether any of its subs have overflowed into the archive. Returns an empty
+ * graph if the main is hidden or gone (the screen redirects home on that).
+ */
+export async function fetchPlaceGraph(userId: string, mainId: string): Promise<ToukouGraph> {
+  const [
+    { data: types, error: typesError },
+    { data: main, error: mainError },
+    { data: subs, error: subsError },
+  ] = await Promise.all([
+    supabase.from('activity_types').select('id, color'),
+    supabase
+      .from('activities')
+      .select('id, kind, parent_id, activity_type, photo_url, phrase, likes, dislikes, lat, lng, event_id')
+      .eq('id', mainId)
+      .eq('kind', 'main')
+      .eq('hidden', false)
+      .maybeSingle(),
+    supabase
+      .from('activities')
+      .select('id, kind, parent_id, activity_type, photo_url, phrase, likes, dislikes, lat, lng, event_id')
+      .eq('parent_id', mainId)
+      .eq('kind', 'sub')
+      .eq('hidden', false)
+      .eq('archived', false)
+      .order('created_at', { ascending: true }),
+  ]);
+  if (typesError) throw typesError;
+  if (mainError) throw mainError;
+  if (subsError) throw subsError;
+  if (!main) return { nodes: [], edges: [] };
+
+  const colorByType = new Map(types.map((t) => [t.id, t.color]));
+
+  const { data: votes, error: votesError } = await supabase
+    .from('votes')
+    .select('activity_id, value')
+    .eq('user_id', userId);
+  if (votesError) throw votesError;
+  const voteByActivity = new Map(votes.map((v) => [v.activity_id, v.value as 1 | -1]));
+
+  const { data: archivedSubs, error: archivedError } = await supabase
+    .from('activities')
+    .select('id')
+    .eq('parent_id', mainId)
+    .eq('kind', 'sub')
+    .eq('archived', true)
+    .eq('hidden', false)
+    .limit(1);
+  if (archivedError) throw archivedError;
+  const hasArchivedSubs = archivedSubs.length > 0;
+
+  const rows = [main, ...subs] as ActivityRow[];
+  const nodes: ToukouNode[] = rows.map((row) => {
+    const baseColor = colorByType.get(row.activity_type) ?? '#6e8ca0';
+    return {
+      id: row.id,
+      kind: row.kind,
+      parentId: row.parent_id,
+      color: row.kind === 'main' ? baseColor : subShade(baseColor),
+      photoUrl: row.photo_url,
+      phrase: row.phrase,
+      likes: row.likes,
+      dislikes: row.dislikes,
+      myVote: voteByActivity.get(row.id) ?? null,
+      hasArchivedSubs: row.kind === 'main' && hasArchivedSubs,
+    };
+  });
+
+  const edges: ToukouEdge[] = subs.map((row) => ({ source: row.id, target: mainId }));
+
+  return { nodes, edges };
+}
+
 /** The seeded activity types (§5.5) -- the palette + labels for the main composer. */
 export async function fetchActivityTypes(): Promise<ActivityType[]> {
   const { data, error } = await supabase

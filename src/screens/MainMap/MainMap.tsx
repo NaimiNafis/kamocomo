@@ -28,13 +28,35 @@ import {
 } from '../../lib/activities';
 import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
 import { logQrEntry } from '../../lib/duck';
+import {
+  createMain,
+  fetchActivityTypes,
+  getActiveEvent,
+  type ActivityType,
+  type KamoEvent,
+} from '../../lib/toukou';
+import { KAMOGAWA_DELTA } from '../../lib/geo';
 import { Intro, type IntroPhase } from '../Intro/Intro';
 import { Onboarding } from '../Onboarding/Onboarding';
 import { Tutorial } from '../Tutorial/Tutorial';
 import { PlacePopup } from './PlacePopup';
+import { Composer, type ComposerResult } from '../ToukouMap/Composer';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { MapStyleSwitch } from '../../components/MapStyleSwitch';
 import { needsOnboarding, useIdentityStore } from '../../store/identityStore';
+
+/** Location for a new main: the visitor's position, or the Kamogawa default. */
+function getCreateLocation(): Promise<{ lat: number; lng: number }> {
+  const fallback = { lat: KAMOGAWA_DELTA.latitude, lng: KAMOGAWA_DELTA.longitude };
+  return new Promise((resolve) => {
+    if (!('geolocation' in navigator)) return resolve(fallback);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(fallback),
+      { timeout: 6000, maximumAge: 60_000 },
+    );
+  });
+}
 
 configureCesiumIon();
 
@@ -78,9 +100,46 @@ export function MainMap() {
   const [placePopup, setPlacePopup] = useState<{ mainId: string; preview: ActivityPreview } | null>(
     null,
   );
+  const [activeEvent, setActiveEvent] = useState<KamoEvent | null>(null);
+  const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
   const identityStatus = useIdentityStore((s) => s.status);
   const profile = useIdentityStore((s) => s.profile);
+  const userId = useIdentityStore((s) => s.userId);
   const completeOnboarding = useIdentityStore((s) => s.completeOnboarding);
+
+  // §C7: "post an activity here" is event-gated (mains only happen during a
+  // live gathering); compose-only data, best-effort and simply absent if
+  // offline (you can't post anyway without a connection).
+  useEffect(() => {
+    void getActiveEvent().then(setActiveEvent).catch(() => {});
+    void fetchActivityTypes().then(setActivityTypes).catch(() => {});
+  }, []);
+
+  async function handleCreateMain(result: ComposerResult) {
+    if (!userId || !activeEvent || !result.activityTypeId) return;
+    setSubmitting(true);
+    setSubmitError(false);
+    try {
+      const loc = await getCreateLocation();
+      await createMain({
+        authorId: userId,
+        activityTypeId: result.activityTypeId,
+        eventId: activeEvent.id,
+        phrase: result.phrase,
+        photoFile: result.photoFile,
+        lat: loc.lat,
+        lng: loc.lng,
+      });
+      setComposerOpen(false);
+    } catch {
+      setSubmitError(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -348,6 +407,21 @@ export function MainMap() {
               </div>
             </div>
           )}
+
+          {activeEvent && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-6 z-10 flex justify-center px-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmitError(false);
+                  setComposerOpen(true);
+                }}
+                className="pointer-events-auto rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone shadow-lg"
+              >
+                + {t('toukou.createMain')}
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -359,6 +433,16 @@ export function MainMap() {
           preview={placePopup.preview}
           onClose={() => closeCinematicRef.current()}
           onViewActivity={() => navigate(`/toukou?main=${placePopup.mainId}`)}
+        />
+      )}
+      {composerOpen && (
+        <Composer
+          mode="main"
+          activityTypes={activityTypes}
+          submitting={submitting}
+          error={submitError}
+          onSubmit={(result) => void handleCreateMain(result)}
+          onCancel={() => setComposerOpen(false)}
         />
       )}
     </div>
