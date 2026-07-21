@@ -13,13 +13,14 @@ scavenger hunt. Japanese-first, bilingual (JA/EN), no account required.
 - **React 18 + Vite + TypeScript**, React Router, Zustand
 - **CesiumJS** (`cesium` + `vite-plugin-cesium`) for the 3D globe/map
 - **Supabase** (Postgres, anonymous auth, Storage, Realtime) — the only backend
-- **Tailwind CSS v4** with the design tokens from the architecture doc §4.1
+- **Tailwind CSS v4** with the design tokens documented in `docs/ARCHITECTURE.md`
 - **i18next** — every user-facing string is in `src/i18n/{en,ja}.json`
 - **d3-force** for the toukou activity web
 - **localforage** + a service worker (`vite-plugin-pwa`) for offline resilience
 
-The architecture reference is `Virtual_Kamogawa_Design_Architecture.md`; the
-build rules are `CLAUDE.md`; the phased build log is `BUILD_PLAN.md`.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how it's built (screens,
+data model, identity, event gating, anti-cheat) and [`CLAUDE.md`](CLAUDE.md)
+for the working rules this repo follows.
 
 ## Prerequisites
 
@@ -98,7 +99,7 @@ between the reported location and the spot and only grants the stamp within
 120 m — a client cannot self-grant a stamp (direct inserts to `stamps` are
 blocked by RLS).
 
-## Identity — the no-account trade-off (§6)
+## Identity — the no-account trade-off
 
 There is **no login**. On first load the app calls Supabase anonymous
 sign-in, and the returned user id (plus a cached profile) is the device's
@@ -120,23 +121,31 @@ online-only; the feed screens are the ones that work offline.
 
 ## Demo script (~3 minutes)
 
-1. **Open the app** → the intro flies Earth → Japan → Kyoto → the Kamogawa
-   Delta, then lands on the 3D map. (First visit also asks three quick
-   onboarding questions and opens a 5-slide tutorial.)
+1. **Open the app** → the intro sweeps from the far side of the globe, across
+   Japan and Kyoto, to the Kamogawa Delta, then lands on the 3D map. (First
+   visit also asks three quick onboarding questions and opens a 5-slide
+   tutorial; mobile gets a one-time "drag to look around" hint.)
 2. **Tap the language toggle** (EN/JA) — every string flips instantly.
-3. **Tap an ❗ marker** → the **toukou web** opens: main activities in their
-   type color with subs orbiting. Like/dislike a post; tap **+** on a main to
-   add a sub with a photo; watch it animate in. Open a second browser
-   side-by-side to see posts/votes appear live.
+3. **Tap an ❗ marker** → a short cinematic (framing highlight → fly-in →
+   orbit) settles on that spot, then a popup shows its photo/phrase with a
+   button into **that place's own toukou web** — main activity in its type
+   color, subs orbiting. Thumbs up/down a post; tap **+** on the main to add
+   a sub with a photo; watch it animate in. Open a second browser
+   side-by-side to see posts/votes appear live. The report button (bottom
+   right of a card) asks for a reason.
 4. **Tap "See earlier posts"** on a busy main (or the **Archive** button) →
    the cookpad-style history; open one to see its full sub timeline, archived
    posts included.
-5. **Tap a 🦆 marker** → the **duck page**: share a photo, and see the 10-slot
+5. Back on the map, an active gathering shows a **"post an activity"** button
+   to add a new main of your own.
+6. **Tap a 🦆 marker** → the **duck page**: share a photo, and see the 10-slot
    stamp card.
-6. **Scan a duck-spot QR** (`scripts/generate-qr.ts`) while standing near the
+7. **Scan a duck-spot QR** (`scripts/generate-qr.ts`) while standing near the
    spot → the stamp is collected (try it from far away to see the geofence
-   reject it). Collect all 10 → the **certificate** unlocks.
-7. **Turn on airplane mode and reload** a feed screen → cached content with an
+   reject it). Not near a spot? Flip **"Test mode: use Delta location"** on
+   the scan page to try the flow without traveling. Collect all 10 → the
+   **certificate** unlocks.
+8. **Turn on airplane mode and reload** a feed screen → cached content with an
    offline banner, not a blank page.
 
 ## Project layout
@@ -152,6 +161,18 @@ src/
 supabase/
   migrations/   versioned SQL schema + policies + triggers + RPC
   seed.sql      demo activity types, events, duck spots
-scripts/        generate-qr.ts, seed-demo-activities.mjs
+scripts/        generate-qr.ts, seed-demo-activities.mjs, seed-demo-subs.mjs
 img/marks/      custom duck + exclamation SVG marks
+img/kamogawa/   real Kamogawa photos, incl. the shared placeholder image
 ```
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what each screen does
+and how the data model fits together.
+
+## Contributing
+
+Small, focused commits; `npm run build && npm run lint && npm run typecheck`
+clean before committing. Schema changes are a new file in
+`supabase/migrations/` — never edit one that's already applied. See
+[`CLAUDE.md`](CLAUDE.md) for the fuller set of working rules (identity model,
+server-authoritative rules, design tokens) this repo follows.

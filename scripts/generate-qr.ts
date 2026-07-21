@@ -1,6 +1,7 @@
-// Generates a scannable QR PNG for each duck spot's stamp-scan URL (§A.2b,
-// BUILD_PLAN Phase 8). All QRs point at the SAME app -- they differ only by
-// the opaque `?spot=<qr_token>` that tells the app which spot was scanned.
+// Generates a scannable QR PNG for each duck spot's stamp-scan URL (see
+// "Duck-stamp anti-cheat" in docs/ARCHITECTURE.md). All QRs point at the SAME
+// app -- they differ only by the opaque `?spot=<qr_token>` that tells the app
+// which spot was scanned.
 //
 // Usage:
 //   npx tsx scripts/generate-qr.ts
