@@ -4,24 +4,34 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as Cesium from 'cesium';
 import {
   VIEWER_OPTIONS,
+  addPlaceFraming,
   applyKyotoCameraConstraints,
   applyMobilePerfSettings,
   configureCesiumIon,
   createMarkerLayers,
   flyIntroSequence,
+  flyToHomeView,
+  flyToPlace,
   locateAndMarkVisitor,
+  orbitPlace,
   setHomeView,
   setMapStyle as applyMapStyle,
   setupMarkerTapHandler,
   type MapStyle,
   type MarkerPoint,
 } from '../../lib/cesium';
-import { fetchMainActivityMarkers, subscribeToNewMainActivities } from '../../lib/activities';
+import {
+  fetchActivityPreview,
+  fetchMainActivityMarkers,
+  subscribeToNewMainActivities,
+  type ActivityPreview,
+} from '../../lib/activities';
 import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
 import { logQrEntry } from '../../lib/duck';
 import { Intro, type IntroPhase } from '../Intro/Intro';
 import { Onboarding } from '../Onboarding/Onboarding';
 import { Tutorial } from '../Tutorial/Tutorial';
+import { PlacePopup } from './PlacePopup';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { MapStyleSwitch } from '../../components/MapStyleSwitch';
 import { needsOnboarding, useIdentityStore } from '../../store/identityStore';
@@ -56,6 +66,7 @@ export function MainMap() {
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const constraintsCleanupRef = useRef<(() => void) | null>(null);
   const skipRef = useRef<() => void>(() => {});
+  const closeCinematicRef = useRef<() => void>(() => {});
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
@@ -63,6 +74,9 @@ export function MainMap() {
   const [tutorialOverride, setTutorialOverride] = useState<boolean | null>(null);
   const [mapHintDismissed, setMapHintDismissed] = useState(
     () => localStorage.getItem(HAS_SEEN_MAP_HINT_KEY) === 'true',
+  );
+  const [placePopup, setPlacePopup] = useState<{ mainId: string; preview: ActivityPreview } | null>(
+    null,
   );
   const identityStatus = useIdentityStore((s) => s.status);
   const profile = useIdentityStore((s) => s.profile);
@@ -79,9 +93,6 @@ export function MainMap() {
     // §5.3/§5.4 markers: exclamation from main activities, duck from duck
     // spots. Realtime keeps the activity set current without a reload.
     const markerLayers = createMarkerLayers(v);
-    const removeTapHandler = setupMarkerTapHandler(v, (kind) => {
-      navigate(kind === 'activity' ? '/toukou' : '/duck');
-    });
 
     let activityPoints: MarkerPoint[] = [];
     void fetchMainActivityMarkers().then((points) => {
@@ -98,6 +109,68 @@ export function MainMap() {
       if (activityPoints.some((p) => p.id === marker.id)) return;
       activityPoints = [...activityPoints, marker];
       markerLayers.setActivities(activityPoints);
+    });
+
+    // §B: tapping an exclamation marker plays a cinematic (framing highlight
+    // -> fly-in -> slow orbit) around that specific place, then shows a popup
+    // for it -- one place, one cinematic at a time (see `cinematic` below).
+    // The Kyoto camera clamp is lifted for the duration (the close-up/orbit
+    // view is tighter than the clamp expects) and restored when it ends.
+    let cinematic: { cancelled: boolean; removeFraming: () => void; cancelOrbit: (() => void) | null } | null =
+      null;
+
+    function closeCinematic() {
+      if (cinematic) {
+        cinematic.cancelled = true;
+        cinematic.removeFraming();
+        cinematic.cancelOrbit?.();
+        cinematic = null;
+      }
+      setPlacePopup(null);
+      if (!v.isDestroyed() && !constraintsCleanupRef.current) {
+        constraintsCleanupRef.current = applyKyotoCameraConstraints(v);
+        void flyToHomeView(v);
+      }
+    }
+    closeCinematicRef.current = closeCinematic;
+
+    async function startPlaceCinematic(mainId: string) {
+      if (cinematic || v.isDestroyed()) return;
+      const point = activityPoints.find((p) => p.id === mainId);
+      if (!point) return;
+
+      constraintsCleanupRef.current?.();
+      constraintsCleanupRef.current = null;
+
+      const removeFraming = addPlaceFraming(v, point.lat, point.lng);
+      const session = { cancelled: false, removeFraming, cancelOrbit: null as (() => void) | null };
+      cinematic = session;
+
+      const previewPromise = fetchActivityPreview(mainId).catch(() => null);
+
+      await flyToPlace(v, point.lat, point.lng);
+      if (session.cancelled || v.isDestroyed()) return;
+
+      const { promise: orbitPromise, cancel: cancelOrbit } = orbitPlace(v, point.lat, point.lng);
+      session.cancelOrbit = cancelOrbit;
+      await orbitPromise;
+      if (session.cancelled || v.isDestroyed()) return;
+
+      const preview = await previewPromise;
+      if (session.cancelled || v.isDestroyed()) return;
+      if (!preview) {
+        closeCinematic();
+        return;
+      }
+      setPlacePopup({ mainId, preview });
+    }
+
+    const removeTapHandler = setupMarkerTapHandler(v, (kind, refId) => {
+      if (kind === 'duckSpot') {
+        navigate('/duck');
+        return;
+      }
+      void startPlaceCinematic(refId);
     });
 
     const signal = { cancelled: false };
@@ -151,6 +224,7 @@ export function MainMap() {
 
     return () => {
       timers.forEach(clearTimeout);
+      cinematic?.cancelOrbit?.();
       constraintsCleanupRef.current?.();
       unsubscribeActivityInserts();
       removeTapHandler();
@@ -280,6 +354,13 @@ export function MainMap() {
       {introPhase !== 'done' && <Intro phase={introPhase} onSkip={() => skipRef.current()} />}
       {showOnboarding && <Onboarding onComplete={(fields) => void completeOnboarding(fields)} />}
       {tutorialOpen && <Tutorial onClose={closeTutorial} />}
+      {placePopup && (
+        <PlacePopup
+          preview={placePopup.preview}
+          onClose={() => closeCinematicRef.current()}
+          onViewActivity={() => navigate(`/toukou?main=${placePopup.mainId}`)}
+        />
+      )}
     </div>
   );
 }

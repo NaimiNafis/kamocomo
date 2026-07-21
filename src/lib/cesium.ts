@@ -180,6 +180,15 @@ function flyToStep(viewer: Cesium.Viewer, view: CameraView, duration: number): P
 }
 
 /**
+ * Flies back to the resting home view (e.g. after closing a marker-tap
+ * cinematic) so the visitor can see and tap other markers again, instead of
+ * being left zoomed into wherever the cinematic ended.
+ */
+export function flyToHomeView(viewer: Cesium.Viewer, durationSeconds = 1.2): Promise<void> {
+  return flyToStep(viewer, HERO_VIEW, durationSeconds);
+}
+
+/**
  * §5.1 intro flight: the far side of Earth -> Japan -> Kyoto -> Kamogawa
  * Delta, ~5s total. Starts from FAR_SIDE_VIEW instantly (the reveal happens
  * in the overlay, not here) so the first leg visibly sweeps across the whole
@@ -368,4 +377,137 @@ export function setupMarkerTapHandler(
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   return () => handler.destroy();
+}
+
+// =========================================================================
+// Marker-tap cinematic: framing highlight -> close fly-in -> slow orbit.
+// The Kyoto camera-bounds clamp is lifted by the caller for the duration
+// (see MainMap), since the close-up/orbit view is tighter than the clamp
+// expects and the target is inside Kyoto anyway.
+// =========================================================================
+
+function squareOutlineCorners(center: Cesium.Cartesian3, halfSizeMeters: number): Cesium.Cartesian3[] {
+  const enuTransform = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+  const corners: [number, number][] = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+    [-1, -1],
+  ];
+  return corners.map(([ex, ey]) =>
+    Cesium.Matrix4.multiplyByPoint(
+      enuTransform,
+      new Cesium.Cartesian3(ex * halfSizeMeters, ey * halfSizeMeters, 0),
+      new Cesium.Cartesian3(),
+    ),
+  );
+}
+
+/**
+ * A pulsing square outline at the spot -- a camera-viewfinder-style framing
+ * highlight, ground-clamped. Calm sine pulse (§4.3: nothing bouncy). Returns
+ * a remover.
+ */
+export function addPlaceFraming(viewer: Cesium.Viewer, lat: number, lng: number): () => void {
+  const center = Cesium.Cartesian3.fromDegrees(lng, lat);
+  const startTime = performance.now();
+
+  const positions = new Cesium.CallbackProperty(() => {
+    const elapsedSeconds = (performance.now() - startTime) / 1000;
+    const pulse = 1 + 0.15 * Math.sin(elapsedSeconds * 3);
+    return squareOutlineCorners(center, 22 * pulse);
+  }, false);
+
+  const entity = viewer.entities.add({
+    polyline: {
+      positions,
+      width: 3,
+      material: kamoColor('--kamo-sunset'),
+      clampToGround: true,
+    },
+  });
+
+  return () => viewer.entities.remove(entity);
+}
+
+const PLACE_VIEW_HEIGHT_M = 350;
+const PLACE_VIEW_PITCH_RADIANS = Cesium.Math.toRadians(-38);
+
+/** Flies in close and low over the spot (oblique, not top-down) so its
+ * surroundings actually read as a place rather than a satellite dot. */
+export function flyToPlace(
+  viewer: Cesium.Viewer,
+  lat: number,
+  lng: number,
+  durationSeconds = 1.8,
+): Promise<void> {
+  return new Promise((resolve) => {
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lng, lat - 0.002, PLACE_VIEW_HEIGHT_M),
+      orientation: { heading: 0, pitch: PLACE_VIEW_PITCH_RADIANS, roll: 0 },
+      duration: durationSeconds,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
+      complete: () => resolve(),
+      cancel: () => resolve(),
+    });
+  });
+}
+
+/**
+ * Slowly sweeps the camera heading partway around the spot (not a full
+ * spin) so the visitor sees where it sits relative to its surroundings, then
+ * releases the lookAt lock. Cesium has no continuous-orbit API, so this
+ * drives `camera.lookAt` per frame -- the standard technique for it.
+ * Returns a promise (resolves when the sweep ends or is cancelled) and a
+ * cancel function.
+ */
+export function orbitPlace(
+  viewer: Cesium.Viewer,
+  lat: number,
+  lng: number,
+  durationMs = 2000,
+): { promise: Promise<void>; cancel: () => void } {
+  const center = Cesium.Cartesian3.fromDegrees(lng, lat);
+  const startHeading = viewer.camera.heading;
+  const totalRotation = Cesium.Math.toRadians(75);
+  const startTime = performance.now();
+  let cancelled = false;
+  let rafId = 0;
+
+  function release() {
+    if (!viewer.isDestroyed()) viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  }
+
+  const promise = new Promise<void>((resolve) => {
+    function tick() {
+      if (cancelled || viewer.isDestroyed()) {
+        resolve();
+        return;
+      }
+      const t = Math.min((performance.now() - startTime) / durationMs, 1);
+      const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+      const heading = startHeading + totalRotation * eased;
+      viewer.camera.lookAt(
+        center,
+        new Cesium.HeadingPitchRange(heading, PLACE_VIEW_PITCH_RADIANS, PLACE_VIEW_HEIGHT_M),
+      );
+      if (t >= 1) {
+        release();
+        resolve();
+        return;
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+    rafId = requestAnimationFrame(tick);
+  });
+
+  return {
+    promise,
+    cancel: () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      release();
+    },
+  };
 }

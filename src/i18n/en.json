@@ -44,7 +44,8 @@
     "archiveButton": "Archive",
     "back": "Back to map",
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
-    "dragHint": "Drag to look around"
+    "dragHint": "Drag to look around",
+    "viewActivity": "View activity"
   },
   "archive": {
     "title": "Archive",

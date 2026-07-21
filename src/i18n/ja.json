@@ -44,7 +44,8 @@
     "archiveButton": "アーカイブ",
     "back": "地図に戻る",
     "qrWelcome": "鴨川への隠れた入口を見つけました",
-    "dragHint": "ドラッグして周りを見渡そう"
+    "dragHint": "ドラッグして周りを見渡そう",
+    "viewActivity": "活動を見る"
   },
   "archive": {
     "title": "アーカイブ",
