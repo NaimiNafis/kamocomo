@@ -115,7 +115,7 @@
     "reported": "報告しました",
     "stampCardTitle": "鴨図鑑",
     "stampProgress": "{{earned}} / 10 地点",
-    "stampHint": "川沿いの各鴨地点でQRを読み取ってカードを埋めましょう。",
+    "stampHint": "川沿いの鴨のQRを読み取ってカードを埋めましょう。",
     "certificateLocked": "10個すべて集めると証明書が手に入ります。",
     "certificateUnlocked": "証明書を獲得しました!",
     "viewCertificate": "証明書を見る"
@@ -128,7 +128,7 @@
     "tooFar": "鴨地点にもっと近づいてください",
     "tooFarDetail": "約{{distance}}m離れています。スタンプを得るには120m以内に入る必要があります。",
     "locationNeeded": "位置情報が必要です",
-    "locationDenied": "スタンプを集めるには位置情報を許可してください。実際に川にいたことの証明になります。",
+    "locationDenied": "鴨を捕まえるには位置情報を許可してください。実際に川にいたことの証明になります。",
     "locationUnavailable": "現在地を取得できませんでした。地点の近くでもう一度お試しください。",
     "notFound": "この地点は認識できませんでした。",
     "missingSpot": "このリンクに地点がありません。",
