@@ -29,3 +29,6 @@ supabase/.temp
 
 # generated QR codes (reproducible from scripts/generate-qr.ts + duck_spots)
 qr-codes/
+
+# vs
+.vs/

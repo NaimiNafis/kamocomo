@@ -67,8 +67,8 @@
     "empty": "まだ活動がありません。最初の投稿をしてみましょう。",
     "createMain": "活動を投稿",
     "nextGathering": "次の集いまで あと{{days}}日{{hours}}時間",
-    "nextGatheringSoon": "まもなく次の集いが始まります",
-    "noGathering": "次の集いは未定です",
+    "nextGatheringSoon": "まもなく次の集まりが始まります",
+    "noGathering": "次の集まりは未定です",
     "addSub": "この活動に加わる",
     "viewArchived": "過去の投稿を見る",
     "like": "いいね",
@@ -87,7 +87,7 @@
   "composer": {
     "mainTitle": "活動を投稿",
     "subTitle": "この活動に加わる",
-    "activityType": "何をしていますか?",
+    "activityType": "何をしていますか？",
     "phrase": "ひとこと",
     "phrasePlaceholder": "例:静かだからここで書いています",
     "addPhoto": "写真を追加",
@@ -113,9 +113,9 @@
     "posting": "共有中…",
     "report": "報告",
     "reported": "報告しました",
-    "stampCardTitle": "鴨スタンプラリー",
-    "stampProgress": "{{earned}} / 10 スポット",
-    "stampHint": "川沿いの各鴨スポットでQRを読み取ってカードを埋めましょう。",
+    "stampCardTitle": "鴨図鑑",
+    "stampProgress": "{{earned}} / 10 地点",
+    "stampHint": "川沿いの各鴨地点でQRを読み取ってカードを埋めましょう。",
     "certificateLocked": "10個すべて集めると証明書が手に入ります。",
     "certificateUnlocked": "証明書を獲得しました!",
     "viewCertificate": "証明書を見る"
@@ -123,15 +123,15 @@
   "scan": {
     "locating": "現在地を確認中…",
     "collected": "スタンプを獲得!",
-    "alreadyCollected": "取得済み",
-    "alreadyDetail": "このスポットのスタンプはすでに獲得しています。",
-    "tooFar": "鴨スポットにもっと近づいてください",
+    "alreadyCollected": "獲得済み",
+    "alreadyDetail": "この地点の鴨はすでに獲得しています。",
+    "tooFar": "鴨地点にもっと近づいてください",
     "tooFarDetail": "約{{distance}}m離れています。スタンプを得るには120m以内に入る必要があります。",
     "locationNeeded": "位置情報が必要です",
     "locationDenied": "スタンプを集めるには位置情報を許可してください。実際に川にいたことの証明になります。",
-    "locationUnavailable": "現在地を取得できませんでした。スポットの近くでもう一度お試しください。",
-    "notFound": "このスポットコードは認識できませんでした。",
-    "missingSpot": "このリンクにスポットコードがありません。",
+    "locationUnavailable": "現在地を取得できませんでした。地点の近くでもう一度お試しください。",
+    "notFound": "この地点は認識できませんでした。",
+    "missingSpot": "このリンクに地点がありません。",
     "progress": "{{count}} / 10 スタンプ",
     "certificateUnlocked": "10個すべて集めました!証明書が手に入りました。",
     "goToDuck": "鴨ページへ",
@@ -139,9 +139,9 @@
     "deltaTestMode": "テストモード:デルタの位置を使う"
   },
   "certificate": {
-    "heading": "Certificate of Completion",
+    "heading": "修了証",
     "headingJa": "達成証明書",
-    "body": "awarded for collecting all ten duck stamps along the Kamogawa",
+    "body": "鴨川沿いでアヒル図鑑をコンプリートしました！",
     "bodyJa": "鴨川のすべての鴨スタンプを集めたことを証します",
     "issued": "発行日 {{date}}",
     "close": "閉じる"
@@ -154,7 +154,7 @@
     "slides": [
       {
         "title": "鴨川へようこそ",
-        "body": "この地図には、今まさに川辺で起きていることがリアルタイムで映し出されます。"
+        "body": "この地図には、川辺で起きていることがリアルタイムで映し出されます。"
       },
       {
         "title": "❗マーク",
@@ -162,15 +162,15 @@
       },
       {
         "title": "🦆マーク",
-        "body": "🦆マークをタップすると、鴨の写真や近くのスタンプスポットが見られます。"
+        "body": "🦆マークをタップすると、鴨の写真や近くのスタンプ地点が見られます。"
       },
       {
         "title": "参加してみよう",
-        "body": "自分の活動を投稿したり、誰かの投稿に加わったり -- みんな歓迎です。"
+        "body": "自分の活動を投稿したり、誰かの投稿に加わったり -- すべて歓迎されます。"
       },
       {
         "title": "スタンプを集めよう",
-        "body": "川沿いの実際の鴨スポットでQRコードを読み取ると、スタンプがもらえます。"
+        "body": "川沿いの実際の鴨地点でQRコードを読み取ると、スタンプがもらえます。"
       }
     ]
   }
