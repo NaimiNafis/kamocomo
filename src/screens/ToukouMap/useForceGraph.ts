@@ -34,15 +34,15 @@ export interface NodePosition {
 }
 
 // Collision radii sized to each element's worst-case bounding *circle* (half
-// its diagonal): main cards ~128x190, sub cards ~96x134, and the small "+"
-// add-sub button. Covering the full circle (not just the width) stops cards
+// its diagonal): main cards ~128x190, sub cards ~96x134. The "add" node is a
+// blank sub-sized card, so it lays out exactly like a sub (an empty slot in
+// the orbit). Covering the full circle (not just the width) stops cards
 // sliding vertically into each other.
 const MAIN_RADIUS = 116;
 const SUB_RADIUS = 84;
-const ADD_RADIUS = 26;
 
 function radiusOf(kind: GraphNodeKind): number {
-  return kind === 'main' ? MAIN_RADIUS : kind === 'sub' ? SUB_RADIUS : ADD_RADIUS;
+  return kind === 'main' ? MAIN_RADIUS : SUB_RADIUS;
 }
 
 /**
@@ -102,20 +102,14 @@ export function useForceGraph(nodes: GraphNode[], edges: ToukouEdge[]) {
     const simulation = forceSimulation(simNodes)
       .force(
         'charge',
-        forceManyBody<SimNode>().strength((d) =>
-          d.kind === 'main' ? -520 : d.kind === 'sub' ? -140 : -60,
-        ),
+        // The add card behaves like a sub (an empty extra slot in the orbit).
+        forceManyBody<SimNode>().strength((d) => (d.kind === 'main' ? -520 : -140)),
       )
       .force(
         'link',
         forceLink<SimNode, SimLink>(simLinks)
           .id((d) => d.id)
-          // The "+" sits close to its main; subs orbit a bit further out.
-          .distance((l) =>
-            (l.source as SimNode).kind === 'addsub'
-              ? MAIN_RADIUS + ADD_RADIUS + 8
-              : MAIN_RADIUS + SUB_RADIUS + 30,
-          )
+          .distance(MAIN_RADIUS + SUB_RADIUS + 30)
           .strength(0.75),
       )
       .force('center', forceCenter(0, 0))

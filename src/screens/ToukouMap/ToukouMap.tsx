@@ -21,6 +21,7 @@ import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
 import { NodeCard } from './NodeCard';
+import { AddCard } from './AddCard';
 import { Composer, type ComposerResult } from './Composer';
 import { ReportDialog, type ReportReason } from './ReportDialog';
 import { useForceGraph, type GraphNode } from './useForceGraph';
@@ -239,16 +240,12 @@ export function ToukouMap() {
                   className="absolute -translate-x-1/2 -translate-y-1/2"
                   style={{ left: pos.x, top: pos.y }}
                 >
-                  <button
-                    type="button"
-                    data-testid="add-sub"
-                    aria-label={t('toukou.addSub')}
+                  <AddCard
+                    color={main?.color ?? '#2E3A59'}
+                    label={t('toukou.addSub')}
+                    testId="add-sub"
                     onClick={() => setComposer({ mode: 'sub', parentId: mainId })}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-lg font-medium text-kamo-stone shadow-md"
-                    style={{ backgroundColor: main?.color ?? '#2E3A59' }}
-                  >
-                    +
-                  </button>
+                  />
                 </div>
               );
             }

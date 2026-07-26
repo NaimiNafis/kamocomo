@@ -5,6 +5,7 @@ import { duckIconDataUri } from '../../lib/ducks';
 import type { DuckGraph as DuckGraphData, DuckNode } from '../../lib/duck';
 import { useForceGraph, type GraphNode } from '../ToukouMap/useForceGraph';
 import { useGraphViewport } from '../ToukouMap/useGraphViewport';
+import { AddCard } from '../ToukouMap/AddCard';
 
 const EDGE_OFFSET = 4000;
 const ADD_PREFIX = 'add:';
@@ -112,17 +113,13 @@ export function DuckGraph({ graph, reportedIds, uploading, onUpload, onReport }:
             const main = nodeById.get(spotId);
             return (
               <div key={ln.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: pos.x, top: pos.y }}>
-                <button
-                  type="button"
-                  data-testid="duck-add"
-                  aria-label={t('duck.addPhoto')}
+                <AddCard
+                  color={main?.color ?? '#E0885E'}
+                  label={t('duck.addPhoto')}
+                  testId="duck-add"
                   disabled={uploading}
                   onClick={() => pickPhotoFor(spotId)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-lg font-medium text-kamo-stone shadow-md disabled:opacity-50"
-                  style={{ backgroundColor: main?.color ?? '#E0885E' }}
-                >
-                  +
-                </button>
+                />
               </div>
             );
           }
