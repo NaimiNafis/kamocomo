@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
@@ -24,44 +24,12 @@ import { NodeCard } from './NodeCard';
 import { Composer, type ComposerResult } from './Composer';
 import { ReportDialog, type ReportReason } from './ReportDialog';
 import { useForceGraph, type GraphNode } from './useForceGraph';
+import { useGraphViewport } from './useGraphViewport';
 
 const EDGE_OFFSET = 4000;
-const MIN_SCALE = 0.4;
-const MAX_SCALE = 2;
-const FIT_PADDING = 90; // room for card size around the extreme nodes
-
-interface ViewTransform {
-  tx: number;
-  ty: number;
-  scale: number;
-}
-
-type Gesture =
-  | { kind: 'pan'; startX: number; startY: number; startTx: number; startTy: number }
-  | { kind: 'node'; id: string }
-  | { kind: 'pinch'; startDist: number; startScale: number; worldX: number; worldY: number };
-
-type ComposerState = { mode: 'main' } | { mode: 'sub'; parentId: string } | null;
-
 const ADD_PREFIX = 'add:';
 
-/** The auto-fit transform: scale + translate that frames every node in the
- * viewport, centered. Pure, so it can be derived during render each tick. */
-function fitView(positions: Map<string, { x: number; y: number }>, size: { w: number; h: number }): ViewTransform {
-  const pts = [...positions.values()];
-  if (pts.length === 0 || size.w === 0) return { tx: 0, ty: 0, scale: 1 };
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const scale = Math.min(
-    MAX_SCALE,
-    Math.max(MIN_SCALE, Math.min((size.w - FIT_PADDING) / Math.max(maxX - minX, 1), (size.h - FIT_PADDING) / Math.max(maxY - minY, 1))),
-  );
-  return { scale, tx: (-(minX + maxX) / 2) * scale, ty: (-(minY + maxY) / 2) * scale };
-}
+type ComposerState = { mode: 'main' } | { mode: 'sub'; parentId: string } | null;
 
 /**
  * One place's board (§C1/item 7): every main happening there today, each in
@@ -104,13 +72,11 @@ export function ToukouMap() {
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const [userView, setUserView] = useState<ViewTransform | null>(null);
-  const view = userView ?? fitView(positions, size);
-  const gesture = useRef<Gesture | null>(null);
-  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const { viewportRef, cx, cy, view, containerHandlers } = useGraphViewport(positions, {
+    startDrag,
+    drag,
+    endDrag,
+  });
 
   // Every place marker passes ?place=; a bare /toukou visit has nowhere to go.
   useEffect(() => {
@@ -172,121 +138,6 @@ export function ToukouMap() {
       unsubscribe();
     };
   }, [userId, placeId, event, refetchBoard]);
-
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const cx = size.w / 2;
-  const cy = size.h / 2;
-
-  function toWorld(clientX: number, clientY: number) {
-    const rect = viewportRef.current!.getBoundingClientRect();
-    return {
-      x: (clientX - rect.left - cx - view.tx) / view.scale,
-      y: (clientY - rect.top - cy - view.ty) / view.scale,
-    };
-  }
-
-  function pinchMetrics() {
-    const [a, b] = [...pointers.current.values()];
-    return { dist: Math.hypot(a.x - b.x, a.y - b.y), midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2 };
-  }
-
-  function releaseCapture(pointerId: number) {
-    try {
-      viewportRef.current?.releasePointerCapture(pointerId);
-    } catch {
-      /* not captured -- fine */
-    }
-  }
-
-  // All pointer handling is container-level so a second finger can start a
-  // pinch even when both fingers are on nodes (item 4). A single pointer on a
-  // card body drags that node; on a button, nothing (the button's click
-  // fires); on the background, it pans.
-  function handlePointerDown(e: React.PointerEvent) {
-    const target = e.target as HTMLElement;
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (pointers.current.size === 2) {
-      if (gesture.current?.kind === 'node') endDrag(gesture.current.id);
-      setUserView(view);
-      const { dist, midX, midY } = pinchMetrics();
-      const world = toWorld(midX, midY);
-      gesture.current = { kind: 'pinch', startDist: dist, startScale: view.scale, worldX: world.x, worldY: world.y };
-      viewportRef.current?.setPointerCapture(e.pointerId);
-      return;
-    }
-    if (pointers.current.size > 2) return;
-
-    if (target.closest('button')) return; // let the tapped button handle it
-
-    const nodeEl = target.closest('[data-node-id]') as HTMLElement | null;
-    if (nodeEl?.dataset.nodeId) {
-      setUserView(view);
-      gesture.current = { kind: 'node', id: nodeEl.dataset.nodeId };
-      startDrag(nodeEl.dataset.nodeId);
-    } else {
-      setUserView(view);
-      gesture.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, startTx: view.tx, startTy: view.ty };
-    }
-    viewportRef.current?.setPointerCapture(e.pointerId);
-  }
-
-  function handlePointerMove(e: React.PointerEvent) {
-    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const g = gesture.current;
-    if (!g) return;
-
-    if (g.kind === 'pinch') {
-      if (pointers.current.size < 2) return;
-      const { dist, midX, midY } = pinchMetrics();
-      const rect = viewportRef.current!.getBoundingClientRect();
-      const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, g.startScale * (dist / g.startDist)));
-      setUserView({ scale, tx: midX - rect.left - cx - g.worldX * scale, ty: midY - rect.top - cy - g.worldY * scale });
-    } else if (g.kind === 'pan') {
-      setUserView((v) => ({
-        scale: v?.scale ?? view.scale,
-        tx: g.startTx + (e.clientX - g.startX),
-        ty: g.startTy + (e.clientY - g.startY),
-      }));
-    } else {
-      const world = toWorld(e.clientX, e.clientY);
-      drag(g.id, world.x, world.y);
-    }
-  }
-
-  function handlePointerUp(e: React.PointerEvent) {
-    pointers.current.delete(e.pointerId);
-    releaseCapture(e.pointerId);
-    const g = gesture.current;
-
-    if (g?.kind === 'pinch' && pointers.current.size === 1) {
-      // One finger lifted mid-pinch -> keep going as a pan with the other.
-      const [rem] = [...pointers.current.values()];
-      gesture.current = { kind: 'pan', startX: rem.x, startY: rem.y, startTx: view.tx, startTy: view.ty };
-      return;
-    }
-    if (pointers.current.size === 0) {
-      if (g?.kind === 'node') endDrag(g.id);
-      gesture.current = null;
-    }
-  }
-
-  function handleWheel(e: React.WheelEvent) {
-    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-    setUserView((v) => {
-      const base = v ?? view;
-      return { ...base, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, base.scale * factor)) };
-    });
-  }
 
   async function handleVote(node: ToukouNode, value: 1 | -1) {
     if (!userId) return;
@@ -350,15 +201,7 @@ export function ToukouMap() {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-kamo-stone">
-      <div
-        ref={viewportRef}
-        className="absolute inset-0 touch-none"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onWheel={handleWheel}
-      >
+      <div ref={viewportRef} className="absolute inset-0 touch-none" {...containerHandlers}>
         <div
           className="absolute left-0 top-0 origin-top-left"
           style={{ transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})` }}

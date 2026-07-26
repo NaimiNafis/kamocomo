@@ -115,6 +115,7 @@
     "error": "Couldn't load the duck page.",
     "empty": "No duck photos yet. Share the first one.",
     "addPhoto": "Share a duck photo",
+    "graphHint": "Tap a duck's + to share a photo of it.",
     "posting": "Sharing…",
     "report": "Report",
     "reported": "Reported",

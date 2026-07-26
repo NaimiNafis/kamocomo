@@ -1,0 +1,188 @@
+import { useEffect, useRef, useState } from 'react';
+import type { NodePosition } from './useForceGraph';
+
+const MIN_SCALE = 0.4;
+const MAX_SCALE = 2;
+const FIT_PADDING = 90; // room for card size around the extreme nodes
+
+export interface ViewTransform {
+  tx: number;
+  ty: number;
+  scale: number;
+}
+
+type Gesture =
+  | { kind: 'pan'; startX: number; startY: number; startTx: number; startTy: number }
+  | { kind: 'node'; id: string }
+  | { kind: 'pinch'; startDist: number; startScale: number; worldX: number; worldY: number };
+
+/** The auto-fit transform that frames every node in the viewport, centered.
+ * Pure, so it can be derived during render each tick. */
+function fitView(positions: Map<string, NodePosition>, size: { w: number; h: number }): ViewTransform {
+  const pts = [...positions.values()];
+  if (pts.length === 0 || size.w === 0) return { tx: 0, ty: 0, scale: 1 };
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const scale = Math.min(
+    MAX_SCALE,
+    Math.max(MIN_SCALE, Math.min((size.w - FIT_PADDING) / Math.max(maxX - minX, 1), (size.h - FIT_PADDING) / Math.max(maxY - minY, 1))),
+  );
+  return { scale, tx: (-(minX + maxX) / 2) * scale, ty: (-(minY + maxY) / 2) * scale };
+}
+
+export interface GraphDragHandlers {
+  startDrag: (id: string) => void;
+  drag: (id: string, x: number, y: number) => void;
+  endDrag: (id: string) => void;
+}
+
+/**
+ * Shared pan / wheel-zoom / two-finger-pinch / node-drag interaction for a
+ * force-graph canvas (the toukou board and the duck graph both use it). All
+ * pointer handling is container-level so a second finger starts a pinch even
+ * when both fingers are on nodes (item 4): a single pointer on a `button` is
+ * left alone (its click fires), on a `[data-node-id]` element drags that node,
+ * and on the background pans; a second pointer converts to a pinch about the
+ * midpoint and cancels any in-progress node drag.
+ *
+ * The view auto-fits to frame the whole graph until the user interacts, then
+ * `userView` takes over -- derived during render (not via a setState effect)
+ * so it doesn't cascade a render on every simulation tick.
+ */
+export function useGraphViewport(positions: Map<string, NodePosition>, drag: GraphDragHandlers) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [userView, setUserView] = useState<ViewTransform | null>(null);
+  const view = userView ?? fitView(positions, size);
+  const gesture = useRef<Gesture | null>(null);
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const cx = size.w / 2;
+  const cy = size.h / 2;
+
+  function toWorld(clientX: number, clientY: number) {
+    const rect = viewportRef.current!.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - cx - view.tx) / view.scale,
+      y: (clientY - rect.top - cy - view.ty) / view.scale,
+    };
+  }
+
+  function pinchMetrics() {
+    const [a, b] = [...pointers.current.values()];
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2 };
+  }
+
+  function releaseCapture(pointerId: number) {
+    try {
+      viewportRef.current?.releasePointerCapture(pointerId);
+    } catch {
+      /* not captured -- fine */
+    }
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    const target = e.target as HTMLElement;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.current.size === 2) {
+      if (gesture.current?.kind === 'node') drag.endDrag(gesture.current.id);
+      setUserView(view);
+      const { dist, midX, midY } = pinchMetrics();
+      const world = toWorld(midX, midY);
+      gesture.current = { kind: 'pinch', startDist: dist, startScale: view.scale, worldX: world.x, worldY: world.y };
+      viewportRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (pointers.current.size > 2) return;
+
+    if (target.closest('button')) return; // let the tapped button handle it
+
+    const nodeEl = target.closest('[data-node-id]') as HTMLElement | null;
+    if (nodeEl?.dataset.nodeId) {
+      setUserView(view);
+      gesture.current = { kind: 'node', id: nodeEl.dataset.nodeId };
+      drag.startDrag(nodeEl.dataset.nodeId);
+    } else {
+      setUserView(view);
+      gesture.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, startTx: view.tx, startTy: view.ty };
+    }
+    viewportRef.current?.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+    if (!g) return;
+
+    if (g.kind === 'pinch') {
+      if (pointers.current.size < 2) return;
+      const { dist, midX, midY } = pinchMetrics();
+      const rect = viewportRef.current!.getBoundingClientRect();
+      const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, g.startScale * (dist / g.startDist)));
+      setUserView({ scale, tx: midX - rect.left - cx - g.worldX * scale, ty: midY - rect.top - cy - g.worldY * scale });
+    } else if (g.kind === 'pan') {
+      setUserView((v) => ({
+        scale: v?.scale ?? view.scale,
+        tx: g.startTx + (e.clientX - g.startX),
+        ty: g.startTy + (e.clientY - g.startY),
+      }));
+    } else {
+      const world = toWorld(e.clientX, e.clientY);
+      drag.drag(g.id, world.x, world.y);
+    }
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    pointers.current.delete(e.pointerId);
+    releaseCapture(e.pointerId);
+    const g = gesture.current;
+
+    if (g?.kind === 'pinch' && pointers.current.size === 1) {
+      const [rem] = [...pointers.current.values()];
+      gesture.current = { kind: 'pan', startX: rem.x, startY: rem.y, startTx: view.tx, startTy: view.ty };
+      return;
+    }
+    if (pointers.current.size === 0) {
+      if (g?.kind === 'node') drag.endDrag(g.id);
+      gesture.current = null;
+    }
+  }
+
+  function onWheel(e: React.WheelEvent) {
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    setUserView((v) => {
+      const base = v ?? view;
+      return { ...base, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, base.scale * factor)) };
+    });
+  }
+
+  return {
+    viewportRef,
+    size,
+    cx,
+    cy,
+    view,
+    containerHandlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onPointerCancel: onPointerUp,
+      onWheel,
+    },
+  };
+}

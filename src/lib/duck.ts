@@ -1,31 +1,87 @@
 import { supabase } from './supabase';
-import { uploadPhoto, reportContent } from './toukou';
+import { uploadPhoto, reportContent, subShade, type ToukouEdge } from './toukou';
 import { KAMOGAWA_DELTA, getPosition } from './geo';
+import { duckColor } from './ducks';
 
 // =========================================================================
-// Duck photo feed (social; decoupled from stamps -- §5.7)
+// Duck graph (§6/item 6): the 10 ducks as main nodes, shared photos as subs.
+// The duck page is a toukou-style graph -- each duck spot IS a duck (its color
+// is shared with its map marker + stamp slot), and people post photos onto a
+// duck, which show up as its subs.
 // =========================================================================
 
-export interface DuckPost {
+export interface DuckNode {
   id: string;
-  photoUrl: string;
-  createdAt: string;
+  kind: 'main' | 'sub';
+  parentId: string | null;
+  color: string;
+  nameEn: string; // main only (subs get '')
+  nameJa: string;
+  earned: boolean; // main only -- whether this user has this duck's stamp
+  photoUrl: string | null; // sub only
 }
 
-export async function fetchDuckPosts(): Promise<DuckPost[]> {
-  const { data, error } = await supabase
-    .from('duck_posts')
-    .select('id, photo_url, created_at')
-    .eq('hidden', false)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data.map((d) => ({ id: d.id, photoUrl: d.photo_url, createdAt: d.created_at }));
+export interface DuckGraph {
+  nodes: DuckNode[];
+  edges: ToukouEdge[];
 }
 
-/** Uploads the photo and creates a duck post. Location is best-effort (falls
- * back to the Kamogawa default) -- unlike a stamp scan, a photo post isn't
- * geofenced. */
-export async function createDuckPost(userId: string, photoFile: File): Promise<void> {
+/** Builds the duck graph: the 10 active duck spots as colored main nodes
+ * (ordered lat-desc so colors match the map/stamp card), each flagged with
+ * whether the user has earned its stamp, plus every non-hidden duck photo as
+ * a sub of its duck. */
+export async function fetchDuckGraph(userId: string): Promise<DuckGraph> {
+  const [{ data: spots, error: se }, { data: posts, error: pe }, { data: stamps, error: ste }] =
+    await Promise.all([
+      supabase.from('duck_spots').select('id, name_en, name_ja').eq('active', true).order('lat', { ascending: false }),
+      supabase
+        .from('duck_posts')
+        .select('id, photo_url, duck_spot_id')
+        .eq('hidden', false)
+        .not('duck_spot_id', 'is', null)
+        .order('created_at', { ascending: true }),
+      supabase.from('stamps').select('duck_spot_id').eq('user_id', userId),
+    ]);
+  if (se) throw se;
+  if (pe) throw pe;
+  if (ste) throw ste;
+
+  const earned = new Set(stamps.map((s) => s.duck_spot_id));
+  const colorBySpot = new Map(spots.map((s, i) => [s.id, duckColor(i)]));
+
+  const mainNodes: DuckNode[] = spots.map((s, i) => ({
+    id: s.id,
+    kind: 'main',
+    parentId: null,
+    color: duckColor(i),
+    nameEn: s.name_en,
+    nameJa: s.name_ja,
+    earned: earned.has(s.id),
+    photoUrl: null,
+  }));
+
+  const spotIds = new Set(spots.map((s) => s.id));
+  const subNodes: DuckNode[] = posts
+    .filter((p) => spotIds.has(p.duck_spot_id))
+    .map((p) => ({
+      id: p.id,
+      kind: 'sub',
+      parentId: p.duck_spot_id,
+      color: subShade(colorBySpot.get(p.duck_spot_id) ?? '#e0885e'),
+      nameEn: '',
+      nameJa: '',
+      earned: false,
+      photoUrl: p.photo_url,
+    }));
+
+  const edges: ToukouEdge[] = subNodes.map((s) => ({ source: s.id, target: s.parentId as string }));
+  return { nodes: [...mainNodes, ...subNodes], edges };
+}
+
+/** Uploads a photo and posts it onto a specific duck. Location is best-effort
+ * (falls back to the Kamogawa default) -- unlike a stamp scan, a photo post
+ * isn't geofenced. */
+export async function createDuckPost(userId: string, photoFile: File, duckSpotId: string): Promise<void> {
   const photoUrl = await uploadPhoto(userId, photoFile);
   let lat = KAMOGAWA_DELTA.latitude;
   let lng = KAMOGAWA_DELTA.longitude;
@@ -38,12 +94,23 @@ export async function createDuckPost(userId: string, photoFile: File): Promise<v
   }
   const { error } = await supabase
     .from('duck_posts')
-    .insert({ author_id: userId, photo_url: photoUrl, lat, lng });
+    .insert({ author_id: userId, photo_url: photoUrl, duck_spot_id: duckSpotId, lat, lng });
   if (error) throw error;
 }
 
 export function reportDuckPost(reporterId: string, postId: string): Promise<void> {
   return reportContent(reporterId, 'duck_post', postId);
+}
+
+/** Realtime: new duck photos appear in the graph without a reload. */
+export function subscribeToDuckPosts(onChange: () => void): () => void {
+  const channel = supabase
+    .channel('duck-posts-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'duck_posts' }, onChange)
+    .subscribe();
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }
 
 // =========================================================================
@@ -58,6 +125,7 @@ export interface DuckSpot {
 
 export interface StampCardSlot extends DuckSpot {
   earned: boolean;
+  color: string; // this duck's color (shared with its map marker + graph node)
 }
 
 export async function fetchDuckSpots(): Promise<DuckSpot[]> {
@@ -79,7 +147,9 @@ export async function fetchStampCard(userId: string): Promise<StampCardSlot[]> {
   ]);
   if (error) throw error;
   const earned = new Set(stamps.map((s) => s.duck_spot_id));
-  return spots.map((s) => ({ ...s, earned: earned.has(s.id) }));
+  // Ordered lat-desc by fetchDuckSpots, so index -> duckColor matches the map
+  // markers and the duck graph.
+  return spots.map((s, i) => ({ ...s, earned: earned.has(s.id), color: duckColor(i) }));
 }
 
 export async function fetchCertificate(userId: string): Promise<{ issuedAt: string } | null> {
