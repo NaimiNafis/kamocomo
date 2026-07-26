@@ -3,13 +3,18 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
 import {
-  createSub,
-  fetchPlaceGraph,
-  reportContent,
   clearVote,
+  createMain,
+  createSub,
+  fetchActivityTypes,
+  fetchPlaceBoard,
+  getActiveEvent,
+  reportContent,
   setVote,
   subscribeToToukou,
-  type ToukouGraph,
+  type ActivityType,
+  type KamoEvent,
+  type PlaceBoard,
   type ToukouNode,
 } from '../../lib/toukou';
 import { cachedFetch } from '../../lib/cache';
@@ -18,7 +23,7 @@ import { StaleBanner } from '../../components/StaleBanner';
 import { NodeCard } from './NodeCard';
 import { Composer, type ComposerResult } from './Composer';
 import { ReportDialog, type ReportReason } from './ReportDialog';
-import { useForceGraph } from './useForceGraph';
+import { useForceGraph, type GraphNode } from './useForceGraph';
 
 const EDGE_OFFSET = 4000;
 const MIN_SCALE = 0.4;
@@ -31,10 +36,14 @@ interface ViewTransform {
   scale: number;
 }
 
-type DragState =
+type Gesture =
   | { kind: 'pan'; startX: number; startY: number; startTx: number; startTy: number }
   | { kind: 'node'; id: string }
   | { kind: 'pinch'; startDist: number; startScale: number; worldX: number; worldY: number };
+
+type ComposerState = { mode: 'main' } | { mode: 'sub'; parentId: string } | null;
+
+const ADD_PREFIX = 'add:';
 
 /** The auto-fit transform: scale + translate that frames every node in the
  * viewport, centered. Pure, so it can be derived during render each tick. */
@@ -55,92 +64,115 @@ function fitView(positions: Map<string, { x: number; y: number }>, size: { w: nu
 }
 
 /**
- * One place's toukou web (§5.5/§C1): the main a visitor tapped from the map,
- * plus its subs. Every marker links here via `?main=<id>`, so this screen
- * always needs that id -- a direct visit without one bounces back to the map.
+ * One place's board (§C1/item 7): every main happening there today, each in
+ * its activity-type color with its subs orbiting in a lighter shade, plus a
+ * "+" node beside each main to add a sub and a place-level "post an activity"
+ * button. Reached only from a place marker (`?place=<id>`); a bare visit
+ * bounces to the map.
  */
 export function ToukouMap() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isJa = i18n.language.startsWith('ja');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const mainId = searchParams.get('main');
+  const placeId = searchParams.get('place');
   const userId = useIdentityStore((s) => s.userId);
 
-  const [graph, setGraph] = useState<ToukouGraph>({ nodes: [], edges: [] });
+  const [board, setBoard] = useState<PlaceBoard | null>(null);
+  const [event, setEvent] = useState<KamoEvent | null>(null);
+  const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading');
   const [stale, setStale] = useState(false);
-  const [composerParentId, setComposerParentId] = useState<string | null>(null);
+  const [composer, setComposer] = useState<ComposerState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [reportTarget, setReportTarget] = useState<string | null>(null);
 
-  const { positions, startDrag, drag, endDrag } = useForceGraph(graph.nodes, graph.edges);
+  // Layout: the board's mains + subs, plus a synthetic "+" (addsub) node per
+  // main. The full card data lives in `nodeById`; the layout only needs id+kind.
+  const cards = board?.nodes ?? [];
+  const nodeById = new Map(cards.map((n) => [n.id, n]));
+  const mains = cards.filter((n) => n.kind === 'main');
+  const layoutNodes: GraphNode[] = [
+    ...cards.map((n) => ({ id: n.id, kind: n.kind })),
+    ...mains.map((m) => ({ id: `${ADD_PREFIX}${m.id}`, kind: 'addsub' as const })),
+  ];
+  const layoutEdges = [
+    ...(board?.edges ?? []),
+    ...mains.map((m) => ({ source: `${ADD_PREFIX}${m.id}`, target: m.id })),
+  ];
+
+  const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
-  // The view is *derived*: auto-fit frames the whole web to the viewport
-  // (recomputed each tick as the layout settles) until the user pans / zooms /
-  // drags, which sets userView and takes over. Deriving it during render (vs.
-  // a setState effect) avoids cascading renders on every simulation tick.
   const [userView, setUserView] = useState<ViewTransform | null>(null);
   const view = userView ?? fitView(positions, size);
-  const dragState = useRef<DragState | null>(null);
-  // Every currently-down pointer, keyed by id -- lets a second finger turn a
-  // one-finger pan into a pinch (§C3), which Cesium-style single-pointer
-  // handling didn't support before.
-  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const gesture = useRef<Gesture | null>(null);
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
 
-  // Every marker passes a main id; a bare /toukou visit has nowhere to go.
+  // Every place marker passes ?place=; a bare /toukou visit has nowhere to go.
   useEffect(() => {
-    if (!mainId) navigate('/', { replace: true });
-  }, [mainId, navigate]);
+    if (!placeId) navigate('/', { replace: true });
+  }, [placeId, navigate]);
 
-  const refetchGraph = useCallback(async () => {
-    if (!userId || !mainId) return;
+  const refetchBoard = useCallback(async () => {
+    if (!userId || !placeId || !event) return;
     try {
-      setGraph(await fetchPlaceGraph(userId, mainId));
+      setBoard(await fetchPlaceBoard(userId, placeId, event.id));
     } catch {
-      /* keep the last good graph; realtime will retry on the next change */
+      /* keep the last good board; realtime retries on the next change */
     }
-  }, [userId, mainId]);
+  }, [userId, placeId, event]);
 
-  // Initial load. Cached (falls back to the last good copy when offline,
-  // flagged stale), scoped to this one place.
+  // Initial load: today's event (always live), then this place's board (cached
+  // by place so it still shows offline), plus the activity types for the
+  // "post an activity" composer.
   useEffect(() => {
-    if (!userId || !mainId) return;
+    if (!userId || !placeId) return;
     let cancelled = false;
     (async () => {
       try {
-        const graphRes = await cachedFetch(`toukou:${mainId}:${userId}`, () => fetchPlaceGraph(userId, mainId));
+        const ev = await getActiveEvent();
         if (cancelled) return;
-        setGraph(graphRes.data);
-        setStale(graphRes.stale);
-        setStatus(graphRes.data.nodes.length === 0 ? 'notfound' : 'ready');
+        setEvent(ev);
+        const res = await cachedFetch(`toukou:place:${placeId}:${userId}`, () =>
+          fetchPlaceBoard(userId, placeId, ev.id),
+        );
+        if (cancelled) return;
+        if (!res.data) {
+          setStatus('notfound');
+          return;
+        }
+        setBoard(res.data);
+        setStale(res.stale);
+        setStatus('ready');
       } catch {
         if (!cancelled) setStatus('error');
+        return;
       }
+      void fetchActivityTypes().then((v) => !cancelled && setActivityTypes(v)).catch(() => {});
     })();
     return () => {
       cancelled = true;
     };
-  }, [userId, mainId]);
+  }, [userId, placeId]);
 
-  // Realtime: debounce a whole-graph refetch on any activity/vote change.
+  // Realtime: debounce a board refetch on any activity/vote change.
   useEffect(() => {
-    if (!userId || !mainId) return;
+    if (!userId || !placeId || !event) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = subscribeToToukou(() => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void refetchGraph(), 250);
+      timer = setTimeout(() => void refetchBoard(), 250);
     });
     return () => {
       if (timer) clearTimeout(timer);
       unsubscribe();
     };
-  }, [userId, mainId, refetchGraph]);
+  }, [userId, placeId, event, refetchBoard]);
 
-  // Track viewport size so (0,0) world sits at its center.
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -163,97 +195,88 @@ export function ToukouMap() {
   }
 
   function pinchMetrics() {
-    const [a, b] = [...pointersRef.current.values()];
-    return {
-      dist: Math.hypot(a.x - b.x, a.y - b.y),
-      midX: (a.x + b.x) / 2,
-      midY: (a.y + b.y) / 2,
-    };
+    const [a, b] = [...pointers.current.values()];
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2 };
   }
 
-  function handlePointerDownBackground(e: React.PointerEvent) {
-    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    viewportRef.current?.setPointerCapture(e.pointerId);
-
-    if (pointersRef.current.size === 2) {
-      // A second finger landed -- switch to a pinch (zoom about the midpoint,
-      // panning with it if the fingers also drift together).
-      const { dist, midX, midY } = pinchMetrics();
-      setUserView(view);
-      const world = toWorld(midX, midY);
-      dragState.current = { kind: 'pinch', startDist: dist, startScale: view.scale, worldX: world.x, worldY: world.y };
-    } else if (pointersRef.current.size === 1) {
-      setUserView(view); // freeze the current frame; the user is taking control
-      dragState.current = {
-        kind: 'pan',
-        startX: e.clientX,
-        startY: e.clientY,
-        startTx: view.tx,
-        startTy: view.ty,
-      };
+  function releaseCapture(pointerId: number) {
+    try {
+      viewportRef.current?.releasePointerCapture(pointerId);
+    } catch {
+      /* not captured -- fine */
     }
   }
 
-  function handleNodePointerDown(e: React.PointerEvent, id: string) {
-    e.stopPropagation();
-    // A tap on a card's button (vote/report/+/archive) must act, not drag --
-    // otherwise every button press would reheat the simulation and jiggle the
-    // whole web.
-    if ((e.target as HTMLElement).closest('button')) return;
-    setUserView(view); // stop auto-fit from reframing while dragging a node
-    dragState.current = { kind: 'node', id };
-    startDrag(id);
+  // All pointer handling is container-level so a second finger can start a
+  // pinch even when both fingers are on nodes (item 4). A single pointer on a
+  // card body drags that node; on a button, nothing (the button's click
+  // fires); on the background, it pans.
+  function handlePointerDown(e: React.PointerEvent) {
+    const target = e.target as HTMLElement;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.current.size === 2) {
+      if (gesture.current?.kind === 'node') endDrag(gesture.current.id);
+      setUserView(view);
+      const { dist, midX, midY } = pinchMetrics();
+      const world = toWorld(midX, midY);
+      gesture.current = { kind: 'pinch', startDist: dist, startScale: view.scale, worldX: world.x, worldY: world.y };
+      viewportRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (pointers.current.size > 2) return;
+
+    if (target.closest('button')) return; // let the tapped button handle it
+
+    const nodeEl = target.closest('[data-node-id]') as HTMLElement | null;
+    if (nodeEl?.dataset.nodeId) {
+      setUserView(view);
+      gesture.current = { kind: 'node', id: nodeEl.dataset.nodeId };
+      startDrag(nodeEl.dataset.nodeId);
+    } else {
+      setUserView(view);
+      gesture.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, startTx: view.tx, startTy: view.ty };
+    }
     viewportRef.current?.setPointerCapture(e.pointerId);
   }
 
   function handlePointerMove(e: React.PointerEvent) {
-    if (pointersRef.current.has(e.pointerId)) {
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    }
-    const d = dragState.current;
-    if (!d) return;
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+    if (!g) return;
 
-    if (d.kind === 'pinch') {
-      if (pointersRef.current.size < 2) return;
+    if (g.kind === 'pinch') {
+      if (pointers.current.size < 2) return;
       const { dist, midX, midY } = pinchMetrics();
       const rect = viewportRef.current!.getBoundingClientRect();
-      const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, d.startScale * (dist / d.startDist)));
-      setUserView({
-        scale,
-        tx: midX - rect.left - cx - d.worldX * scale,
-        ty: midY - rect.top - cy - d.worldY * scale,
-      });
-    } else if (d.kind === 'pan') {
+      const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, g.startScale * (dist / g.startDist)));
+      setUserView({ scale, tx: midX - rect.left - cx - g.worldX * scale, ty: midY - rect.top - cy - g.worldY * scale });
+    } else if (g.kind === 'pan') {
       setUserView((v) => ({
         scale: v?.scale ?? view.scale,
-        tx: d.startTx + (e.clientX - d.startX),
-        ty: d.startTy + (e.clientY - d.startY),
+        tx: g.startTx + (e.clientX - g.startX),
+        ty: g.startTy + (e.clientY - g.startY),
       }));
     } else {
       const world = toWorld(e.clientX, e.clientY);
-      drag(d.id, world.x, world.y);
+      drag(g.id, world.x, world.y);
     }
   }
 
   function handlePointerUp(e: React.PointerEvent) {
-    pointersRef.current.delete(e.pointerId);
-    const d = dragState.current;
-    if (d?.kind === 'node') endDrag(d.id);
-    viewportRef.current?.releasePointerCapture(e.pointerId);
+    pointers.current.delete(e.pointerId);
+    releaseCapture(e.pointerId);
+    const g = gesture.current;
 
-    if (d?.kind === 'pinch' && pointersRef.current.size === 1) {
-      // One finger lifted mid-pinch -- keep going as a plain pan with the
-      // remaining finger instead of dropping the gesture.
-      const [remaining] = [...pointersRef.current.values()];
-      dragState.current = {
-        kind: 'pan',
-        startX: remaining.x,
-        startY: remaining.y,
-        startTx: view.tx,
-        startTy: view.ty,
-      };
-    } else if (pointersRef.current.size === 0) {
-      dragState.current = null;
+    if (g?.kind === 'pinch' && pointers.current.size === 1) {
+      // One finger lifted mid-pinch -> keep going as a pan with the other.
+      const [rem] = [...pointers.current.values()];
+      gesture.current = { kind: 'pan', startX: rem.x, startY: rem.y, startTx: view.tx, startTy: view.ty };
+      return;
+    }
+    if (pointers.current.size === 0) {
+      if (g?.kind === 'node') endDrag(g.id);
+      gesture.current = null;
     }
   }
 
@@ -267,16 +290,12 @@ export function ToukouMap() {
 
   async function handleVote(node: ToukouNode, value: 1 | -1) {
     if (!userId) return;
-    // Optimistic: reflect the switch immediately, then reconcile from the server.
-    setGraph((g) => ({
-      ...g,
-      nodes: g.nodes.map((n) => (n.id === node.id ? applyVote(n, value) : n)),
-    }));
+    setBoard((b) => (b ? { ...b, nodes: b.nodes.map((n) => (n.id === node.id ? applyVote(n, value) : n)) } : b));
     try {
       if (node.myVote === value) await clearVote(userId, node.id);
       else await setVote(userId, node.id, value);
     } finally {
-      void refetchGraph();
+      void refetchBoard();
     }
   }
 
@@ -293,18 +312,32 @@ export function ToukouMap() {
   }
 
   async function handleComposerSubmit(result: ComposerResult) {
-    if (!userId || !composerParentId) return;
+    if (!userId || !composer || !board) return;
     setSubmitting(true);
     setSubmitError(false);
     try {
-      await createSub({
-        authorId: userId,
-        parentId: composerParentId,
-        phrase: result.phrase,
-        photoFile: result.photoFile,
-      });
-      setComposerParentId(null);
-      await refetchGraph();
+      if (composer.mode === 'main') {
+        if (!result.activityTypeId || !event || !placeId) return;
+        await createMain({
+          authorId: userId,
+          activityTypeId: result.activityTypeId,
+          eventId: event.id,
+          placeId,
+          phrase: result.phrase,
+          photoFile: result.photoFile,
+          lat: board.placeLat,
+          lng: board.placeLng,
+        });
+      } else {
+        await createSub({
+          authorId: userId,
+          parentId: composer.parentId,
+          phrase: result.phrase,
+          photoFile: result.photoFile,
+        });
+      }
+      setComposer(null);
+      await refetchBoard();
     } catch {
       setSubmitError(true);
     } finally {
@@ -313,14 +346,14 @@ export function ToukouMap() {
   }
 
   const positionOf = (id: string) => positions.get(id) ?? { x: 0, y: 0 };
+  const placeName = board ? (isJa ? board.placeNameJa : board.placeNameEn) : '';
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-kamo-stone">
-      {/* Graph viewport */}
       <div
         ref={viewportRef}
         className="absolute inset-0 touch-none"
-        onPointerDown={handlePointerDownBackground}
+        onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
@@ -334,16 +367,16 @@ export function ToukouMap() {
             className="pointer-events-none absolute overflow-visible"
             style={{ left: -EDGE_OFFSET, top: -EDGE_OFFSET, width: EDGE_OFFSET * 2, height: EDGE_OFFSET * 2 }}
           >
-            {graph.edges.map((edge) => {
+            {(board?.edges ?? []).map((edge) => {
               const s = positionOf(edge.source);
-              const tPos = positionOf(edge.target);
+              const tp = positionOf(edge.target);
               return (
                 <line
                   key={`${edge.source}-${edge.target}`}
                   x1={s.x + EDGE_OFFSET}
                   y1={s.y + EDGE_OFFSET}
-                  x2={tPos.x + EDGE_OFFSET}
-                  y2={tPos.y + EDGE_OFFSET}
+                  x2={tp.x + EDGE_OFFSET}
+                  y2={tp.y + EDGE_OFFSET}
                   stroke="#6E8CA0"
                   strokeWidth={1.5}
                   strokeOpacity={0.5}
@@ -352,23 +385,46 @@ export function ToukouMap() {
             })}
           </svg>
 
-          {graph.nodes.map((node) => {
-            const pos = positionOf(node.id);
+          {layoutNodes.map((ln) => {
+            const pos = positionOf(ln.id);
+            if (ln.kind === 'addsub') {
+              const mainId = ln.id.slice(ADD_PREFIX.length);
+              const main = nodeById.get(mainId);
+              return (
+                <div
+                  key={ln.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: pos.x, top: pos.y }}
+                >
+                  <button
+                    type="button"
+                    data-testid="add-sub"
+                    aria-label={t('toukou.addSub')}
+                    onClick={() => setComposer({ mode: 'sub', parentId: mainId })}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-lg font-medium text-kamo-stone shadow-md"
+                    style={{ backgroundColor: main?.color ?? '#2E3A59' }}
+                  >
+                    +
+                  </button>
+                </div>
+              );
+            }
+            const node = nodeById.get(ln.id);
+            if (!node) return null;
             return (
               <div
-                key={node.id}
+                key={ln.id}
                 data-testid="toukou-node"
+                data-node-id={ln.id}
                 data-node-kind={node.kind}
                 className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
                 style={{ left: pos.x, top: pos.y }}
-                onPointerDown={(e) => handleNodePointerDown(e, node.id)}
               >
                 <NodeCard
                   node={node}
                   reported={reportedIds.has(node.id)}
                   onLike={() => void handleVote(node, 1)}
                   onDislike={() => void handleVote(node, -1)}
-                  onAddSub={() => setComposerParentId(node.id)}
                   onReport={() => {
                     if (!reportedIds.has(node.id)) setReportTarget(node.id);
                   }}
@@ -380,26 +436,29 @@ export function ToukouMap() {
         </div>
       </div>
 
-      {/* Offline/stale banner */}
       <div className="absolute inset-x-0 top-0 z-20">
         <StaleBanner show={stale} />
       </div>
 
-      {/* Top bar */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
+      {/* Top bar: back + place name + language */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-4">
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="pointer-events-auto rounded-full border border-kamo-ink/15 bg-kamo-stone/90 px-3 py-1.5 font-ui text-xs text-kamo-ink shadow-sm backdrop-blur"
+          className="pointer-events-auto shrink-0 rounded-full border border-kamo-ink/15 bg-kamo-stone/90 px-3 py-1.5 font-ui text-xs text-kamo-ink shadow-sm backdrop-blur"
         >
           ‹ {t('mainMap.back')}
         </button>
-        <div className="pointer-events-auto">
+        {placeName && (
+          <span className="pointer-events-none truncate rounded-full bg-kamo-stone/90 px-3 py-1.5 font-display text-sm text-kamo-ink shadow-sm backdrop-blur">
+            {placeName}
+          </span>
+        )}
+        <div className="pointer-events-auto shrink-0">
           <LanguageToggle />
         </div>
       </div>
 
-      {/* Loading / not-found / error states */}
       {status === 'loading' && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-ui text-sm text-kamo-ink/60">
           {t('toukou.loading')}
@@ -429,15 +488,36 @@ export function ToukouMap() {
           </button>
         </div>
       )}
+      {status === 'ready' && mains.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8 text-center font-ui text-sm text-kamo-ink/60">
+          {t('toukou.placeEmpty')}
+        </div>
+      )}
 
-      {composerParentId && (
+      {/* Place-level "post an activity" (the daily gathering is always live) */}
+      {status === 'ready' && (
+        <div className="absolute inset-x-0 bottom-0 flex justify-center p-4">
+          <button
+            type="button"
+            onClick={() => {
+              setSubmitError(false);
+              setComposer({ mode: 'main' });
+            }}
+            className="rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone shadow-lg"
+          >
+            + {t('toukou.createMain')}
+          </button>
+        </div>
+      )}
+
+      {composer && (
         <Composer
-          mode="sub"
-          activityTypes={[]}
+          mode={composer.mode}
+          activityTypes={activityTypes}
           submitting={submitting}
           error={submitError}
           onSubmit={(result) => void handleComposerSubmit(result)}
-          onCancel={() => setComposerParentId(null)}
+          onCancel={() => setComposer(null)}
         />
       )}
 
@@ -455,10 +535,8 @@ function applyVote(node: ToukouNode, value: 1 | -1): ToukouNode {
   const toggledOff = node.myVote === value;
   let likes = node.likes;
   let dislikes = node.dislikes;
-  // Remove the previous vote's effect.
   if (node.myVote === 1) likes -= 1;
   if (node.myVote === -1) dislikes -= 1;
-  // Apply the new one (unless we're toggling the same vote off).
   const nextVote = toggledOff ? null : value;
   if (nextVote === 1) likes += 1;
   if (nextVote === -1) dislikes += 1;

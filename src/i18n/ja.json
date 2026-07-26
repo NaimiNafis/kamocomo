@@ -67,6 +67,7 @@
     "loading": "読み込み中…",
     "error": "活動を読み込めませんでした。",
     "empty": "まだ活動がありません。最初の投稿をしてみましょう。",
+    "placeEmpty": "今日はまだこの場所に活動がありません。最初の投稿をしてみましょう。",
     "createMain": "活動を投稿",
     "nextGathering": "次の集いまで あと{{days}}日{{hours}}時間",
     "nextGatheringSoon": "まもなく次の集いが始まります",

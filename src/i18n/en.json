@@ -69,6 +69,7 @@
     "loading": "Loading the web…",
     "error": "Couldn't load activities.",
     "empty": "No activities yet. Be the first to post one.",
+    "placeEmpty": "No activities here yet today. Post the first one.",
     "createMain": "Post an activity",
     "nextGathering": "Next gathering in {{days}}d {{hours}}h",
     "nextGatheringSoon": "Next gathering starting soon",

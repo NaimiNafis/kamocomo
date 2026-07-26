@@ -34,24 +34,23 @@ interface NodeCardProps {
   reported: boolean;
   onLike: () => void;
   onDislike: () => void;
-  onAddSub: () => void;
   onReport: () => void;
   onViewArchived: () => void;
 }
 
 /**
- * A single post in the toukou web (§5.5). Mains are larger and carry the `+`
- * (add-sub) affordance and, when they have overflowed subs, an "earlier posts"
- * link to the archive; subs are smaller and omit both. Photo-less posts fall
- * back to the shared riverbank placeholder (§C6). The report button sits in
- * the card's bottom-right corner (§C5) and opens a reason picker elsewhere.
+ * A single post in the toukou web (§5.5). Mains are larger and, when they have
+ * overflowed subs, carry an "earlier posts" link to the archive; subs are
+ * smaller. Adding a sub is a separate "+" node beside the main, not a button
+ * on the card (item 5). Photo-less posts fall back to the shared riverbank
+ * placeholder (§C6). The report button sits in the card's bottom-right corner
+ * (§C5) and opens a reason picker elsewhere.
  */
 export function NodeCard({
   node,
   reported,
   onLike,
   onDislike,
-  onAddSub,
   onReport,
   onViewArchived,
 }: NodeCardProps) {
@@ -119,18 +118,6 @@ export function NodeCard({
             {node.dislikes}
           </button>
         </div>
-
-        {isMain && (
-          <button
-            type="button"
-            onClick={stop(onAddSub)}
-            aria-label={t('toukou.addSub')}
-            className="mt-1 flex h-5 w-5 items-center justify-center rounded-full font-ui text-sm"
-            style={{ backgroundColor: 'rgba(255,255,255,0.85)', color: '#1C1C1A' }}
-          >
-            +
-          </button>
-        )}
 
         {isMain && node.hasArchivedSubs && (
           <button
