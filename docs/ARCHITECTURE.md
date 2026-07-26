@@ -68,8 +68,8 @@ src/
 supabase/
   migrations/   versioned SQL — schema, RLS, triggers, RPCs (never edit an
                 applied migration; add a new file)
-  seed.sql      demo activity types, events, duck spots
-scripts/        generate-qr.ts, seed-demo-activities.mjs, seed-demo-subs.mjs
+  seed.sql      demo activity types, events, duck spots (places ship in a migration)
+scripts/        generate-qr.ts, seed-demo-places.mjs, seed-demo-ducks.mjs, …
 img/
   marks/        custom duck + exclamation SVG marks (no stock/AI art)
   kamogawa/     real Kamogawa photos, incl. the shared placeholder image
@@ -84,10 +84,10 @@ URLs, so paths must not be renamed:
 |---|---|
 | `/` | Intro (once per session) → the 3D map |
 | `/?from=qr&spot=<slug>` | Same, but entered via a hidden photogenic-spot QR |
-| `/toukou?main=<id>` | One place's activity web (always entered from a marker) |
+| `/toukou?place=<id>` | One place's board of activities (always entered from a place marker) |
 | `/archive` , `/archive?main=<id>` | Cookpad-style history grid, or one main's full history |
-| `/duck` | Duck photo feed + 10-slot stamp card |
-| `/duck/scan?spot=<qr_token>` | Geofenced stamp scan from a physical QR |
+| `/duck` | Duck graph (10 ducks + photos) + 10-slot stamp card |
+| `/duck/scan?spot=<qr_token>` | Geofenced stamp scan; routes through the intro to `/duck` |
 
 ```
 INTRO (once/session)
@@ -97,18 +97,22 @@ INTRO (once/session)
      |
 MAIN MAP (3D Cesium, Kyoto-locked)
   "you are here" marker · tutorial · language toggle · map style switch
-  event-gated "post an activity" button
-  markers:
-    !  exclamation -> tap plays a cinematic (frame, fly in, orbit the spot),
-       then a popup with that place's photo/phrase and a button into ->
+  "duck collection" button -> /duck
+  markers (one per PLACE, plus colored duck markers):
+    !  place -> tap plays a cinematic (frame, fly in, orbit), then a popup with
+       the place's name/photos and a button into ->
     duck -> /duck
        |
        v
-  /toukou?main=<id>  (that marker's own web)     /duck
-  main + subs, thumbs up/down, add a sub,          photo feed, stamp card,
-  report (with a reason), "see earlier posts"      /duck/scan -> stamps -> certificate
-  -> /archive?main=<id>
+  /toukou?place=<id>  (that place's board)        /duck
+  MANY mains, each its own color, subs lighter;    10 duck nodes + photo subs;
+  thumbs up/down; a "+" node adds a sub;           tap a duck's "+" to post a
+  "post an activity" adds a main; report (reason)  photo; 10-slot stamp card
+  -> /archive?main=<id>                            -> /duck/scan -> stamp -> certificate
 ```
+
+A duck-QR scan doesn't dead-end on a scan screen: it collects the stamp, then
+plays the full intro and lands on `/duck` with a result banner.
 
 ## Screens in detail
 
@@ -130,37 +134,39 @@ they're the cost control that keeps photoreal tile billing bounded to the
 area the app actually cares about). A one-time "drag to look around" hint
 appears for first-time mobile visitors.
 
-Markers are unclustered on purpose: each needs to be individually tappable so
-tapping one can route to *that specific place's* content, not a shared
-destination. Tapping an exclamation marker plays a short cinematic — a
-pulsing framing highlight at the spot, a close fly-in, and a slow orbit — then
-shows a popup with that place's own photo/phrase and a button into
-`/toukou?main=<id>`. Tapping a duck marker goes straight to `/duck`.
+There is **one exclamation marker per fixed PLACE** (not per main), so the map
+stays uncluttered no matter how many mains a place accrues during a gathering.
+Markers are unclustered so each is individually tappable. Tapping a place plays
+a short cinematic — a pulsing framing highlight, a close fly-in, and a slow
+orbit — then shows a popup with the place's name, a few of its current photos,
+and a button into `/toukou?place=<id>`. Duck spots render as per-spot **colored
+duck markers** (a shared 10-color palette, placeholder art until the real duck
+illustrations land); tapping one goes to `/duck`. A "duck collection" button
+also opens `/duck`; creating an activity happens inside a place's board, not on
+the map.
 
-An event-gated "post an activity" button opens the same composer the toukou
-page uses for subs, in main-creation mode (see [Event gating](#event-gating)).
+### Toukou / place board (`src/screens/ToukouMap`)
 
-### Toukou / activity web (`src/screens/ToukouMap`)
+Always scoped to one place (`?place=<id>`) — a bare `/toukou` visit bounces
+back to the map. The board shows **every main happening at that place today**
+(the daily gathering), each in its activity-type color, with its subs orbiting
+in a lighter shade; the mains repel into separate clusters. Layout is d3-force
+with collision radii sized to each card's full bounding circle and a
+synchronous pre-warm before first paint, so even a busy board opens already
+settled instead of visibly untangling.
 
-Always scoped to one place (`?main=<id>`) — a bare `/toukou` visit has
-nowhere to go and bounces back to the map. The graph is one main (pinned at
-the center, in its activity-type's color) plus its subs (a lighter shade,
-linked to the main), laid out with d3-force. Collision radii are sized to
-each card's full bounding circle (not just its width) and the simulation is
-pre-warmed synchronously before first paint, so even the densest graph (up to
-21 nodes — one main plus the 20-sub cap) opens already settled instead of
-visibly untangling.
+A node card shows a photo (or the shared placeholder), the phrase, and thumbs
+up/down (one vote per user, switchable); mains with overflowed subs also get a
+"see earlier posts" link into the archive. **Adding a sub is a dedicated "+"
+node** beside each main (colored like it); a place-level "post an activity"
+button creates a new main here. The report button (every card) opens a reason
+picker (inappropriate / spam / off-topic / other). The pan / wheel / pinch /
+node-drag interaction is a shared `useGraphViewport` hook (also used by the
+duck graph): one finger pans or drags a node, and a second finger pinch-zooms
+about the midpoint **even when both fingers are on nodes**.
 
-A node card shows a photo (or the shared placeholder if the post has none),
-the phrase, thumbs up/down (one vote per user, switchable), and — mains
-only — a `+` to add a sub and, once any of its subs have overflowed the cap,
-a "see earlier posts" link into the archive. The report button (every card)
-opens a reason picker (inappropriate / spam / off-topic / other) rather than
-reporting blind. One finger pans; a second finger pinch-zooms about the
-midpoint between the two touches.
-
-Realtime keeps the graph current: any insert/update to `activities` or
-`votes` triggers a debounced refetch.
+Realtime keeps the board current: any insert/update to `activities` or `votes`
+triggers a debounced refetch.
 
 ### Archive (`src/screens/Archive`)
 
@@ -171,10 +177,13 @@ long-term record of how a spot has been used. Reached from the toukou page's
 
 ### Duck page (`src/screens/Duck`)
 
-A duck-photo feed (social, decoupled from stamps) plus the 10-slot stamp
-card. Stamps are earned only by scanning a QR at one of the 10 physical duck
-spots — see [Duck-stamp anti-cheat](#duck-stamp-anti-cheat). Collecting all
-10 unlocks a screenshot-worthy certificate.
+A toukou-style **graph of the 10 ducks** (each duck spot IS a duck, drawn with
+its own colored icon) where people post photos onto a duck — its "+" node opens
+a photo picker and the photo becomes one of that duck's subs. The **10-slot
+stamp card** stays on top (each earned slot shows its duck's color), plus a
+persistent test-mode toggle. Stamps are earned only by scanning a QR at one of
+the 10 physical duck spots — see [Duck-stamp anti-cheat](#duck-stamp-anti-cheat);
+collecting all 10 unlocks a screenshot-worthy certificate.
 
 ## Data model
 
@@ -185,11 +194,12 @@ edit an applied migration, add a new file). Summary:
 |---|---|
 | `profiles` | One row per anonymous user; nationality/age/gender from onboarding |
 | `activity_types` | Seeded palette (writing, reading, walking, music, yoga…) |
-| `events` | Windows when main activities can be created |
-| `activities` | Both mains and subs (`kind`), `parent_id`, `activity_type`, `photo_url`, `phrase`, `lat/lng`, `likes`/`dislikes`, `archived`, `hidden` |
+| `places` | ~8 fixed riverbank locations; each is one map marker. Ships seeded in its migration (clients can't insert) |
+| `events` | Daily gathering windows; today's is upserted on read by `ensure_todays_event()` |
+| `activities` | Both mains and subs (`kind`); mains carry `place_id` + `event_id`; also `parent_id`, `activity_type`, `photo_url`, `phrase`, `lat/lng`, `likes`/`dislikes`, `archived`, `hidden` |
 | `votes` | One row per `(user_id, activity_id)`; switching updates it in place |
-| `duck_posts` | The social duck-photo feed, separate from stamps |
-| `duck_spots` | The 10 physical stamp locations, each with an opaque `qr_token` |
+| `duck_posts` | Photos posted onto a duck (`duck_spot_id`) — the duck graph's subs |
+| `duck_spots` | The 10 physical stamp locations / ducks, each with an opaque `qr_token` |
 | `stamps` | One row per `(user_id, duck_spot_id)` a user has earned |
 | `certificates` | Issued once a user has 10 distinct stamps |
 | `reports` | Moderation flags, with a reason, on an activity or duck post |
@@ -199,9 +209,10 @@ Enforced server-side (RLS policies, triggers, or the `scan_duck_spot` RPC —
 client checks are UX sugar only):
 
 - **Main-only-during-an-event**: a restrictive insert policy rejects a
-  `kind='main'` row unless `now()` falls inside an active event's window.
-- **20-sub cap**: after each sub insert, a trigger archives every sub beyond
-  the 20 most recent (by `created_at`) for that main.
+  `kind='main'` row unless `now()` falls inside an active event's window; a
+  `NOT VALID` check also requires every new main to carry a `place_id`.
+- **10-sub cap**: after each sub insert, a trigger archives every sub beyond
+  the 10 most recent (by `created_at`) for that main.
 - **One vote per user per activity**: the `votes` primary key.
 - **Stamp geofence**: `scan_duck_spot` recomputes the distance server-side
   from whatever point the client submits and only awards the stamp within
@@ -221,17 +232,19 @@ simplification for a low-friction public demo. If cross-device continuity is
 ever needed, an optional "link email" step could be added later without
 changing the underlying model.
 
-## Event gating
+## Event gating — the daily gathering
 
-Main activities can only be created during a live "gathering" event; subs are
-never gated (that's how the culture keeps accreting between events). The
-authoritative check is compute-on-read — `getActiveEvent()` asks "is there an
-event window around `now()`?" rather than trusting a stored flag — backed by
-the restrictive RLS policy above, so a bypassed client still can't sneak a
-main through outside a window. Between events, the map/toukou UI hides the
-"post an activity" affordance and shows a localized "next gathering in…"
-countdown instead. Events themselves are managed directly in the Supabase
-Studio table editor — no `/admin` page.
+The gathering is a **daily-rotating window computed from the clock, with no
+cron**. `getActiveEvent()` calls the `ensure_todays_event()` RPC, which upserts
+a deterministic event row for the current Kyoto day and returns it — so there
+is always a live window (mains are always creatable) and every main posted
+today shares one `event_id`. A place board queries only *today's* mains
+(`event_id = today`), so at day rollover the previous day's mains simply drop
+off the live board and remain in the archive — the rotation is emergent from
+date filtering, not a scheduled job (a `pg_cron` snapshot could be added later
+if a hard boundary side-effect is ever needed). The restrictive
+"main-only-during-an-event" RLS still backs this, so a bypassed client can't
+post a main outside the window. Subs are never gated.
 
 ## Duck-stamp anti-cheat
 
@@ -244,11 +257,11 @@ A stamp means "I was really at this spot," layered three ways:
 3. **`UNIQUE(user_id, duck_spot_id)`** — a re-scan is a silent no-op ("already
    collected"), not a duplicate stamp.
 
-For testing the flow without physically visiting: `/duck/scan` has a "Delta
-test mode" toggle that submits the Kamogawa Delta's own coordinates instead of
-the device's GPS fix. This doesn't weaken the server-side check — it's
-equivalent to (and no easier to abuse than) spoofing device GPS, just without
-needing to.
+For testing the flow without physically visiting, the duck page has a **test
+mode** toggle: when on, a scan submits the *scanned spot's own* coordinates
+(looked up by `qr_token`), so the geofence passes for **any** QR. This doesn't
+weaken the server-side check — it's equivalent to (and no easier to abuse than)
+spoofing device GPS, just without needing to.
 
 ## Design tokens
 
