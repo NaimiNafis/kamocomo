@@ -45,7 +45,9 @@
     "back": "地図に戻る",
     "qrWelcome": "鴨川への隠れた入口を見つけました",
     "dragHint": "ドラッグして周りを見渡そう",
-    "viewActivity": "活動を見る"
+    "moreActivities": "活動を見る",
+    "placeActivityCount_other": "現在 {{count}} 件の活動",
+    "duckCollection": "鴨コレクション"
   },
   "archive": {
     "title": "アーカイブ",

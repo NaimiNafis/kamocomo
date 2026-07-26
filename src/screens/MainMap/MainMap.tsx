@@ -20,43 +20,16 @@ import {
   type MapStyle,
   type MarkerPoint,
 } from '../../lib/cesium';
-import {
-  fetchActivityPreview,
-  fetchMainActivityMarkers,
-  subscribeToNewMainActivities,
-  type ActivityPreview,
-} from '../../lib/activities';
+import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
 import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
 import { logQrEntry } from '../../lib/duck';
-import {
-  createMain,
-  fetchActivityTypes,
-  getActiveEvent,
-  type ActivityType,
-  type KamoEvent,
-} from '../../lib/toukou';
-import { KAMOGAWA_DELTA } from '../../lib/geo';
 import { Intro, type IntroPhase } from '../Intro/Intro';
 import { Onboarding } from '../Onboarding/Onboarding';
 import { Tutorial } from '../Tutorial/Tutorial';
 import { PlacePopup } from './PlacePopup';
-import { Composer, type ComposerResult } from '../ToukouMap/Composer';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { MapStyleSwitch } from '../../components/MapStyleSwitch';
 import { needsOnboarding, useIdentityStore } from '../../store/identityStore';
-
-/** Location for a new main: the visitor's position, or the Kamogawa default. */
-function getCreateLocation(): Promise<{ lat: number; lng: number }> {
-  const fallback = { lat: KAMOGAWA_DELTA.latitude, lng: KAMOGAWA_DELTA.longitude };
-  return new Promise((resolve) => {
-    if (!('geolocation' in navigator)) return resolve(fallback);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(fallback),
-      { timeout: 6000, maximumAge: 60_000 },
-    );
-  });
-}
 
 configureCesiumIon();
 
@@ -68,15 +41,18 @@ const CATCHPHRASE_HOLD_MS = 1900;
 const MAP_HINT_AUTO_DISMISS_MS = 4000;
 
 /**
- * Full-screen Cesium globe, constrained to Kyoto (§8.1), plus the §5.3/§5.4
- * overlay chrome: top bar (tutorial button + language toggle), bottom-right
- * map-style switch, "you are here" marker, and the tutorial popup.
+ * Full-screen Cesium globe, constrained to Kyoto (§8.1), plus the overlay
+ * chrome: top bar (tutorial + language toggle), map-style switch, "you are
+ * here" marker, a "duck collection" button, and the tutorial popup.
+ *
+ * Markers are one per fixed PLACE (not per main activity), so the map stays
+ * uncluttered no matter how busy a place gets during a gathering. Tapping a
+ * place plays a cinematic and opens its board of activities; tapping a duck
+ * goes to the duck page.
  *
  * The §5.1 intro (title -> catchphrase -> Earth-to-Kamogawa flight) plays
- * once per session on top of this same globe/viewer before the Kyoto camera
- * lock engages -- the bounding-box clamp would otherwise fight the flight,
- * since the flight legitimately passes through Earth/Japan views outside it.
- * The rest of the chrome only appears once the intro has landed.
+ * once per session before the Kyoto camera lock engages -- the clamp would
+ * otherwise fight the flight, which passes through views outside Kyoto.
  */
 export function MainMap() {
   const { t } = useTranslation();
@@ -97,49 +73,12 @@ export function MainMap() {
   const [mapHintDismissed, setMapHintDismissed] = useState(
     () => localStorage.getItem(HAS_SEEN_MAP_HINT_KEY) === 'true',
   );
-  const [placePopup, setPlacePopup] = useState<{ mainId: string; preview: ActivityPreview } | null>(
+  const [placePopup, setPlacePopup] = useState<{ placeId: string; preview: PlacePreview } | null>(
     null,
   );
-  const [activeEvent, setActiveEvent] = useState<KamoEvent | null>(null);
-  const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(false);
   const identityStatus = useIdentityStore((s) => s.status);
   const profile = useIdentityStore((s) => s.profile);
-  const userId = useIdentityStore((s) => s.userId);
   const completeOnboarding = useIdentityStore((s) => s.completeOnboarding);
-
-  // §C7: "post an activity here" is event-gated (mains only happen during a
-  // live gathering); compose-only data, best-effort and simply absent if
-  // offline (you can't post anyway without a connection).
-  useEffect(() => {
-    void getActiveEvent().then(setActiveEvent).catch(() => {});
-    void fetchActivityTypes().then(setActivityTypes).catch(() => {});
-  }, []);
-
-  async function handleCreateMain(result: ComposerResult) {
-    if (!userId || !activeEvent || !result.activityTypeId) return;
-    setSubmitting(true);
-    setSubmitError(false);
-    try {
-      const loc = await getCreateLocation();
-      await createMain({
-        authorId: userId,
-        activityTypeId: result.activityTypeId,
-        eventId: activeEvent.id,
-        phrase: result.phrase,
-        photoFile: result.photoFile,
-        lat: loc.lat,
-        lng: loc.lng,
-      });
-      setComposerOpen(false);
-    } catch {
-      setSubmitError(true);
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -149,32 +88,26 @@ export function MainMap() {
     applyMobilePerfSettings(v);
     locateAndMarkVisitor(v);
 
-    // §5.3/§5.4 markers: exclamation from main activities, duck from duck
-    // spots. Realtime keeps the activity set current without a reload.
+    // One exclamation marker per PLACE + a colored duck marker per duck spot.
+    // Both sets are fixed seed data, so no realtime subscription is needed --
+    // new mains show up inside a place's board, not as new markers.
     const markerLayers = createMarkerLayers(v);
 
-    let activityPoints: MarkerPoint[] = [];
-    void fetchMainActivityMarkers().then((points) => {
+    let placePoints: MarkerPoint[] = [];
+    void fetchPlaceMarkers().then((points) => {
       if (v.isDestroyed()) return;
-      activityPoints = points;
-      markerLayers.setActivities(activityPoints);
+      placePoints = points;
+      markerLayers.setActivities(placePoints);
     });
     void fetchActiveDuckSpotMarkers().then((points) => {
       if (v.isDestroyed()) return;
       markerLayers.setDuckSpots(points);
     });
-    const unsubscribeActivityInserts = subscribeToNewMainActivities((marker) => {
-      if (v.isDestroyed()) return;
-      if (activityPoints.some((p) => p.id === marker.id)) return;
-      activityPoints = [...activityPoints, marker];
-      markerLayers.setActivities(activityPoints);
-    });
 
-    // §B: tapping an exclamation marker plays a cinematic (framing highlight
-    // -> fly-in -> slow orbit) around that specific place, then shows a popup
-    // for it -- one place, one cinematic at a time (see `cinematic` below).
-    // The Kyoto camera clamp is lifted for the duration (the close-up/orbit
-    // view is tighter than the clamp expects) and restored when it ends.
+    // Tapping a place marker plays a cinematic (framing highlight -> fly-in ->
+    // slow orbit) around it, then shows its popup -- one place at a time. The
+    // Kyoto camera clamp is lifted for the duration (the close-up/orbit view is
+    // tighter than the clamp expects) and restored when it ends.
     let cinematic: { cancelled: boolean; removeFraming: () => void; cancelOrbit: (() => void) | null } | null =
       null;
 
@@ -193,9 +126,9 @@ export function MainMap() {
     }
     closeCinematicRef.current = closeCinematic;
 
-    async function startPlaceCinematic(mainId: string) {
+    async function startPlaceCinematic(placeId: string) {
       if (cinematic || v.isDestroyed()) return;
-      const point = activityPoints.find((p) => p.id === mainId);
+      const point = placePoints.find((p) => p.id === placeId);
       if (!point) return;
 
       constraintsCleanupRef.current?.();
@@ -205,7 +138,7 @@ export function MainMap() {
       const session = { cancelled: false, removeFraming, cancelOrbit: null as (() => void) | null };
       cinematic = session;
 
-      const previewPromise = fetchActivityPreview(mainId).catch(() => null);
+      const previewPromise = fetchPlacePreview(placeId).catch(() => null);
 
       await flyToPlace(v, point.lat, point.lng);
       if (session.cancelled || v.isDestroyed()) return;
@@ -221,7 +154,7 @@ export function MainMap() {
         closeCinematic();
         return;
       }
-      setPlacePopup({ mainId, preview });
+      setPlacePopup({ placeId, preview });
     }
 
     const removeTapHandler = setupMarkerTapHandler(v, (kind, refId) => {
@@ -285,7 +218,6 @@ export function MainMap() {
       timers.forEach(clearTimeout);
       cinematic?.cancelOrbit?.();
       constraintsCleanupRef.current?.();
-      unsubscribeActivityInserts();
       removeTapHandler();
       markerLayers.dispose();
       v.destroy();
@@ -408,20 +340,16 @@ export function MainMap() {
             </div>
           )}
 
-          {activeEvent && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-6 z-10 flex justify-center px-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setSubmitError(false);
-                  setComposerOpen(true);
-                }}
-                className="pointer-events-auto rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone shadow-lg"
-              >
-                + {t('toukou.createMain')}
-              </button>
-            </div>
-          )}
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 z-10 flex justify-center px-4">
+            <button
+              type="button"
+              onClick={() => navigate('/duck')}
+              className="pointer-events-auto flex items-center gap-2 rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone shadow-lg"
+            >
+              <span aria-hidden>🦆</span>
+              {t('mainMap.duckCollection')}
+            </button>
+          </div>
         </>
       )}
 
@@ -432,17 +360,7 @@ export function MainMap() {
         <PlacePopup
           preview={placePopup.preview}
           onClose={() => closeCinematicRef.current()}
-          onViewActivity={() => navigate(`/toukou?main=${placePopup.mainId}`)}
-        />
-      )}
-      {composerOpen && (
-        <Composer
-          mode="main"
-          activityTypes={activityTypes}
-          submitting={submitting}
-          error={submitError}
-          onSubmit={(result) => void handleCreateMain(result)}
-          onCancel={() => setComposerOpen(false)}
+          onViewActivities={() => navigate(`/toukou?place=${placePopup.placeId}`)}
         />
       )}
     </div>

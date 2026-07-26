@@ -45,7 +45,10 @@
     "back": "Back to map",
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
     "dragHint": "Drag to look around",
-    "viewActivity": "View activity"
+    "moreActivities": "More activities",
+    "placeActivityCount_one": "{{count}} activity happening now",
+    "placeActivityCount_other": "{{count}} activities happening now",
+    "duckCollection": "Duck collection"
   },
   "archive": {
     "title": "Archive",

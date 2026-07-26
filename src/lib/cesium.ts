@@ -297,6 +297,8 @@ export interface MarkerPoint {
   id: string;
   lat: number;
   lng: number;
+  /** Optional per-marker icon (used by the colored duck markers). */
+  iconUrl?: string;
 }
 
 export type MarkerKind = 'activity' | 'duckSpot';
@@ -304,7 +306,7 @@ export type MarkerKind = 'activity' | 'duckSpot';
 function setMarkerPoints(
   dataSource: Cesium.CustomDataSource,
   kind: MarkerKind,
-  iconUrl: string,
+  defaultIconUrl: string,
   points: MarkerPoint[],
 ): void {
   dataSource.entities.removeAll();
@@ -312,7 +314,7 @@ function setMarkerPoints(
     dataSource.entities.add({
       position: Cesium.Cartesian3.fromDegrees(point.lng, point.lat),
       billboard: {
-        image: iconUrl,
+        image: point.iconUrl ?? defaultIconUrl,
         width: MARKER_PIXEL_SIZE,
         height: MARKER_PIXEL_SIZE,
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -330,11 +332,12 @@ export interface MarkerLayers {
 }
 
 /**
- * Creates the two marker layers for a Viewer (§5.3: exclamation markers from
- * main activities, duck markers from duck spots). Unclustered: each marker
- * needs to be individually tappable so it can open its own place's cinematic
- * + toukou web, and the seeded set is small enough that overlap at the
- * Kyoto-locked zoom range is minor.
+ * Creates the two marker layers for a Viewer: exclamation markers for the
+ * fixed activity PLACES (one marker per place, so the map stays uncluttered
+ * no matter how many mains a place accrues during a gathering) and colored
+ * duck markers for the duck spots (each carries its own recolored icon via
+ * `MarkerPoint.iconUrl`). Unclustered so each is individually tappable for the
+ * cinematic.
  */
 export function createMarkerLayers(viewer: Cesium.Viewer): MarkerLayers {
   const activitySource = new Cesium.CustomDataSource('activities');
