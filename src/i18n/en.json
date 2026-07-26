@@ -116,6 +116,7 @@
     "empty": "No duck photos yet. Share the first one.",
     "addPhoto": "Share a duck photo",
     "graphHint": "Tap a duck's + to share a photo of it.",
+    "testMode": "Test mode: scan any QR without being there",
     "posting": "Sharing…",
     "report": "Report",
     "reported": "Reported",
@@ -141,8 +142,7 @@
     "progress": "{{count}} / 10 stamps",
     "certificateUnlocked": "You collected all 10! Your certificate is unlocked.",
     "goToDuck": "Go to duck page",
-    "tryAgain": "Try again",
-    "deltaTestMode": "Test mode: use Delta location"
+    "tryAgain": "Try again"
   },
   "certificate": {
     "heading": "Certificate of Completion",

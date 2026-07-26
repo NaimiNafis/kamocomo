@@ -23,6 +23,7 @@ import {
 import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
 import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
 import { logQrEntry } from '../../lib/duck';
+import { HAS_SEEN_INTRO_KEY, OPEN_DUCK_AFTER_INTRO_KEY } from '../../lib/entryFlags';
 import { Intro, type IntroPhase } from '../Intro/Intro';
 import { Onboarding } from '../Onboarding/Onboarding';
 import { Tutorial } from '../Tutorial/Tutorial';
@@ -33,7 +34,6 @@ import { needsOnboarding, useIdentityStore } from '../../store/identityStore';
 
 configureCesiumIon();
 
-const HAS_SEEN_INTRO_KEY = 'hasSeenIntro';
 const HAS_SEEN_TUTORIAL_KEY = 'hasSeenTutorial';
 const HAS_SEEN_MAP_HINT_KEY = 'hasSeenMapHint';
 const TITLE_HOLD_MS = 1800;
@@ -181,6 +181,12 @@ export function MainMap() {
       constraintsCleanupRef.current = applyKyotoCameraConstraints(v);
       sessionStorage.setItem(HAS_SEEN_INTRO_KEY, 'true');
       setIntroPhase('done');
+      // A duck-QR scan routes through the intro, then opens the duck page
+      // (item 3): the stamp was already collected before the flight.
+      if (sessionStorage.getItem(OPEN_DUCK_AFTER_INTRO_KEY) === '1') {
+        sessionStorage.removeItem(OPEN_DUCK_AFTER_INTRO_KEY);
+        navigate('/duck');
+      }
     }
 
     if (finished) {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useNavigate } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
 import {
@@ -13,6 +14,7 @@ import {
   type StampCardSlot,
 } from '../../lib/duck';
 import { cachedFetch } from '../../lib/cache';
+import { DUCK_SCAN_RESULT_KEY, TEST_MODE_KEY, type StashedScanResult } from '../../lib/entryFlags';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
 import { StampCard } from './StampCard';
@@ -27,7 +29,8 @@ type Status = 'loading' | 'ready' | 'error';
  * is replaced by the graph -- a photo now belongs to a specific duck.
  */
 export function Duck() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isJa = i18n.language.startsWith('ja');
   const navigate = useNavigate();
   const userId = useIdentityStore((s) => s.userId);
 
@@ -39,6 +42,33 @@ export function Duck() {
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [showCertificate, setShowCertificate] = useState(false);
   const [stale, setStale] = useState(false);
+  // A duck-QR scan collects the stamp before routing here (item 3) and stashes
+  // its result. Read it once on mount (lazy init, so it survives StrictMode's
+  // double-mount); the effect below clears the stash without a setState.
+  const [scanBanner, setScanBanner] = useState<StashedScanResult | null>(() => {
+    const raw = sessionStorage.getItem(DUCK_SCAN_RESULT_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as StashedScanResult;
+    } catch {
+      return null;
+    }
+  });
+  const [testMode, setTestMode] = useState(() => localStorage.getItem(TEST_MODE_KEY) === 'true');
+
+  useEffect(() => {
+    if (scanBanner) sessionStorage.removeItem(DUCK_SCAN_RESULT_KEY);
+    // Clear the one-shot stash after it's been read into state (runs once).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function toggleTestMode() {
+    setTestMode((prev) => {
+      const next = !prev;
+      localStorage.setItem(TEST_MODE_KEY, String(next));
+      return next;
+    });
+  }
 
   const refetchGraph = useCallback(async () => {
     if (!userId) return;
@@ -119,6 +149,40 @@ export function Duck() {
 
       <StaleBanner show={stale} />
 
+      {scanBanner && (
+        <div className="flex items-center justify-between gap-2 bg-kamo-sunset/90 px-4 py-2">
+          <span className="font-ui text-sm text-kamo-stone">
+            {scanBannerText(scanBanner, isJa, t)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setScanBanner(null)}
+            aria-label={t('common.close')}
+            className="shrink-0 font-ui text-sm text-kamo-stone/80"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={toggleTestMode}
+        aria-pressed={testMode}
+        className="mx-4 mt-3 flex items-center justify-between gap-2 rounded-full border border-kamo-ink/15 bg-kamo-sand/40 px-3 py-1.5 font-ui text-xs text-kamo-ink/70"
+      >
+        {t('duck.testMode')}
+        <span
+          className="flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors"
+          style={{ backgroundColor: testMode ? '#2E3A59' : 'rgba(28,28,26,0.2)' }}
+        >
+          <span
+            className="h-4 w-4 rounded-full bg-kamo-stone transition-transform"
+            style={{ transform: testMode ? 'translateX(16px)' : 'translateX(0)' }}
+          />
+        </span>
+      </button>
+
       {status === 'loading' && (
         <p className="p-4 font-ui text-sm text-kamo-ink/60">{t('duck.loading')}</p>
       )}
@@ -173,4 +237,20 @@ export function Duck() {
       )}
     </div>
   );
+}
+
+function scanBannerText(r: StashedScanResult, isJa: boolean, t: TFunction): string {
+  const name = isJa ? r.spotNameJa : r.spotNameEn;
+  switch (r.status) {
+    case 'collected':
+      return `${t('scan.collected')} · ${name}`;
+    case 'already':
+      return `${t('scan.alreadyCollected')} · ${name}`;
+    case 'too_far':
+      return t('scan.tooFarDetail', { distance: r.distance });
+    case 'location':
+      return t('scan.locationNeeded');
+    default:
+      return t('scan.notFound');
+  }
 }

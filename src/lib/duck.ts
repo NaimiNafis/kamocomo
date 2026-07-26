@@ -152,6 +152,20 @@ export async function fetchStampCard(userId: string): Promise<StampCardSlot[]> {
   return spots.map((s, i) => ({ ...s, earned: earned.has(s.id), color: duckColor(i) }));
 }
 
+/** A duck spot's own coordinates, looked up by its QR token -- used by test
+ * mode to submit "I'm standing at this spot" so the server geofence passes for
+ * any QR without actually being there (no easier to abuse than spoofing GPS). */
+export async function fetchDuckSpotCoords(token: string): Promise<{ lat: number; lng: number } | null> {
+  const { data, error } = await supabase
+    .from('duck_spots')
+    .select('lat, lng')
+    .eq('qr_token', token)
+    .eq('active', true)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { lat: data.lat, lng: data.lng } : null;
+}
+
 export async function fetchCertificate(userId: string): Promise<{ issuedAt: string } | null> {
   const { data, error } = await supabase
     .from('certificates')

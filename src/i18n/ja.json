@@ -114,6 +114,7 @@
     "empty": "まだ鴨の写真がありません。最初の一枚を共有しましょう。",
     "addPhoto": "鴨の写真を共有",
     "graphHint": "鴨の「+」をタップして写真を共有しましょう。",
+    "testMode": "テストモード:現地にいなくてもどのQRでも読み取れる",
     "posting": "共有中…",
     "report": "報告",
     "reported": "報告しました",
@@ -139,8 +140,7 @@
     "progress": "{{count}} / 10 スタンプ",
     "certificateUnlocked": "10個すべて集めました!証明書が手に入りました。",
     "goToDuck": "鴨ページへ",
-    "tryAgain": "もう一度",
-    "deltaTestMode": "テストモード:デルタの位置を使う"
+    "tryAgain": "もう一度"
   },
   "certificate": {
     "heading": "Certificate of Completion",
