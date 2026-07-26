@@ -41,6 +41,7 @@ export function Duck() {
   const [uploading, setUploading] = useState(false);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [showCertificate, setShowCertificate] = useState(false);
+  const [showStampCard, setShowStampCard] = useState(false);
   const [stale, setStale] = useState(false);
   // A duck-QR scan collects the stamp before routing here (item 3) and stashes
   // its result. Read it once on mount (lazy init, so it survives StrictMode's
@@ -137,14 +138,22 @@ export function Duck() {
   }
 
   const hasCert = certIssuedAt !== null;
+  const earned = slots.filter((s) => s.earned).length;
 
   return (
     <div className="flex h-full w-full flex-col bg-kamo-stone">
-      <div className="flex items-center justify-between border-b border-kamo-ink/10 p-4">
-        <button type="button" onClick={() => navigate('/')} className="font-ui text-xs text-kamo-ink">
+      <div className="flex items-center justify-between gap-2 border-b border-kamo-ink/10 p-4">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="shrink-0 font-ui text-xs text-kamo-ink"
+        >
           ‹ {t('mainMap.back')}
         </button>
-        <LanguageToggle />
+        <span className="truncate font-display text-base text-kamo-ink">{t('duck.title')}</span>
+        <div className="shrink-0">
+          <LanguageToggle />
+        </div>
       </div>
 
       <StaleBanner show={stale} />
@@ -200,36 +209,59 @@ export function Duck() {
       )}
 
       {status === 'ready' && (
-        <>
-          {/* Stamp card (kept) */}
-          <div className="p-4">
-            <h1 className="mb-3 font-display text-xl text-kamo-ink">{t('duck.title')}</h1>
+        // The duck graph fills the screen; tap a duck's + to add a photo. The
+        // stamp card lives behind the floating button (opens a centered popup).
+        <div className="relative flex-1 overflow-hidden border-t border-kamo-ink/10">
+          <DuckGraph
+            graph={graph}
+            reportedIds={reportedIds}
+            uploading={uploading}
+            onUpload={(spotId, file) => void handleUpload(spotId, file)}
+            onReport={(postId) => void handleReport(postId)}
+          />
+          {uploading && (
+            <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
+              <span className="rounded-full bg-kamo-ink/80 px-3 py-1 font-ui text-xs text-kamo-stone">
+                {t('duck.posting')}
+              </span>
+            </div>
+          )}
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+            <button
+              type="button"
+              onClick={() => setShowStampCard(true)}
+              className="pointer-events-auto flex items-center gap-2 rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone shadow-lg"
+            >
+              <span aria-hidden>🦆</span>
+              {t('duck.stampButton')} · {earned}/10
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showStampCard && (
+        <div
+          className="absolute inset-0 z-40 flex items-center justify-center bg-kamo-ink/50 p-4"
+          onClick={() => setShowStampCard(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-kamo-stone p-3 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <StampCard
               slots={slots}
               hasCertificate={hasCert}
               onViewCertificate={() => setShowCertificate(true)}
             />
-            <p className="mt-2 font-ui text-xs text-kamo-ink/50">{t('duck.graphHint')}</p>
+            <button
+              type="button"
+              onClick={() => setShowStampCard(false)}
+              className="mx-auto mt-3 block rounded-full border border-kamo-ink/20 px-4 py-1.5 font-ui text-sm text-kamo-ink"
+            >
+              {t('common.close')}
+            </button>
           </div>
-
-          {/* Duck graph fills the rest; tap a duck's + to add a photo */}
-          <div className="relative flex-1 overflow-hidden border-t border-kamo-ink/10">
-            <DuckGraph
-              graph={graph}
-              reportedIds={reportedIds}
-              uploading={uploading}
-              onUpload={(spotId, file) => void handleUpload(spotId, file)}
-              onReport={(postId) => void handleReport(postId)}
-            />
-            {uploading && (
-              <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
-                <span className="rounded-full bg-kamo-ink/80 px-3 py-1 font-ui text-xs text-kamo-stone">
-                  {t('duck.posting')}
-                </span>
-              </div>
-            )}
-          </div>
-        </>
+        </div>
       )}
 
       {showCertificate && (

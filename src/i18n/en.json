@@ -108,7 +108,7 @@
     "loading": "Loading…",
     "error": "Couldn't load the duck page.",
     "addPhoto": "Share a duck photo",
-    "graphHint": "Tap a duck's + to share a photo of it.",
+    "stampButton": "Stamp card",
     "testMode": "Test mode: scan any QR without being there",
     "posting": "Sharing…",
     "report": "Report",
