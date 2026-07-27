@@ -235,23 +235,40 @@ function kamoColor(cssVariable: string): Cesium.Color {
 }
 
 /**
- * Adds the "you are here" marker (§5.3) -- a plain Cesium point, not an
- * image, so it needs no asset and can't run afoul of the "no stock imagery"
- * rule. Called once per Viewer lifetime (on mount), so it never needs to
- * find/update a previous marker.
+ * Adds the "you are here" marker (§5.3): a sunset dot with a "You Are Here!"
+ * speech-bubble card floating just above it. The dot is a plain Cesium point
+ * (no stock imagery); the card is a native Cesium label with a filled stone
+ * background (reliable text rendering, unlike an SVG billboard). Called once
+ * per Viewer lifetime (on mount), so it never needs to update a previous one.
  */
 export function setYouAreHereMarker(
   viewer: Cesium.Viewer,
   longitude: number,
   latitude: number,
+  label: string,
 ): Cesium.Entity {
+  const bg = kamoColor('--kamo-stone');
   return viewer.entities.add({
     position: Cesium.Cartesian3.fromDegrees(longitude, latitude),
     point: {
       pixelSize: 14,
       color: kamoColor('--kamo-sunset'),
-      outlineColor: kamoColor('--kamo-stone'),
+      outlineColor: bg,
       outlineWidth: 3,
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+    label: {
+      text: label,
+      font: '600 14px "Noto Sans JP", sans-serif',
+      fillColor: kamoColor('--kamo-indigo'),
+      style: Cesium.LabelStyle.FILL,
+      showBackground: true,
+      backgroundColor: bg,
+      backgroundPadding: new Cesium.Cartesian2(10, 7),
+      // Card sits just above the dot (a small gap over the 14px point).
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      pixelOffset: new Cesium.Cartesian2(0, -14),
       heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     },
@@ -266,10 +283,10 @@ export function setYouAreHereMarker(
  * having been destroyed by then (e.g. React StrictMode's dev-mode double
  * mount/cleanup, or a real unmount before the browser responds).
  */
-export function locateAndMarkVisitor(viewer: Cesium.Viewer): void {
+export function locateAndMarkVisitor(viewer: Cesium.Viewer, label: string): void {
   const fallback = () => {
     if (viewer.isDestroyed()) return;
-    setYouAreHereMarker(viewer, KAMOGAWA_DELTA.longitude, KAMOGAWA_DELTA.latitude);
+    setYouAreHereMarker(viewer, KAMOGAWA_DELTA.longitude, KAMOGAWA_DELTA.latitude, label);
   };
 
   if (!('geolocation' in navigator)) {
@@ -280,7 +297,7 @@ export function locateAndMarkVisitor(viewer: Cesium.Viewer): void {
   navigator.geolocation.getCurrentPosition(
     (position) => {
       if (viewer.isDestroyed()) return;
-      setYouAreHereMarker(viewer, position.coords.longitude, position.coords.latitude);
+      setYouAreHereMarker(viewer, position.coords.longitude, position.coords.latitude, label);
     },
     fallback,
     { timeout: 8000, maximumAge: 60_000 },

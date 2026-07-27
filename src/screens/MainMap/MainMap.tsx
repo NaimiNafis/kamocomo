@@ -86,7 +86,7 @@ export function MainMap() {
     const v = new Cesium.Viewer(containerRef.current, VIEWER_OPTIONS);
     viewerRef.current = v;
     applyMobilePerfSettings(v);
-    locateAndMarkVisitor(v);
+    locateAndMarkVisitor(v, t('mainMap.youAreHere'));
 
     // One exclamation marker per PLACE + a colored duck marker per duck spot.
     // Both sets are fixed seed data, so no realtime subscription is needed --

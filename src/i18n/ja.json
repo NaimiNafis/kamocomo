@@ -46,6 +46,7 @@
     "qrWelcome": "鴨川への隠れた入口を見つけました",
     "dragHint": "ドラッグして周りを見渡そう",
     "moreActivities": "活動を見る",
+    "youAreHere": "ここにいます!",
     "placeActivityCount_other": "現在 {{count}} 件の活動",
     "duckCollection": "鴨コレクション"
   },

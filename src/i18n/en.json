@@ -46,6 +46,7 @@
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
     "dragHint": "Drag to look around",
     "moreActivities": "More activities",
+    "youAreHere": "You Are Here!",
     "placeActivityCount_one": "{{count}} activity happening now",
     "placeActivityCount_other": "{{count}} activities happening now",
     "duckCollection": "Duck collection"
