@@ -65,7 +65,7 @@ console.log('today event:', eventId);
 
 const [{ data: types, error: te }, { data: places, error: pe }] = await Promise.all([
   sb.from('activity_types').select('id, name_en'),
-  sb.from('places').select('id, name_en, lat, lng').order('lat', { ascending: false }),
+  sb.from('places').select('id, name_en, lat, lng').eq('active', true).order('lat', { ascending: false }),
 ]);
 if (te) throw te;
 if (pe) throw pe;
