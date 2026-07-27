@@ -211,7 +211,8 @@ export function ToukouMap() {
             className="pointer-events-none absolute overflow-visible"
             style={{ left: -EDGE_OFFSET, top: -EDGE_OFFSET, width: EDGE_OFFSET * 2, height: EDGE_OFFSET * 2 }}
           >
-            {(board?.edges ?? []).map((edge) => {
+            {/* Every node -- subs and the add card -- gets a string to its main. */}
+            {layoutEdges.map((edge) => {
               const s = positionOf(edge.source);
               const tp = positionOf(edge.target);
               return (

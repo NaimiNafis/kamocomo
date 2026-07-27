@@ -88,7 +88,8 @@ export function DuckGraph({ graph, reportedIds, uploading, onUpload, onReport }:
           className="pointer-events-none absolute overflow-visible"
           style={{ left: -EDGE_OFFSET, top: -EDGE_OFFSET, width: EDGE_OFFSET * 2, height: EDGE_OFFSET * 2 }}
         >
-          {graph.edges.map((edge) => {
+          {/* Every node -- photos and the add card -- gets a string to its duck. */}
+          {layoutEdges.map((edge) => {
             const s = positionOf(edge.source);
             const tp = positionOf(edge.target);
             return (
