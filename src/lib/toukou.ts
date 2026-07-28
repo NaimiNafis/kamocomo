@@ -87,17 +87,17 @@ export interface PlaceBoard extends ToukouGraph {
 }
 
 /**
- * Builds one place's board (§C1/item 7): ALL of today's non-hidden,
- * non-archived mains at that place -- each colored by its activity type --
- * plus every main's non-archived subs (a lighter shade), annotated with the
- * user's votes and which mains have overflowed (archived) subs. Returns null
- * if the place is gone (the screen redirects home on that). `eventId` scopes
- * the mains to the current gathering day.
+ * Builds one place's board (§C1/item 7): ALL of that place's non-hidden,
+ * non-archived mains -- each colored by its activity type -- plus every main's
+ * non-archived subs (a lighter shade), annotated with the user's votes and
+ * which mains have overflowed (archived) subs. Returns null if the place is
+ * gone (the screen redirects home on that). Activities persist on the board
+ * across days (they aren't scoped to the current gathering event); they only
+ * leave when hidden by moderation or archived by the sub-cap.
  */
 export async function fetchPlaceBoard(
   userId: string,
   placeId: string,
-  eventId: string,
 ): Promise<PlaceBoard | null> {
   const [{ data: place, error: placeError }, { data: types, error: typesError }, { data: mains, error: mainsError }] =
     await Promise.all([
@@ -108,7 +108,6 @@ export async function fetchPlaceBoard(
         .select('id, kind, parent_id, activity_type, photo_url, phrase, likes, dislikes')
         .eq('place_id', placeId)
         .eq('kind', 'main')
-        .eq('event_id', eventId)
         .eq('hidden', false)
         .eq('archived', false)
         .order('created_at', { ascending: true }),

@@ -85,27 +85,25 @@ export function ToukouMap() {
   }, [placeId, navigate]);
 
   const refetchBoard = useCallback(async () => {
-    if (!userId || !placeId || !event) return;
+    if (!userId || !placeId) return;
     try {
-      setBoard(await fetchPlaceBoard(userId, placeId, event.id));
+      setBoard(await fetchPlaceBoard(userId, placeId));
     } catch {
       /* keep the last good board; realtime retries on the next change */
     }
-  }, [userId, placeId, event]);
+  }, [userId, placeId]);
 
-  // Initial load: today's event (always live), then this place's board (cached
-  // by place so it still shows offline), plus the activity types for the
-  // "post an activity" composer.
+  // Initial load: this place's board (all its activities, not just today's --
+  // cached by place so it still shows offline). The active event is loaded
+  // separately, best-effort, only for the "post an activity" composer.
   useEffect(() => {
     if (!userId || !placeId) return;
     let cancelled = false;
     (async () => {
+      void getActiveEvent().then((ev) => !cancelled && setEvent(ev)).catch(() => {});
       try {
-        const ev = await getActiveEvent();
-        if (cancelled) return;
-        setEvent(ev);
         const res = await cachedFetch(`toukou:place:${placeId}:${userId}`, () =>
-          fetchPlaceBoard(userId, placeId, ev.id),
+          fetchPlaceBoard(userId, placeId),
         );
         if (cancelled) return;
         if (!res.data) {

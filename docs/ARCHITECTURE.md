@@ -148,9 +148,11 @@ the map.
 ### Toukou / place board (`src/screens/ToukouMap`)
 
 Always scoped to one place (`?place=<id>`) — a bare `/toukou` visit bounces
-back to the map. The board shows **every main happening at that place today**
-(the daily gathering), each in its activity-type color, with its subs orbiting
-in a lighter shade; the mains repel into separate clusters. Layout is d3-force
+back to the map. The board shows **every (non-archived) main at that place**,
+each in its activity-type color, with its subs orbiting in a lighter shade; the
+mains repel into separate clusters. Activities persist across days — they're
+not scoped to the current gathering event, so a place's web stays populated;
+they only leave when hidden by moderation or archived by the sub-cap. Layout is d3-force
 with collision radii sized to each card's full bounding circle and a
 synchronous pre-warm before first paint, so even a busy board opens already
 settled instead of visibly untangling.
@@ -234,17 +236,16 @@ changing the underlying model.
 
 ## Event gating — the daily gathering
 
-The gathering is a **daily-rotating window computed from the clock, with no
-cron**. `getActiveEvent()` calls the `ensure_todays_event()` RPC, which upserts
-a deterministic event row for the current Kyoto day and returns it — so there
-is always a live window (mains are always creatable) and every main posted
-today shares one `event_id`. A place board queries only *today's* mains
-(`event_id = today`), so at day rollover the previous day's mains simply drop
-off the live board and remain in the archive — the rotation is emergent from
-date filtering, not a scheduled job (a `pg_cron` snapshot could be added later
-if a hard boundary side-effect is ever needed). The restrictive
-"main-only-during-an-event" RLS still backs this, so a bypassed client can't
-post a main outside the window. Subs are never gated.
+The gathering is a **daily window computed from the clock, with no cron**.
+`getActiveEvent()` calls the `ensure_todays_event()` RPC, which upserts a
+deterministic event row for the current Kyoto day and returns it — so there is
+always a live window and mains are always creatable. Its purpose is now
+**gating creation**, not rotating the board: the restrictive
+"main-only-during-an-event" RLS uses it so a bypassed client can't post a main
+outside a window, and a new main records the day's `event_id`. The place board
+itself is **not** scoped to the event — it shows all of a place's non-archived
+mains, so activities persist across days rather than disappearing at day
+rollover. Subs are never gated.
 
 ## Duck-stamp anti-cheat
 

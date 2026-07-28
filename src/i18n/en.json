@@ -69,7 +69,7 @@
     "title": "Activity web",
     "loading": "Loading the web…",
     "error": "Couldn't load activities.",
-    "placeEmpty": "No activities here yet today. Post the first one.",
+    "placeEmpty": "No activities here yet. Post the first one.",
     "createMain": "Post an activity",
     "addSub": "Add to this activity",
     "viewArchived": "See earlier posts",
