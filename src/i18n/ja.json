@@ -1,19 +1,19 @@
 {
   "app": {
-    "title": "Virtual Kamogawa",
-    "catchphrase": "皆んなの鴨川、守り続けよう"
+    "title": "バーチャル鴨川",
+    "catchphrase": "守り続けよう、みんなの鴨川。"
   },
   "common": {
     "skip": "スキップ",
-    "loading": "読み込み中…",
+    "loading": "読み込み中……",
     "retry": "再試行",
     "close": "閉じる",
-    "offlineStale": "オフラインです — 保存された内容を表示しています"
+    "offlineStale": "オフラインです — 保存された内容を表示しています。"
   },
   "onboarding": {
-    "title": "少しだけ教えてください",
-    "subtitle": "鴨川を訪れる人を知るために。5秒で終わります。",
-    "nationality": "どちらから来ましたか?",
+    "title": "あなたのことを少しだけ教えてください",
+    "subtitle": "5秒で終わります。",
+    "nationality": "どちらから来ましたか？",
     "nationalityOptions": {
       "japan": "日本",
       "asia": "アジア",
@@ -50,7 +50,7 @@
   "archive": {
     "title": "アーカイブ",
     "subtitle": "鴨川がどう使われてきたか、その記録。",
-    "loading": "アーカイブを読み込み中…",
+    "loading": "アーカイブを読み込み中……",
     "error": "アーカイブを読み込めませんでした。",
     "empty": "まだ何もありません。活動は時間とともにここに集まります。",
     "posts_other": "{{count}}件の投稿",
@@ -89,12 +89,12 @@
     "subTitle": "この活動に加わる",
     "activityType": "何をしていますか？",
     "phrase": "ひとこと",
-    "phrasePlaceholder": "例:静かだからここで書いています",
+    "phrasePlaceholder": "例:静かなのでここで書いています",
     "addPhoto": "写真を追加",
     "changePhoto": "写真を変更",
-    "photoOptional": "写真は任意",
+    "photoOptional": "写真は任意です。",
     "submit": "投稿",
-    "submitting": "投稿中…",
+    "submitting": "投稿中……",
     "cancel": "キャンセル",
     "error": "投稿できませんでした。もう一度お試しください。"
   },
@@ -106,9 +106,9 @@
     "title": "鴨川の鴨",
     "feedTab": "写真",
     "stampTab": "スタンプ",
-    "loading": "読み込み中…",
+    "loading": "読み込み中……",
     "error": "鴨ページを読み込めませんでした。",
-    "empty": "まだ鴨の写真がありません。最初の一枚を共有しましょう。",
+    "empty": "まだ鴨の写真がありません。初めの一枚を共有しましょう。",
     "addPhoto": "鴨の写真を共有",
     "posting": "共有中…",
     "report": "報告",
@@ -121,11 +121,11 @@
     "viewCertificate": "証明書を見る"
   },
   "scan": {
-    "locating": "現在地を確認中…",
+    "locating": "現在地を確認中……",
     "collected": "スタンプを獲得!",
     "alreadyCollected": "獲得済み",
     "alreadyDetail": "この地点の鴨はすでに獲得しています。",
-    "tooFar": "鴨地点にもっと近づいてください",
+    "tooFar": "鴨にもっと近づいてください",
     "tooFarDetail": "約{{distance}}m離れています。スタンプを得るには120m以内に入る必要があります。",
     "locationNeeded": "位置情報が必要です",
     "locationDenied": "鴨を捕まえるには位置情報を許可してください。実際に川にいたことの証明になります。",
@@ -141,8 +141,8 @@
   "certificate": {
     "heading": "修了証",
     "headingJa": "達成証明書",
-    "body": "鴨川沿いでアヒル図鑑をコンプリートしました！",
-    "bodyJa": "鴨川のすべての鴨を獲得したことを証します",
+    "body": "鴨図鑑を完成させました！",
+    "bodyJa": "すべての鴨を捕獲したことを証します",
     "issued": "発行日 {{date}}",
     "close": "閉じる"
   },
@@ -158,11 +158,11 @@
       },
       {
         "title": "❗マーク",
-        "body": "❗マークをタップすると、その場所で行われている活動と参加者が見られます。"
+        "body": "❗マークをタップすると、その場所における活動と活動への参加者が見られます。"
       },
       {
         "title": "🦆マーク",
-        "body": "🦆マークをタップすると、鴨の写真や近くのスタンプ地点が見られます。"
+        "body": "🦆マークをタップすると、鴨の写真や近くの鴨の場所が見られます。"
       },
       {
         "title": "参加してみよう",
