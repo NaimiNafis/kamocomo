@@ -1,250 +1,83 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
-import { fetchCertificate, scanDuckSpot, type ScanResult } from '../../lib/duck';
-import { GeoError, getPosition, KAMOGAWA_DELTA, type GeoFailure } from '../../lib/geo';
-import { LanguageToggle } from '../../components/LanguageToggle';
-import { Certificate } from './Certificate';
+import { fetchDuckSpotCoords, scanDuckSpot } from '../../lib/duck';
+import { getPosition } from '../../lib/geo';
+import {
+  DUCK_SCAN_RESULT_KEY,
+  HAS_SEEN_INTRO_KEY,
+  OPEN_DUCK_AFTER_INTRO_KEY,
+  TEST_MODE_KEY,
+  type StashedScanResult,
+} from '../../lib/entryFlags';
 import duckMark from '../../../img/marks/duck.svg?url';
 
-type Phase =
-  | { kind: 'idle' }
-  | { kind: 'locating' }
-  | { kind: 'geo_error'; reason: GeoFailure }
-  | { kind: 'result'; result: ScanResult };
-
-const DELTA_TEST_MODE_KEY = 'deltaTestModeEnabled';
-
 /**
- * §A.2b geofenced stamp scan. Ensures a session (via the app-wide identity
- * init), requires device location, and calls the server RPC that recomputes
- * the distance and awards the stamp only within 120 m -- the client never
- * grants a stamp itself.
- *
- * "Delta test mode" is a testing convenience: instead of the device's real
- * GPS fix, it submits the Kamogawa Delta's own coordinates, so the flow can
- * be exercised without physically being at the river. It doesn't weaken the
- * server-side check (Postgres still recomputes distance from whatever point
- * is submitted) -- it just lets you submit "I'm at the Delta" truthfully for
- * testing, the same way spoofing device GPS would.
+ * §A.2b geofenced stamp scan, item 3 entry flow. The scan is server-authoritative
+ * (the RPC recomputes the distance and only grants a stamp within 120 m). Rather
+ * than showing its own result screen, it collects the stamp, stashes the result,
+ * and routes THROUGH the globe intro -> the 3D map -> the duck page, which shows
+ * a result banner. Test mode (toggled on the duck page) submits the scanned
+ * spot's own coordinates so any QR works for testing without being there.
  */
 export function DuckScan() {
-  const { t, i18n } = useTranslation();
-  const isJa = i18n.language.startsWith('ja');
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get('spot');
   const userId = useIdentityStore((s) => s.userId);
-
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
-  const [certIssuedAt, setCertIssuedAt] = useState<string | null>(null);
-  const [showCertificate, setShowCertificate] = useState(false);
-  const [deltaTestMode, setDeltaTestMode] = useState(
-    () => localStorage.getItem(DELTA_TEST_MODE_KEY) === 'true',
-  );
   const startedRef = useRef(false);
+  const [missing] = useState(!token);
 
-  function toggleDeltaTestMode() {
-    setDeltaTestMode((prev) => {
-      const next = !prev;
-      localStorage.setItem(DELTA_TEST_MODE_KEY, String(next));
-      return next;
-    });
-  }
-
-  const runScan = useCallback(async () => {
-    if (!token) return;
-    setPhase({ kind: 'locating' });
-    let point;
-    if (deltaTestMode) {
-      point = { lat: KAMOGAWA_DELTA.latitude, lng: KAMOGAWA_DELTA.longitude };
-    } else {
-      try {
-        point = await getPosition();
-      } catch (err) {
-        const reason = err instanceof GeoError ? err.reason : 'unavailable';
-        setPhase({ kind: 'geo_error', reason });
-        return;
-      }
-    }
-    try {
-      const result = await scanDuckSpot(token, point.lat, point.lng);
-      setPhase({ kind: 'result', result });
-      if (result.status === 'collected' && result.certificateEarned && userId) {
-        const cert = await fetchCertificate(userId);
-        setCertIssuedAt(cert?.issuedAt ?? null);
-      }
-    } catch {
-      setPhase({ kind: 'geo_error', reason: 'unavailable' });
-    }
-  }, [token, userId, deltaTestMode]);
-
-  // Run once, after the session is established (a scan may be the person's
-  // very first touch of the app, so wait for identity before calling the RPC).
   useEffect(() => {
-    if (!userId || startedRef.current) return;
+    if (!token || !userId || startedRef.current) return;
     startedRef.current = true;
-    void runScan();
-  }, [userId, runScan]);
+
+    (async () => {
+      let result: StashedScanResult;
+      try {
+        const testMode = localStorage.getItem(TEST_MODE_KEY) === 'true';
+        if (testMode) {
+          const coords = await fetchDuckSpotCoords(token);
+          result = coords
+            ? toStashed(await scanDuckSpot(token, coords.lat, coords.lng))
+            : { status: 'not_found', spotNameEn: '', spotNameJa: '', distance: 0 };
+        } else {
+          try {
+            const p = await getPosition();
+            result = toStashed(await scanDuckSpot(token, p.lat, p.lng));
+          } catch {
+            result = { status: 'location', spotNameEn: '', spotNameJa: '', distance: 0 };
+          }
+        }
+      } catch {
+        result = { status: 'error', spotNameEn: '', spotNameJa: '', distance: 0 };
+      }
+
+      // Hand off to the entry flow: replay the intro, then open the duck page.
+      sessionStorage.setItem(DUCK_SCAN_RESULT_KEY, JSON.stringify(result));
+      sessionStorage.setItem(OPEN_DUCK_AFTER_INTRO_KEY, '1');
+      sessionStorage.removeItem(HAS_SEEN_INTRO_KEY);
+      navigate('/', { replace: true });
+    })();
+  }, [token, userId, navigate]);
 
   return (
-    <div className="flex h-full w-full flex-col bg-kamo-stone">
-      <div className="flex items-center justify-between border-b border-kamo-ink/10 p-4">
-        <button type="button" onClick={() => navigate('/duck')} className="font-ui text-xs text-kamo-ink">
-          ‹ {t('scan.goToDuck')}
-        </button>
-        <LanguageToggle />
-      </div>
-
-      <button
-        type="button"
-        onClick={toggleDeltaTestMode}
-        aria-pressed={deltaTestMode}
-        className="mx-4 mt-3 flex items-center justify-between gap-2 rounded-full border border-kamo-ink/15 bg-kamo-sand/40 px-3 py-1.5 font-ui text-xs text-kamo-ink/70"
-      >
-        {t('scan.deltaTestMode')}
-        <span
-          className="flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors"
-          style={{ backgroundColor: deltaTestMode ? '#2E3A59' : 'rgba(28,28,26,0.2)' }}
-        >
-          <span
-            className="h-4 w-4 rounded-full bg-kamo-stone transition-transform"
-            style={{ transform: deltaTestMode ? 'translateX(16px)' : 'translateX(0)' }}
-          />
-        </span>
-      </button>
-
-      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-        {!token ? (
-          <Message title={t('scan.notFound')} detail={t('scan.missingSpot')} />
-        ) : phase.kind === 'idle' || phase.kind === 'locating' ? (
-          <Message title={t('scan.locating')} />
-        ) : phase.kind === 'geo_error' ? (
-          <>
-            <Message
-              title={t('scan.locationNeeded')}
-              detail={
-                phase.reason === 'denied' ? t('scan.locationDenied') : t('scan.locationUnavailable')
-              }
-            />
-            <RetryButton onClick={() => void runScan()} label={t('scan.tryAgain')} />
-          </>
-        ) : (
-          <ScanResultView
-            result={phase.result}
-            isJa={isJa}
-            onRetry={() => void runScan()}
-            onViewCertificate={() => setShowCertificate(true)}
-            onGoToDuck={() => navigate('/duck')}
-          />
-        )}
-      </div>
-
-      {showCertificate && (
-        <Certificate issuedAt={certIssuedAt} onClose={() => setShowCertificate(false)} />
-      )}
-    </div>
-  );
-}
-
-function ScanResultView({
-  result,
-  isJa,
-  onRetry,
-  onViewCertificate,
-  onGoToDuck,
-}: {
-  result: ScanResult;
-  isJa: boolean;
-  onRetry: () => void;
-  onViewCertificate: () => void;
-  onGoToDuck: () => void;
-}) {
-  const { t } = useTranslation();
-
-  if (result.status === 'not_found' || result.status === 'unauthenticated') {
-    return (
-      <>
-        <Message title={t('scan.notFound')} />
-        <RetryButton onClick={onRetry} label={t('scan.tryAgain')} />
-      </>
-    );
-  }
-
-  if (result.status === 'too_far') {
-    return (
-      <>
-        <Message
-          title={t('scan.tooFar')}
-          detail={t('scan.tooFarDetail', { distance: result.distance })}
-        />
-        <RetryButton onClick={onRetry} label={t('scan.tryAgain')} />
-      </>
-    );
-  }
-
-  const spotName = isJa ? result.spotNameJa : result.spotNameEn;
-  const collected = result.status === 'collected';
-
-  return (
-    <>
-      <img
-        src={duckMark}
-        alt=""
-        className="mb-4 h-24 w-24 animate-[fadeIn_0.5s_ease-out]"
-        draggable={false}
-      />
-      <h1 className="font-display text-2xl text-kamo-ink">
-        {collected ? t('scan.collected') : t('scan.alreadyCollected')}
-      </h1>
-      <p className="mt-1 font-ui text-sm text-kamo-ink/70">{spotName}</p>
-      {!collected && <p className="mt-1 font-ui text-xs text-kamo-ink/50">{t('scan.alreadyDetail')}</p>}
-      <p className="mt-4 font-ui text-sm font-medium text-kamo-ink">
-        {t('scan.progress', { count: result.stampCount })}
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-kamo-indigo px-8 text-center">
+      <img src={duckMark} alt="" className="h-16 w-16 animate-[fadeIn_0.5s_ease-out]" draggable={false} />
+      <p className="font-display text-lg text-kamo-stone">
+        {missing ? t('scan.missingSpot') : t('scan.locating')}
       </p>
-
-      {result.certificateEarned && (
-        <>
-          <p className="mt-4 font-ui text-sm text-kamo-sunset">{t('scan.certificateUnlocked')}</p>
-          <button
-            type="button"
-            onClick={onViewCertificate}
-            className="mt-3 rounded-full bg-kamo-sunset px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone"
-          >
-            {t('duck.viewCertificate')}
-          </button>
-        </>
-      )}
-
-      <button
-        type="button"
-        onClick={onGoToDuck}
-        className="mt-3 rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone"
-      >
-        {t('scan.goToDuck')}
-      </button>
-    </>
-  );
-}
-
-function Message({ title, detail }: { title: string; detail?: string }) {
-  return (
-    <div>
-      <h1 className="font-display text-xl text-kamo-ink">{title}</h1>
-      {detail && <p className="mt-2 font-ui text-sm text-kamo-ink/60">{detail}</p>}
     </div>
   );
 }
 
-function RetryButton({ onClick, label }: { onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="mt-5 rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone"
-    >
-      {label}
-    </button>
-  );
+function toStashed(r: Awaited<ReturnType<typeof scanDuckSpot>>): StashedScanResult {
+  return {
+    status: r.status,
+    spotNameEn: 'spotNameEn' in r ? r.spotNameEn : '',
+    spotNameJa: 'spotNameJa' in r ? r.spotNameJa : '',
+    distance: 'distance' in r ? r.distance : 0,
+  };
 }

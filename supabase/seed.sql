@@ -48,8 +48,13 @@ insert into duck_spots (id, name_en, name_ja, lat, lng, qr_token, active) values
   ('d1000000-0000-0000-0000-000000000010', 'Jujo', '十条', 34.9750, 135.7630, encode(gen_random_bytes(8), 'hex'), true)
 on conflict (id) do nothing;
 
--- Demo main activities (for Phase 5's markers) are seeded separately via
--- scripts/seed-demo-activities.mjs, which signs in real anonymous users
--- through the same signInAnonymously() flow the app itself uses -- not
--- direct SQL -- so every author_id is a genuine auth.users row rather than
--- a hand-inserted one.
+-- The ~8 activity "places" (each map marker is a place, not a single main)
+-- are seeded inside their migration (20260723120000_places_daily_events...),
+-- not here -- clients can't insert into places (read-only RLS), so the
+-- canonical set ships with the schema so the app works right after db push.
+
+-- Demo main activities are seeded separately via scripts/seed-demo-places.mjs
+-- (place-attached mains + subs) / scripts/seed-demo-activities.mjs, which sign
+-- in real anonymous users through the same signInAnonymously() flow the app
+-- itself uses -- not direct SQL -- so every author_id is a genuine auth.users
+-- row rather than a hand-inserted one.

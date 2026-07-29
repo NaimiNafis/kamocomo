@@ -45,7 +45,11 @@
     "back": "Back to map",
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
     "dragHint": "Drag to look around",
-    "viewActivity": "View activity"
+    "moreActivities": "More activities",
+    "youAreHere": "You Are Here!",
+    "placeActivityCount_one": "{{count}} activity happening now",
+    "placeActivityCount_other": "{{count}} activities happening now",
+    "duckCollection": "Duck collection"
   },
   "archive": {
     "title": "Archive",
@@ -65,11 +69,8 @@
     "title": "Activity web",
     "loading": "Loading the web…",
     "error": "Couldn't load activities.",
-    "empty": "No activities yet. Be the first to post one.",
+    "placeEmpty": "No activities here yet. Post the first one.",
     "createMain": "Post an activity",
-    "nextGathering": "Next gathering in {{days}}d {{hours}}h",
-    "nextGatheringSoon": "Next gathering starting soon",
-    "noGathering": "No gathering scheduled yet",
     "addSub": "Add to this activity",
     "viewArchived": "See earlier posts",
     "like": "Like",
@@ -105,18 +106,16 @@
   },
   "duck": {
     "title": "Ducks of the Kamogawa",
-    "feedTab": "Photos",
-    "stampTab": "Stamps",
     "loading": "Loading…",
     "error": "Couldn't load the duck page.",
-    "empty": "No duck photos yet. Share the first one.",
     "addPhoto": "Share a duck photo",
+    "stampButton": "Stamp card",
+    "testMode": "Test mode: scan any QR without being there",
     "posting": "Sharing…",
     "report": "Report",
     "reported": "Reported",
     "stampCardTitle": "Duck stamp rally",
     "stampProgress": "{{earned}} / 10 spots",
-    "stampHint": "Scan the QR at each duck spot along the river to fill your card.",
     "certificateLocked": "Collect all 10 stamps to unlock your certificate.",
     "certificateUnlocked": "Certificate unlocked!",
     "viewCertificate": "View certificate"
@@ -136,8 +135,7 @@
     "progress": "{{count}} / 10 stamps",
     "certificateUnlocked": "You collected all 10! Your certificate is unlocked.",
     "goToDuck": "Go to duck page",
-    "tryAgain": "Try again",
-    "deltaTestMode": "Test mode: use Delta location"
+    "tryAgain": "Try again"
   },
   "certificate": {
     "heading": "Certificate of Completion",

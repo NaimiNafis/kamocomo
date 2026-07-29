@@ -79,44 +79,82 @@ export function subShade(hex: string): string {
 // Graph fetch
 // =========================================================================
 
-/** Builds the toukou graph (§5.5): non-hidden, non-archived mains + subs,
- * colored by activity type, annotated with the current user's votes and
- * whether each main has archived (overflowed) subs. */
-export async function fetchToukouGraph(userId: string): Promise<ToukouGraph> {
-  const [{ data: types, error: typesError }, { data: activities, error: activitiesError }] =
+export interface PlaceBoard extends ToukouGraph {
+  placeNameEn: string;
+  placeNameJa: string;
+  placeLat: number;
+  placeLng: number;
+}
+
+/**
+ * Builds one place's board (§C1/item 7): ALL of that place's non-hidden,
+ * non-archived mains -- each colored by its activity type -- plus every main's
+ * non-archived subs (a lighter shade), annotated with the user's votes and
+ * which mains have overflowed (archived) subs. Returns null if the place is
+ * gone (the screen redirects home on that). Activities persist on the board
+ * across days (they aren't scoped to the current gathering event); they only
+ * leave when hidden by moderation or archived by the sub-cap.
+ */
+export async function fetchPlaceBoard(
+  userId: string,
+  placeId: string,
+): Promise<PlaceBoard | null> {
+  const [{ data: place, error: placeError }, { data: types, error: typesError }, { data: mains, error: mainsError }] =
     await Promise.all([
+      supabase.from('places').select('name_en, name_ja, lat, lng').eq('id', placeId).maybeSingle(),
       supabase.from('activity_types').select('id, color'),
       supabase
         .from('activities')
-        .select('id, kind, parent_id, activity_type, photo_url, phrase, likes, dislikes, lat, lng, event_id')
+        .select('id, kind, parent_id, activity_type, photo_url, phrase, likes, dislikes')
+        .eq('place_id', placeId)
+        .eq('kind', 'main')
         .eq('hidden', false)
         .eq('archived', false)
         .order('created_at', { ascending: true }),
     ]);
+  if (placeError) throw placeError;
   if (typesError) throw typesError;
-  if (activitiesError) throw activitiesError;
+  if (mainsError) throw mainsError;
+  if (!place) return null;
 
   const colorByType = new Map(types.map((t) => [t.id, t.color]));
+  const mainIds = mains.map((m) => m.id);
 
-  const { data: votes, error: votesError } = await supabase
-    .from('votes')
-    .select('activity_id, value')
-    .eq('user_id', userId);
-  if (votesError) throw votesError;
-  const voteByActivity = new Map(votes.map((v) => [v.activity_id, v.value as 1 | -1]));
+  let subs: Pick<ActivityRow, 'id' | 'kind' | 'parent_id' | 'activity_type' | 'photo_url' | 'phrase' | 'likes' | 'dislikes'>[] = [];
+  let voteByActivity = new Map<string, 1 | -1>();
+  let mainsWithArchivedSubs = new Set<string | null>();
 
-  // Which mains have at least one archived sub -> show the archived stub.
-  const { data: archivedSubs, error: archivedError } = await supabase
-    .from('activities')
-    .select('parent_id')
-    .eq('kind', 'sub')
-    .eq('archived', true)
-    .eq('hidden', false);
-  if (archivedError) throw archivedError;
-  const mainsWithArchivedSubs = new Set(archivedSubs.map((s) => s.parent_id));
+  if (mainIds.length > 0) {
+    const [{ data: subRows, error: subsError }, { data: votes, error: votesError }, { data: archived, error: archivedError }] =
+      await Promise.all([
+        supabase
+          .from('activities')
+          .select('id, kind, parent_id, activity_type, photo_url, phrase, likes, dislikes')
+          .in('parent_id', mainIds)
+          .eq('kind', 'sub')
+          .eq('hidden', false)
+          .eq('archived', false)
+          .order('created_at', { ascending: true }),
+        supabase.from('votes').select('activity_id, value').eq('user_id', userId),
+        supabase
+          .from('activities')
+          .select('parent_id')
+          .in('parent_id', mainIds)
+          .eq('kind', 'sub')
+          .eq('archived', true)
+          .eq('hidden', false),
+      ]);
+    if (subsError) throw subsError;
+    if (votesError) throw votesError;
+    if (archivedError) throw archivedError;
+    subs = subRows;
+    voteByActivity = new Map(votes.map((v) => [v.activity_id, v.value as 1 | -1]));
+    mainsWithArchivedSubs = new Set(archived.map((a) => a.parent_id));
+  }
 
-  const rows = activities as ActivityRow[];
-  const nodes: ToukouNode[] = rows.map((row) => {
+  // Subs inherit their parent's activity_type, so a sub's own activity_type is
+  // already the parent's hue -- its color is just the lighter shade of that.
+  const nodes: ToukouNode[] = [...mains, ...subs].map((row) => {
     const baseColor = colorByType.get(row.activity_type) ?? '#6e8ca0';
     return {
       id: row.id,
@@ -132,88 +170,19 @@ export async function fetchToukouGraph(userId: string): Promise<ToukouGraph> {
     };
   });
 
-  const nodeIds = new Set(nodes.map((n) => n.id));
-  const edges: ToukouEdge[] = rows
-    .filter((row) => row.kind === 'sub' && row.parent_id && nodeIds.has(row.parent_id))
-    .map((row) => ({ source: row.id, target: row.parent_id as string }));
+  const mainIdSet = new Set(mainIds);
+  const edges: ToukouEdge[] = subs
+    .filter((s) => s.parent_id && mainIdSet.has(s.parent_id))
+    .map((s) => ({ source: s.id, target: s.parent_id as string }));
 
-  return { nodes, edges };
-}
-
-/**
- * Builds one place's toukou graph (§B/C1): a single main (by id) plus its
- * non-hidden, non-archived subs -- colored, with the current user's votes and
- * whether any of its subs have overflowed into the archive. Returns an empty
- * graph if the main is hidden or gone (the screen redirects home on that).
- */
-export async function fetchPlaceGraph(userId: string, mainId: string): Promise<ToukouGraph> {
-  const [
-    { data: types, error: typesError },
-    { data: main, error: mainError },
-    { data: subs, error: subsError },
-  ] = await Promise.all([
-    supabase.from('activity_types').select('id, color'),
-    supabase
-      .from('activities')
-      .select('id, kind, parent_id, activity_type, photo_url, phrase, likes, dislikes, lat, lng, event_id')
-      .eq('id', mainId)
-      .eq('kind', 'main')
-      .eq('hidden', false)
-      .maybeSingle(),
-    supabase
-      .from('activities')
-      .select('id, kind, parent_id, activity_type, photo_url, phrase, likes, dislikes, lat, lng, event_id')
-      .eq('parent_id', mainId)
-      .eq('kind', 'sub')
-      .eq('hidden', false)
-      .eq('archived', false)
-      .order('created_at', { ascending: true }),
-  ]);
-  if (typesError) throw typesError;
-  if (mainError) throw mainError;
-  if (subsError) throw subsError;
-  if (!main) return { nodes: [], edges: [] };
-
-  const colorByType = new Map(types.map((t) => [t.id, t.color]));
-
-  const { data: votes, error: votesError } = await supabase
-    .from('votes')
-    .select('activity_id, value')
-    .eq('user_id', userId);
-  if (votesError) throw votesError;
-  const voteByActivity = new Map(votes.map((v) => [v.activity_id, v.value as 1 | -1]));
-
-  const { data: archivedSubs, error: archivedError } = await supabase
-    .from('activities')
-    .select('id')
-    .eq('parent_id', mainId)
-    .eq('kind', 'sub')
-    .eq('archived', true)
-    .eq('hidden', false)
-    .limit(1);
-  if (archivedError) throw archivedError;
-  const hasArchivedSubs = archivedSubs.length > 0;
-
-  const rows = [main, ...subs] as ActivityRow[];
-  const nodes: ToukouNode[] = rows.map((row) => {
-    const baseColor = colorByType.get(row.activity_type) ?? '#6e8ca0';
-    return {
-      id: row.id,
-      kind: row.kind,
-      parentId: row.parent_id,
-      color: row.kind === 'main' ? baseColor : subShade(baseColor),
-      photoUrl: row.photo_url,
-      phrase: row.phrase,
-      likes: row.likes,
-      dislikes: row.dislikes,
-      myVote: voteByActivity.get(row.id) ?? null,
-      hasArchivedSubs: row.kind === 'main' && hasArchivedSubs,
-    };
-  });
-
-  const edges: ToukouEdge[] = subs.map((row) => ({ source: row.id, target: mainId }));
-
-  return { nodes, edges };
+  return {
+    nodes,
+    edges,
+    placeNameEn: place.name_en,
+    placeNameJa: place.name_ja,
+    placeLat: place.lat,
+    placeLng: place.lng,
+  };
 }
 
 /** The seeded activity types (§5.5) -- the palette + labels for the main composer. */
@@ -258,6 +227,7 @@ export interface CreateMainInput {
   authorId: string;
   activityTypeId: string;
   eventId: string;
+  placeId: string;
   phrase: string;
   photoFile: File | null;
   lat: number;
@@ -272,6 +242,7 @@ export async function createMain(input: CreateMainInput): Promise<string> {
       kind: 'main',
       activity_type: input.activityTypeId,
       event_id: input.eventId,
+      place_id: input.placeId,
       author_id: input.authorId,
       phrase: input.phrase,
       photo_url: photoUrl,
@@ -291,12 +262,12 @@ export interface CreateSubInput {
   photoFile: File | null;
 }
 
-/** A sub inherits its parent main's activity type and location -- it's a
- * variation of the same activity at the same spot (§5.5). */
+/** A sub inherits its parent main's activity type, place, and location -- it's
+ * a variation of the same activity at the same spot (§5.5). */
 export async function createSub(input: CreateSubInput): Promise<string> {
   const { data: parent, error: parentError } = await supabase
     .from('activities')
-    .select('activity_type, lat, lng')
+    .select('activity_type, place_id, lat, lng')
     .eq('id', input.parentId)
     .single();
   if (parentError) throw parentError;
@@ -308,6 +279,7 @@ export async function createSub(input: CreateSubInput): Promise<string> {
       kind: 'sub',
       parent_id: input.parentId,
       activity_type: parent.activity_type,
+      place_id: parent.place_id,
       author_id: input.authorId,
       phrase: input.phrase,
       photo_url: photoUrl,
@@ -361,32 +333,17 @@ export async function reportContent(
 }
 
 // =========================================================================
-// Event gating (Appendix A.1, Tier 1 compute-on-read)
+// Event gating: the gathering is a daily-rotating window computed from the
+// clock (no cron). ensure_todays_event() upserts today's Kyoto-day event and
+// returns it, so there is always a live window (mains are always creatable)
+// and every main posted today shares one event_id (the place board filters on
+// it; older days fall to the archive).
 // =========================================================================
 
-export async function getActiveEvent(): Promise<KamoEvent | null> {
-  const nowIso = new Date().toISOString();
-  const { data, error } = await supabase
-    .from('events')
-    .select('id, name, starts_at, ends_at')
-    .lte('starts_at', nowIso)
-    .gte('ends_at', nowIso)
-    .order('ends_at', { ascending: false })
-    .limit(1);
+export async function getActiveEvent(): Promise<KamoEvent> {
+  const { data, error } = await supabase.rpc('ensure_todays_event');
   if (error) throw error;
-  return data[0] ?? null;
-}
-
-export async function getNextEvent(): Promise<KamoEvent | null> {
-  const nowIso = new Date().toISOString();
-  const { data, error } = await supabase
-    .from('events')
-    .select('id, name, starts_at, ends_at')
-    .gt('starts_at', nowIso)
-    .order('starts_at', { ascending: true })
-    .limit(1);
-  if (error) throw error;
-  return data[0] ?? null;
+  return data as KamoEvent;
 }
 
 // =========================================================================

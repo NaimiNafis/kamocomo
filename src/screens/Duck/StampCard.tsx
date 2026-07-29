@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import duckMark from '../../../img/marks/duck.svg?url';
 import type { StampCardSlot } from '../../lib/duck';
+import { duckIconDataUri } from '../../lib/ducks';
 
 interface StampCardProps {
   slots: StampCardSlot[];
@@ -30,12 +30,13 @@ export function StampCard({ slots, hasCertificate, onViewCertificate }: StampCar
           <div key={slot.id} className="flex flex-col items-center gap-1">
             <div
               className={`flex aspect-square w-full items-center justify-center rounded-full border ${
-                slot.earned
-                  ? 'border-kamo-sunset/50 bg-kamo-stone'
-                  : 'border-dashed border-kamo-ink/20 bg-transparent'
+                slot.earned ? 'bg-kamo-stone' : 'border-dashed border-kamo-ink/20 bg-transparent'
               }`}
+              style={slot.earned ? { borderColor: slot.color } : undefined}
             >
-              {slot.earned && <img src={duckMark} alt="" className="h-3/4 w-3/4" draggable={false} />}
+              {slot.earned && (
+                <img src={duckIconDataUri(slot.color)} alt="" className="h-3/4 w-3/4" draggable={false} />
+              )}
             </div>
             <span className="line-clamp-1 text-center font-ui text-[9px] leading-tight text-kamo-ink/50">
               {isJa ? slot.nameJa : slot.nameEn}

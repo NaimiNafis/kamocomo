@@ -9,11 +9,21 @@ import {
   type SimulationLinkDatum,
   type SimulationNodeDatum,
 } from 'd3-force';
-import type { ToukouEdge, ToukouNode } from '../../lib/toukou';
+import type { ToukouEdge } from '../../lib/toukou';
+
+export type GraphNodeKind = 'main' | 'sub' | 'addsub';
+
+/** The minimal shape the layout needs -- id + kind. Cards (mains/subs) carry
+ * their full data elsewhere; the synthetic `addsub` nodes are just the "+" the
+ * user taps to add a sub to a main. */
+export interface GraphNode {
+  id: string;
+  kind: GraphNodeKind;
+}
 
 interface SimNode extends SimulationNodeDatum {
   id: string;
-  kind: 'main' | 'sub';
+  kind: GraphNodeKind;
 }
 
 type SimLink = SimulationLinkDatum<SimNode>;
@@ -23,25 +33,29 @@ export interface NodePosition {
   y: number;
 }
 
-// Collision radii sized to each card's worst-case bounding *circle* (half its
-// diagonal, main ~128x190 with a photo + archived-posts line, sub ~96x134
-// with a photo) -- not just half the width. A radius that only covers the
-// width leaves cards free to slide vertically into each other, which is
-// exactly how they used to stack.
+// Collision radii sized to each element's worst-case bounding *circle* (half
+// its diagonal): main cards ~128x190, sub cards ~96x134. The "add" node is a
+// blank sub-sized card, so it lays out exactly like a sub (an empty slot in
+// the orbit). Covering the full circle (not just the width) stops cards
+// sliding vertically into each other.
 const MAIN_RADIUS = 116;
 const SUB_RADIUS = 84;
-const LINK_DISTANCE = MAIN_RADIUS + SUB_RADIUS + 30;
+
+function radiusOf(kind: GraphNodeKind): number {
+  return kind === 'main' ? MAIN_RADIUS : SUB_RADIUS;
+}
 
 /**
- * Runs a d3-force simulation over one place's toukou graph (a single main
- * plus its subs) and returns live node positions centered on (0,0). The main
- * is pinned at the center as the fixed hub the subs orbit via the link
- * force; collision radii (sized to each card's full bounding circle, with
- * multiple solver iterations for a tighter guarantee) keep every card clear
- * of every other. Positions of nodes that persist across a refetch are
- * preserved so realtime updates don't reshuffle the whole board.
+ * Runs a d3-force simulation over a place's board -- MULTIPLE mains (each
+ * repelling the others so their clusters spread out), every main's subs
+ * orbiting it via the link force, and a small "+" add-sub node tucked beside
+ * each main. Collision radii (sized to each element's full bounding circle,
+ * multiple solver iterations) keep everything clear of everything else, and
+ * the whole thing is pre-warmed synchronously so it opens already settled.
+ * Positions of nodes that persist across a refetch are preserved so realtime
+ * updates don't reshuffle the board.
  */
-export function useForceGraph(nodes: ToukouNode[], edges: ToukouEdge[]) {
+export function useForceGraph(nodes: GraphNode[], edges: ToukouEdge[]) {
   const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
   const simNodesRef = useRef<Map<string, SimNode>>(new Map());
   const [positions, setPositions] = useState<Map<string, NodePosition>>(new Map());
@@ -68,19 +82,16 @@ export function useForceGraph(nodes: ToukouNode[], edges: ToukouEdge[]) {
     }
     for (const node of nodes) {
       if (!store.has(node.id)) {
-        const isMain = node.kind === 'main';
         const parentId = parentOf.get(node.id);
         const parent = parentId ? store.get(parentId) : undefined;
+        // Mains scatter around the center (pre-warm separates them); subs and
+        // add-buttons start near their main so they settle into its orbit.
+        const spread = node.kind === 'main' ? 160 : 60;
         store.set(node.id, {
           id: node.id,
           kind: node.kind,
-          x: isMain ? 0 : (parent?.x ?? 0) + (Math.random() - 0.5) * 80,
-          y: isMain ? 0 : (parent?.y ?? 0) + (Math.random() - 0.5) * 80,
-          // The main is the fixed hub subs orbit around (a per-place graph
-          // has exactly one); pinning it keeps the whole layout stable
-          // instead of drifting as subs are added.
-          fx: isMain ? 0 : undefined,
-          fy: isMain ? 0 : undefined,
+          x: (parent?.x ?? 0) + (Math.random() - 0.5) * spread,
+          y: (parent?.y ?? 0) + (Math.random() - 0.5) * spread,
         });
       }
     }
@@ -91,36 +102,35 @@ export function useForceGraph(nodes: ToukouNode[], edges: ToukouEdge[]) {
     const simulation = forceSimulation(simNodes)
       .force(
         'charge',
+        // The add card behaves like a sub (an empty extra slot in the orbit).
         forceManyBody<SimNode>().strength((d) => (d.kind === 'main' ? -520 : -140)),
       )
       .force(
         'link',
         forceLink<SimNode, SimLink>(simLinks)
           .id((d) => d.id)
-          .distance(LINK_DISTANCE)
+          .distance(MAIN_RADIUS + SUB_RADIUS + 30)
           .strength(0.75),
       )
       .force('center', forceCenter(0, 0))
       .force(
         'collide',
         forceCollide<SimNode>()
-          .radius((d) => (d.kind === 'main' ? MAIN_RADIUS : SUB_RADIUS))
+          .radius((d) => radiusOf(d.kind))
           .strength(1)
           .iterations(3),
       );
 
-    // Pre-warm synchronously: a dense graph (up to 21 nodes on the busiest
-    // main) takes several seconds of real-time ticking to fully separate,
-    // which otherwise shows as cards visibly jostling apart/overlapping
-    // right after opening the page. Running the solver to convergence
-    // *before* wiring up the tick listener means the very first (async,
-    // next-frame) tick already reports settled positions -- the animated
-    // loop below then only has to handle small ongoing changes (a drag, a
-    // realtime insert), not untangle from scratch. (setPositions is only
-    // ever called from that async tick callback, not synchronously here, to
-    // avoid a synchronous setState-in-effect.)
+    // Pre-warm synchronously: a dense board (several mains + their subs) takes
+    // seconds of real-time ticking to fully separate, which otherwise shows as
+    // cards visibly jostling apart right after opening the page. Running the
+    // solver to convergence *before* wiring up the tick listener means the
+    // first (async, next-frame) tick already reports settled positions; the
+    // animated loop then only handles small ongoing changes (a drag, a
+    // realtime insert). setPositions is only called from that async callback,
+    // never synchronously here, to avoid a synchronous setState-in-effect.
     simulation.stop();
-    for (let i = 0; i < 150; i++) simulation.tick();
+    for (let i = 0; i < 200; i++) simulation.tick();
 
     simulation.on('tick', () => {
       const next = new Map<string, NodePosition>();
