@@ -11,7 +11,7 @@ scavenger hunt. Japanese-first, bilingual (JA/EN), no account required.
 ## Stack
 
 - **React 18 + Vite + TypeScript**, React Router, Zustand
-- **CesiumJS** (`cesium` + `vite-plugin-cesium`) for the 3D globe/map
+- **Google Maps Platform 3D Maps** (`Map3DElement`) for the 3D globe/map
 - **Supabase** (Postgres, anonymous auth, Storage, Realtime) — the only backend
 - **Tailwind CSS v4** with the design tokens documented in `docs/ARCHITECTURE.md`
 - **i18next** — every user-facing string is in `src/i18n/{en,ja}.json`
@@ -26,7 +26,7 @@ for the working rules this repo follows.
 
 - Node.js ≥ 20.19 (developed on 22)
 - A Supabase project (free tier is fine)
-- A Cesium ion access token (free account)
+- A Google Maps Platform API key (see below — a billing account is required)
 
 ## Setup
 
@@ -42,8 +42,28 @@ cp .env.local.example .env.local   # then fill in the three values below
 ```
 VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<your project's anon / publishable key>
-VITE_CESIUM_ION_TOKEN=<your Cesium ion token>
+VITE_GOOGLE_MAPS_API_KEY=<your Google Maps Platform key>
 ```
+
+### One-time Google Maps Platform configuration
+
+1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/)
+   and **enable billing** on it. A payment method is required to issue a Maps
+   key at all; new accounts get a trial credit, and 3D map loads have a monthly
+   free allowance that a demo comfortably fits inside.
+2. Enable the **Maps JavaScript API**.
+3. Create an API key and **restrict it** — this matters, because the key ships
+   in client-side JS and can't be hidden:
+   - *Application restrictions* → HTTP referrers → `https://kamokamo.vercel.app/*`
+     and `http://localhost:5173/*`
+   - *API restrictions* → Maps JavaScript API only
+4. Set a **quota cap** and a budget alert on the project. The referrer
+   restriction stops other sites using your key; the quota cap is what stops a
+   bug or a scraper running up a bill.
+
+The map is pinned to the Maps JS `weekly` (stable) channel in
+[`src/lib/map3d.ts`](src/lib/map3d.ts). `MapMode.ROADMAP` is deliberately not
+used — it's pre-GA and only exists on the `v=alpha` channel.
 
 ### One-time Supabase configuration
 
@@ -66,7 +86,7 @@ VITE_CESIUM_ION_TOKEN=<your Cesium ion token>
    This signs in real anonymous users and posts a few main activities through
    the same flow the app uses.
 
-The `photos` Storage bucket, RLS policies, triggers (20-sub archive cap,
+The `photos` Storage bucket, RLS policies, triggers (10-sub archive cap,
 10-stamp certificate, vote counters), the event-gating policy, and the
 geofenced `scan_duck_spot` RPC are all created by the migrations — no manual
 dashboard setup beyond step 1.
@@ -155,7 +175,7 @@ src/
   app/          routes, error boundary
   screens/      Intro, MainMap, Onboarding, Tutorial, ToukouMap, Archive, Duck
   components/    shared UI (language toggle, map-style switch, stale banner)
-  lib/          supabase, identity, cesium, toukou, archive, duck, geo, cache
+  lib/          supabase, identity, map3d, river, toukou, archive, duck, geo, cache
   i18n/         en.json, ja.json
   store/        zustand (identity)
 supabase/

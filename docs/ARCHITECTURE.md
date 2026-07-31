@@ -39,7 +39,7 @@ signage. The app is a discovery layer over the real place:
 | Layer | Choice |
 |---|---|
 | Framework | React 18 + Vite + TypeScript |
-| 3D map | CesiumJS (`cesium` + `vite-plugin-cesium`) |
+| 3D map | Google Maps Platform 3D Maps (`Map3DElement`, `weekly` channel) |
 | Routing | React Router, code-split per screen |
 | State | Zustand (identity), otherwise local component state |
 | Styling | Tailwind CSS v4, design tokens as CSS variables |
@@ -61,8 +61,9 @@ src/
   screens/      one folder per screen — Intro, MainMap, Onboarding, Tutorial,
                 ToukouMap, Archive, Duck
   components/   shared UI (language toggle, map-style switch, stale banner)
-  lib/          all Supabase/Cesium/identity access lives here — screens never
-                import @supabase/supabase-js directly
+  lib/          all Supabase/map/identity access lives here — screens never
+                import @supabase/supabase-js directly. map3d.ts owns the
+                Google Maps 3D wrapper; river.ts draws the blue Kamogawa
   i18n/         en.json, ja.json (ja is never allowed to lag behind en)
   store/        zustand stores (identity)
 supabase/
@@ -95,7 +96,7 @@ INTRO (once/session)
      |
      v (first visit only) ONBOARDING: nationality / age / gender
      |
-MAIN MAP (3D Cesium, Kyoto-locked)
+MAIN MAP (Google Maps 3D, Kamogawa-corridor-locked)
   "you are here" marker · tutorial · language toggle · map style switch
   "duck collection" button -> /duck
   markers (one per PLACE, plus colored duck markers):
@@ -122,17 +123,34 @@ Plays once per session (`hasSeenIntro` in `sessionStorage`, Skip button always
 available): the title fades in, cross-fades to the localized catchphrase, then
 the camera flies from the far side of the globe (deliberately the hemisphere
 *opposite* Japan, so the flight visibly sweeps across the whole Earth) through
-Japan and Kyoto to the Kamogawa Delta. The Kyoto camera-bounds clamp (see
-below) only engages once the flight lands — it would otherwise fight the
-flight, since the flight legitimately passes through views outside Kyoto.
+Japan and Kyoto to the Kamogawa Delta. Each leg is a `flyCameraTo()` awaited on
+the map's `gmp-animationend` event. The corridor clamp (see below) only engages
+once the flight lands — it would otherwise fight the flight, since the flight
+legitimately passes through views far outside Kyoto.
 
 ### Main map (`src/screens/MainMap`)
 
-A full-screen Cesium viewer, camera-locked to a bounding rectangle around
-Kyoto with min/max zoom limits (`lib/cesium.ts` — **never remove these**;
-they're the cost control that keeps photoreal tile billing bounded to the
-area the app actually cares about). A one-time "drag to look around" hint
-appears for first-time mobile visitors.
+A full-screen `Map3DElement`, camera-locked to the **Kamogawa corridor**
+(34.960–35.065 N, 135.745–135.800 E) with `minAltitude` 300 m, `maxAltitude`
+20 km and a 55° `maxTilt` (`applyKamogawaConstraints()` in `lib/map3d.ts` —
+**never remove these**; they're the cost control that keeps tile billing
+bounded to the stretch of river the app is actually about). The corridor is
+derived from the seeded data — every active place and duck spot, plus ~1.5 km
+of margin — and is deliberately *not* the Kyoto-shi administrative boundary,
+which sprawls north into the Sakyo-ku mountains and west past Arashiyama and
+would be looser than this. A one-time "drag to look around" hint appears for
+first-time mobile visitors.
+
+The **style switch** is a single property: `SATELLITE` renders photorealistic
+3D with no labels, names or road text at all (the default), and `HYBRID` puts
+roads and place names over the same imagery. `MapMode.ROADMAP` is deliberately
+unused — it's pre-GA and only exists on the `v=alpha` channel.
+
+Because photoreal imagery makes the river easy to lose, the Kamogawa is drawn
+as a blue `--kamo-river` polyline (`lib/river.ts`) in three strands — 高野川
+and 賀茂川 meeting at the Delta, then the main stretch south past the bridges.
+It's always on, in both modes, so "where is the river?" is answered whether or
+not labels are showing.
 
 There is **one exclamation marker per fixed PLACE** (not per main), so the map
 stays uncluttered no matter how many mains a place accrues during a gathering.
@@ -196,7 +214,7 @@ edit an applied migration, add a new file). Summary:
 |---|---|
 | `profiles` | One row per anonymous user; nationality/age/gender from onboarding |
 | `activity_types` | Seeded palette (writing, reading, walking, music, yoga…) |
-| `places` | ~8 fixed riverbank locations; each is one map marker. Ships seeded in its migration (clients can't insert) |
+| `places` | 16 active fixed riverbank locations tracing the river's shape; each is one map marker. Ships seeded in its migration (clients can't insert) |
 | `events` | Daily gathering windows; today's is upserted on read by `ensure_todays_event()` |
 | `activities` | Both mains and subs (`kind`); mains carry `place_id` + `event_id`; also `parent_id`, `activity_type`, `photo_url`, `phrase`, `lat/lng`, `likes`/`dislikes`, `archived`, `hidden` |
 | `votes` | One row per `(user_id, activity_id)`; switching updates it in place |

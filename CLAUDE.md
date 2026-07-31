@@ -8,14 +8,17 @@
 ## Project
 
 Virtual Kamogawa — a mobile-first web app that makes the tacit culture (暗黙知)
-of Kyoto's Kamogawa riverbank discoverable: a 3D Cesium map of the river, a
+of Kyoto's Kamogawa riverbank discoverable: a 3D Google Maps view of the river, a
 "toukou map" web of activity posts people can vote on, an archive, and a
 duck-spot QR stamp rally. Live at https://kamokamo.vercel.app.
 
 ## Stack (fixed — do not substitute)
 
 - React 18 + Vite + TypeScript, React Router, Zustand
-- CesiumJS via `cesium` + `vite-plugin-cesium`
+- Google Maps Platform 3D Maps (`Map3DElement`) via `@googlemaps/js-api-loader`,
+  pinned to the `weekly` (stable) channel. Never switch to `v=alpha` — that's
+  the only place `MapMode.ROADMAP` lives, and it isn't worth putting a live
+  site on a pre-GA channel for.
 - Supabase (`@supabase/supabase-js`): Postgres, anonymous auth, Storage, Realtime
 - i18next / react-i18next — every user-facing string goes through i18n (en + ja), no hardcoded copy
 - Tailwind CSS, with design tokens (`docs/ARCHITECTURE.md`) defined as CSS variables
@@ -27,17 +30,17 @@ duck-spot QR stamp rally. Live at https://kamokamo.vercel.app.
 - `npm run dev` — Vite dev server
 - `npm run build` — production build (must pass before considering anything "done")
 - `npm run lint` / `npm run typecheck` — must be clean before committing
-- `npx supabase db push` — apply migrations (team uses hosted Supabase; `.env.local` holds `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_CESIUM_ION_TOKEN`)
+- `npx supabase db push` — apply migrations (team uses hosted Supabase; `.env.local` holds `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_GOOGLE_MAPS_API_KEY`)
 
 ## Architecture rules
 
-1. **Folder structure** — screens in `src/screens/<Name>/`, shared pieces in `src/components/`, all Supabase/Cesium/identity access through `src/lib/`. Screens never import `@supabase/supabase-js` directly.
+1. **Folder structure** — screens in `src/screens/<Name>/`, shared pieces in `src/components/`, all Supabase/map/identity access through `src/lib/`. Screens never import `@supabase/supabase-js` directly.
 2. **Identity:** anonymous only. `lib/identity.ts` owns `signInAnonymously()`, session restore, and the local profile cache. Never build email/password auth.
-3. **Server-authoritative rules:** event-gating of main activities, the 20-sub cap → archive, one-vote-per-user, stamp uniqueness, and the duck-scan geofence are enforced in Postgres (RLS policies, triggers, or RPCs) — client checks are UX sugar only.
-4. **Cesium cost control:** camera locked to the Kyoto bounding rectangle with min/max zoom limits, set in `lib/cesium.ts`. Never remove these limits.
+3. **Server-authoritative rules:** event-gating of main activities, the 10-sub cap → archive, one-vote-per-user, stamp uniqueness, and the duck-scan geofence are enforced in Postgres (RLS policies, triggers, or RPCs) — client checks are UX sugar only.
+4. **Map cost control:** the camera is locked to the Kamogawa corridor (`bounds`), with `minAltitude`/`maxAltitude` and a `maxTilt` cap, set in `applyKamogawaConstraints()` in `lib/map3d.ts`. Never remove these limits. They're lifted only for the intro flight and the marker-tap cinematic, and restored right after.
 5. **Moderation:** every feed/map query filters `hidden = true`. The report button opens a reason picker and inserts into `reports`.
 6. **Offline-friendly:** every network call has a loading state, an error state with retry, and a cached fallback where it matters. Assume flaky outdoor mobile signal.
-7. **Routes** are fixed: `/` (intro → main map), `/?from=qr&spot=<slug>` (QR entry), `/toukou?main=<id>` (always entered from a specific marker/place), `/archive`, `/duck`, `/duck/scan?spot=<qr_token>`. Don't rename them — physical QR codes will encode these URLs.
+7. **Routes** are fixed: `/` (intro → main map), `/?from=qr&spot=<slug>` (QR entry), `/toukou?place=<id>` (always entered from a specific place marker), `/archive`, `/duck`, `/duck/scan?spot=<qr_token>`. Don't rename them — physical QR codes will encode these URLs.
 
 ## Design rules
 
