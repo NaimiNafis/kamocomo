@@ -47,19 +47,40 @@ VITE_GOOGLE_MAPS_API_KEY=<your Google Maps Platform key>
 
 ### One-time Google Maps Platform configuration
 
+This project is run to cost **¥0**. That's achievable, but it depends on two
+settings, so don't skip steps 4 and 5.
+
 1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/)
-   and **enable billing** on it. A payment method is required to issue a Maps
-   key at all; new accounts get a trial credit, and 3D map loads have a monthly
-   free allowance that a demo comfortably fits inside.
+   and **enable billing**. A payment method is required to issue a Maps key at
+   all — there is no card-free path.
 2. Enable the **Maps JavaScript API**.
 3. Create an API key and **restrict it** — this matters, because the key ships
    in client-side JS and can't be hidden:
    - *Application restrictions* → HTTP referrers → `https://kamokamo.vercel.app/*`
      and `http://localhost:5173/*`
    - *API restrictions* → Maps JavaScript API only
-4. Set a **quota cap** and a budget alert on the project. The referrer
-   restriction stops other sites using your key; the quota cap is what stops a
-   bug or a scraper running up a bill.
+4. **Upgrade to a paid billing account** before the trial credit expires. This
+   sounds backwards, but the recurring monthly free tier is only granted to
+   upgraded accounts — if the trial simply lapses, the API stops and the map
+   breaks. On an upgraded account you are charged ¥0 as long as you stay under
+   the allowance.
+5. **Set a quota cap.** APIs & Services → Maps JavaScript API → Quotas → set
+   *Requests per day* to **~160**. That works out to ~4,800/month, just under
+   the free allowance, and it's what actually guarantees no bill. Add a budget
+   alert too, as a backstop.
+
+### What the free allowance is
+
+3D map loads bill to the **Immersive Maps** SKU (`4816-83A2-9059`, Pro tier):
+**5,000 free loads per month**, resetting on the 1st, then $7.00 per 1,000.
+
+A "load" is one `Map3DElement` creation, not a pan or zoom. Note that
+`MainMap` mounts fresh every time someone navigates back to `/`, so a visitor
+who tours a place, opens the duck page and returns can spend 3–5 loads. Budget
+roughly **1,200–1,600 visitor sessions per month**, not 5,000.
+
+Local development spends the same quota — every hot reload that remounts
+`MainMap` is another load. Keep the dev server closed when you aren't using it.
 
 The map is pinned to the Maps JS `weekly` (stable) channel in
 [`src/lib/map3d.ts`](src/lib/map3d.ts). `MapMode.ROADMAP` is deliberately not
