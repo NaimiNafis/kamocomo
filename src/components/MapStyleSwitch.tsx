@@ -1,14 +1,15 @@
 import { useTranslation } from 'react-i18next';
-import type { MapStyle } from '../lib/cesium';
+import type { MapStyle } from '../lib/map3d';
 
-const STYLES: MapStyle[] = ['photoreal', 'flat'];
+const STYLES: MapStyle[] = ['satellite', 'hybrid'];
 
 interface MapStyleSwitchProps {
   value: MapStyle;
   onChange: (style: MapStyle) => void;
 }
 
-/** §5.3 bottom-right map-style switch (photoreal <-> flat imagery for now). */
+/** §5.3 bottom-right map-style switch. SATELLITE is photorealistic 3D with no
+ * labels at all; HYBRID adds roads and place names over the same imagery. */
 export function MapStyleSwitch({ value, onChange }: MapStyleSwitchProps) {
   const { t } = useTranslation();
 

@@ -29,7 +29,7 @@ export function duckColor(index: number): string {
 /**
  * The placeholder duck mark recolored to `color` -- the base `duck.svg`
  * shape with its body/head/outline swapped to the duck's color -- returned as
- * an inline SVG data URI usable as both a Cesium billboard image and a React
+ * an inline SVG data URI usable as both a 3D map marker image and a React
  * `<img src>`. Replace this with the real per-duck art when it's ready.
  */
 export function duckIconDataUri(color: string): string {

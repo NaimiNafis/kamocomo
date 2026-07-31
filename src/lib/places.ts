@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { MarkerPoint } from './cesium';
+import type { MarkerPoint } from './map3d';
 
 /** The fixed activity places, as map markers (one exclamation marker each). */
 export async function fetchPlaceMarkers(): Promise<MarkerPoint[]> {

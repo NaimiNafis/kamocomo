@@ -47,6 +47,7 @@
     "dragHint": "ドラッグして周りを見渡そう",
     "moreActivities": "活動を見る",
     "youAreHere": "ここにいます!",
+    "mapError": "地図を読み込めませんでした。",
     "placeActivityCount_other": "現在 {{count}} 件の活動",
     "duckCollection": "鴨コレクション"
   },
@@ -99,8 +100,8 @@
     "error": "投稿できませんでした。もう一度お試しください。"
   },
   "mapStyle": {
-    "photoreal": "写真",
-    "flat": "地図"
+    "satellite": "文字なし",
+    "hybrid": "文字あり"
   },
   "duck": {
     "title": "鴨川の鴨",

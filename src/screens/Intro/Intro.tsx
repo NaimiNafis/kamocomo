@@ -11,7 +11,7 @@ interface IntroProps {
  * §5.1 intro overlay: title fades in, cross-fades to the catchphrase, then
  * fades away to reveal the globe (rendered by the parent) while it flies
  * Earth -> Japan -> Kyoto -> Kamogawa Delta. Purely presentational -- timing
- * and the Cesium flight live in MainMap, which owns the Viewer instance.
+ * and the camera flight live in MainMap, which owns the map element.
  */
 export function Intro({ phase, onSkip }: IntroProps) {
   const { t } = useTranslation();

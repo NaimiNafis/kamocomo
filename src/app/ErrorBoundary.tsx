@@ -11,7 +11,7 @@ interface State {
 /**
  * Last line of defense against a white screen (Phase 9): any render/runtime
  * error below this boundary shows a recoverable message instead of a blank
- * page -- important for flaky outdoor mobile where a failed Cesium init or
+ * page -- important for flaky outdoor mobile where a failed map init or
  * data fetch shouldn't strand the user. Copy is intentionally not i18n'd:
  * i18next may itself be the thing that failed.
  */

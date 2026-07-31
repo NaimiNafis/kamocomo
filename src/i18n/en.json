@@ -47,6 +47,7 @@
     "dragHint": "Drag to look around",
     "moreActivities": "More activities",
     "youAreHere": "You Are Here!",
+    "mapError": "Couldn't load the map.",
     "placeActivityCount_one": "{{count}} activity happening now",
     "placeActivityCount_other": "{{count}} activities happening now",
     "duckCollection": "Duck collection"
@@ -101,8 +102,8 @@
     "error": "Couldn't post. Try again."
   },
   "mapStyle": {
-    "photoreal": "Photoreal",
-    "flat": "Flat"
+    "satellite": "No labels",
+    "hybrid": "Labels"
   },
   "duck": {
     "title": "Ducks of the Kamogawa",

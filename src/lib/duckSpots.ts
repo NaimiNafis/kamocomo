@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { MarkerPoint } from './cesium';
+import type { MarkerPoint } from './map3d';
 import { duckColor, duckIconDataUri } from './ducks';
 
 /**

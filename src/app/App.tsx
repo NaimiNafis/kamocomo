@@ -3,10 +3,10 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useIdentityStore } from '../store/identityStore';
 import { ErrorBoundary } from './ErrorBoundary';
 
-// Routes are code-split so only the map route pulls in the heavy Cesium
-// bundle. This keeps the initial load small (mobile-first / Lighthouse) and
-// lets the non-map screens load and work offline without the ~6 MB Cesium
-// runtime, which the globe needs but the feeds don't.
+// Routes are code-split so only the map route pulls in the Google Maps 3D
+// loader and kicks off the Maps JS API fetch from Google's CDN. This keeps the
+// initial load small (mobile-first / Lighthouse) and lets the non-map screens
+// load and work offline without touching the map runtime at all.
 const MainMap = lazy(() => import('../screens/MainMap/MainMap').then((m) => ({ default: m.MainMap })));
 const ToukouMap = lazy(() =>
   import('../screens/ToukouMap/ToukouMap').then((m) => ({ default: m.ToukouMap })),
