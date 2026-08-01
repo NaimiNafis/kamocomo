@@ -92,11 +92,8 @@
     "photoRequired": "写真が必要です"
   },
   "mapStyle": {
-    "realistic": "3D",
-    "graphical": "2D",
     "labelsOff": "文字なし",
-    "labelsOn": "文字あり",
-    "labelsOffUnavailable": "文字なしの地図は未設定です"
+    "labelsOn": "文字あり"
   },
   "duck": {
     "testMode": "テストモード:現地にいなくてもどのQRでも読み取れる",

@@ -39,7 +39,7 @@ signage. The app is a discovery layer over the real place:
 | Layer | Choice |
 |---|---|
 | Framework | React 18 + Vite + TypeScript |
-| 3D map | Google Maps Platform 3D Maps (`Map3DElement`, `alpha` channel — see below) |
+| 3D map | Google Maps Platform 3D Maps (`Map3DElement`, `weekly` channel) |
 | Routing | React Router, code-split per screen |
 | State | Zustand (identity), otherwise local component state |
 | Styling | Tailwind CSS v4, design tokens as CSS variables |
@@ -193,17 +193,18 @@ is visible — at altitude with a tilted camera you see well past it. `maxAltitu
 is therefore the lever that controls how much surrounding Kyoto is in frame, and
 it's set to 8 km to keep the view on the river.
 
-The **style controls** are two orthogonal choices: imagery (*realistic* photo vs
-*graphical*, the flat cartoonish basemap — labelled **3D** and **2D** in the UI,
-since that's how the difference reads to a visitor) crossed with labels on/off.
-Google has native modes for only three of the four combinations — `SATELLITE`
-(realistic, no labels — the default), `HYBRID` (realistic + labels) and
-`ROADMAP` (graphical + labels). There is no label-free ROADMAP, so that fourth
-case sets a Cloud-styled `mapId` whose style hides every label layer; `mapId`
-is runtime-settable, so this costs no map rebuild and no extra billable load.
-Without `VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID` configured the control disables
-itself rather than silently doing nothing. ROADMAP is why the API is pinned to
-the `alpha` channel — it is pre-GA and exists nowhere else.
+The **map view** has one control: whether Google draws its labels over the
+photorealistic imagery. `SATELLITE` is label-free (the default) and `HYBRID`
+adds road and place names.
+
+It was briefly two axes, crossed with a flat cartoonish basemap labelled "2D".
+That basemap is `MapMode.ROADMAP`, which is **pre-GA and exists only on the
+`v=alpha` channel** — a channel Google documents as development-only and may
+change without notice. Carrying that on a deployed public site wasn't worth one
+extra view, so the API is pinned to `weekly` and ROADMAP is gone. The
+label-free half of that pair also needed a Cloud-styled `mapId`
+(`VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`); with ROADMAP gone, SATELLITE is
+natively label-free and no Map ID is involved.
 
 Since the round-3 migration (`20260801120000`) **a place IS a duck spot**, so
 there is exactly **one marker set**: 10 duck markers, one per spot, each in its

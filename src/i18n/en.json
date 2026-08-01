@@ -94,11 +94,8 @@
     "photoRequired": "A photo is required"
   },
   "mapStyle": {
-    "realistic": "3D",
-    "graphical": "2D",
     "labelsOff": "No labels",
-    "labelsOn": "Labels",
-    "labelsOffUnavailable": "Label-free map view isn't configured"
+    "labelsOn": "Labels"
   },
   "duck": {
     "testMode": "Test mode: scan any QR without being there",
