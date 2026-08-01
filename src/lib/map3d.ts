@@ -208,28 +208,39 @@ export function flyToPlace(map: Map3D, lat: number, lng: number, durationMillis 
   );
 }
 
+/** How far the camera swings around a tapped place — a hint of parallax to
+ * show how the spot sits in its surroundings, not a tour of it. */
+const PLACE_SWEEP_DEGREES = 45;
+
 /**
- * Slowly orbits the camera around the spot so the visitor sees where it sits
- * relative to its surroundings. One clockwise round, then it stops.
- * Returns a promise (resolves when the orbit ends or is cancelled) and a
+ * Swings the camera partway around the spot so the visitor sees where it sits
+ * relative to its surroundings, then stops.
+ *
+ * Deliberately NOT `flyCameraAround`: its `repeatCount` counts *whole*
+ * revolutions, so the smallest thing it can do is a full 360° spin — which is
+ * both longer than this wants and disorienting on a phone. Nudging `heading`
+ * with `flyCameraTo` gives an arbitrary arc and, because Google eases that
+ * move in and out, a noticeably smoother start than a constant-rate orbit.
+ *
+ * Returns a promise (resolves when the sweep ends or is cancelled) and a
  * cancel function.
  */
 export function orbitPlace(
   map: Map3D,
   lat: number,
   lng: number,
-  durationMillis = 2000,
+  durationMillis = 1300,
 ): { promise: Promise<void>; cancel: () => void } {
   const signal = { cancelled: false };
 
-  map.flyCameraAround({
-    camera: {
+  map.flyCameraTo({
+    endCamera: {
       center: { lat, lng, altitude: 0 },
       range: PLACE_VIEW_RANGE_M,
       tilt: PLACE_VIEW_TILT,
+      heading: (map.heading ?? 0) + PLACE_SWEEP_DEGREES,
     },
     durationMillis,
-    repeatCount: 1,
   });
 
   return {
@@ -272,10 +283,15 @@ export function applyKamogawaConstraints(map: Map3D): () => void {
 
 /**
  * Two independent choices, four combinations:
- *   realistic — photorealistic 3D imagery
+ *   realistic — photorealistic 3D imagery. Shown to users as "3D".
  *   graphical — the flat cartoonish basemap (blue water, green parks), so the
- *               Kamogawa is unmistakable. Pre-GA, alpha channel only.
+ *               Kamogawa is unmistakable. Shown as "2D". Pre-GA, alpha only.
  * crossed with labels on/off.
+ *
+ * The internal names describe the rendering; the labels describe how it reads
+ * to a visitor. They're kept apart on purpose — ROADMAP is still drawn on a
+ * tilted 3D globe, so calling it `twoD` in code would be a lie, even though
+ * "2D" is the right word on the button.
  *
  * Google only has native modes for three of the four. SATELLITE is realistic
  * without labels, HYBRID is realistic with them, ROADMAP is graphical with
@@ -319,63 +335,175 @@ export function kamoColor(cssVariable: string): string {
 }
 
 // =========================================================================
-// §5.3 "you are here"
+// §5.3 the visitor's own location — a Google-Maps-style dot with a heading cone
 // =========================================================================
 
+const USER_MARKER_SIZE = 46;
+
+/** Redraw thresholds. `Marker3DElement` rasterizes its art on append and has no
+ * rotation property, so "turning" the cone means rebuilding the marker — cheap,
+ * but not something to do on every sensor tick. A few degrees of compass jitter
+ * is normal even standing still. */
+const HEADING_STEP_DEGREES = 6;
+const POSITION_STEP_METERS = 2;
+
 /**
- * Adds the "you are here" marker (§5.3): a labelled pin at the visitor's
- * location. `Marker3DElement` carries the label natively, so this no longer
- * needs the point + background-label pair the Cesium version did.
+ * The location dot: a white-ringed disc with a translucent wedge showing which
+ * way the device is facing, the way Google Maps draws it. `heading` is degrees
+ * clockwise from north, or null when the device can't report one — in which
+ * case the wedge is omitted rather than left pointing at an arbitrary bearing.
+ *
+ * Uses --kamo-river rather than Google's #4285F4: CLAUDE.md's design rules
+ * allow only the kamo tokens and explicitly bar saturated "tech" colors.
  */
-export function setYouAreHereMarker(
-  maps3d: Maps3D,
-  map: Map3D,
-  longitude: number,
-  latitude: number,
-  label: string,
-): google.maps.maps3d.Marker3DElement {
-  const marker = new maps3d.Marker3DElement({
-    position: { lat: latitude, lng: longitude, altitude: 0 },
-    label,
-    altitudeMode: 'CLAMP_TO_GROUND',
-    extruded: true,
-  });
-  map.appendChild(marker);
-  return marker;
+function userLocationIcon(heading: number | null): string {
+  const blue = kamoColor('--kamo-river') || '#6E8CA0';
+  const ring = kamoColor('--kamo-stone') || '#E9E4D8';
+  const cone =
+    heading === null
+      ? ''
+      : `<g transform="rotate(${heading.toFixed(0)} 32 32)">` +
+        `<path d="M32 32 L19.3 4.8 A30 30 0 0 1 44.7 4.8 Z" fill="${blue}" opacity="0.35"/>` +
+        `</g>`;
+  const svg =
+    `<svg viewBox="0 0 64 64" width="${USER_MARKER_SIZE}" height="${USER_MARKER_SIZE}" xmlns="http://www.w3.org/2000/svg">` +
+    cone +
+    `<circle cx="32" cy="32" r="9.5" fill="${ring}"/>` +
+    `<circle cx="32" cy="32" r="6.5" fill="${blue}"/>` +
+    `</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/** Rough metres between two nearby points — good enough to decide whether the
+ * dot moved enough to be worth redrawing. */
+function roughMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const dy = (aLat - bLat) * 111_320;
+  const dx = (aLng - bLng) * 111_320 * Math.cos((aLat * Math.PI) / 180);
+  return Math.hypot(dx, dy);
+}
+
+function headingFromEvent(event: DeviceOrientationEvent): number | null {
+  // iOS reports a true compass heading directly; everyone else gives `alpha`,
+  // which counts anticlockwise from north and is only meaningful when the
+  // reading is absolute (otherwise it's relative to wherever the page started).
+  const webkit = (event as DeviceOrientationEvent & { webkitCompassHeading?: number })
+    .webkitCompassHeading;
+  if (typeof webkit === 'number' && !Number.isNaN(webkit)) return webkit;
+  if (event.absolute && typeof event.alpha === 'number') return (360 - event.alpha) % 360;
+  return null;
+}
+
+export interface UserLocationMarker {
+  /** iOS 13+ gates compass access behind a permission prompt that only works
+   * from a user gesture, so the caller has to invoke this from one. A no-op
+   * everywhere else. */
+  requestHeadingPermission(): Promise<void>;
+  dispose(): void;
 }
 
 /**
- * Locates the visitor via the Geolocation API and drops the "you are here"
- * marker there, falling back to the Kamogawa default when denied/unavailable
- * (§5.3). Never throws. Geolocation resolves asynchronously and well after
- * this call returns, so both callbacks check `isMounted()` first — the map
- * element may already be torn down by then (React StrictMode's dev-mode
- * double mount/cleanup, or a real unmount before the browser responds).
+ * Tracks the visitor and draws their location on the map, following them as
+ * they move and swinging the cone as they turn. Falls back to the Kamogawa
+ * Delta when geolocation is denied or unavailable, so there's always a dot.
+ *
+ * Never throws. Every callback fires asynchronously and long after this
+ * returns, so each one re-checks that it hasn't been disposed — the map element
+ * may already be gone (React StrictMode's dev double mount/cleanup, or a real
+ * unmount before the browser answers).
  */
-export function locateAndMarkVisitor(
-  maps3d: Maps3D,
-  map: Map3D,
-  label: string,
-  isMounted: () => boolean,
-): void {
-  const fallback = () => {
-    if (!isMounted()) return;
-    setYouAreHereMarker(maps3d, map, KAMOGAWA_DELTA.longitude, KAMOGAWA_DELTA.latitude, label);
-  };
+export function createUserLocationMarker(maps3d: Maps3D, map: Map3D): UserLocationMarker {
+  let disposed = false;
+  let marker: google.maps.maps3d.Marker3DElement | null = null;
+  let lat = KAMOGAWA_DELTA.latitude;
+  let lng = KAMOGAWA_DELTA.longitude;
+  let heading: number | null = null;
+  let drawnHeading: number | null = null;
+  let drawnLat: number | null = null;
+  let drawnLng: number | null = null;
 
-  if (!('geolocation' in navigator)) {
-    fallback();
-    return;
+  function draw() {
+    if (disposed) return;
+    marker?.remove();
+    const next = new maps3d.Marker3DElement({
+      position: { lat, lng, altitude: 0 },
+      altitudeMode: 'CLAMP_TO_GROUND',
+      sizePreserved: true,
+    });
+    const img = document.createElement('img');
+    img.src = userLocationIcon(heading);
+    const template = document.createElement('template');
+    template.content.append(img);
+    next.append(template);
+    map.appendChild(next);
+    marker = next;
+    drawnHeading = heading;
+    drawnLat = lat;
+    drawnLng = lng;
   }
 
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      if (!isMounted()) return;
-      setYouAreHereMarker(maps3d, map, position.coords.longitude, position.coords.latitude, label);
+  function maybeRedraw() {
+    if (disposed) return;
+    const movedFar =
+      drawnLat === null || drawnLng === null || roughMeters(lat, lng, drawnLat, drawnLng) >= POSITION_STEP_METERS;
+    const turnedFar =
+      heading !== null &&
+      (drawnHeading === null || Math.abs(((heading - drawnHeading + 540) % 360) - 180) >= HEADING_STEP_DEGREES);
+    if (movedFar || turnedFar) draw();
+  }
+
+  draw(); // show the fallback dot immediately; sensors refine it below
+
+  let watchId: number | null = null;
+  if ('geolocation' in navigator) {
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        if (disposed) return;
+        lat = position.coords.latitude;
+        lng = position.coords.longitude;
+        maybeRedraw();
+      },
+      () => {
+        /* keep the Kamogawa fallback */
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
+    );
+  }
+
+  const onOrientation = (event: DeviceOrientationEvent) => {
+    if (disposed) return;
+    const next = headingFromEvent(event);
+    if (next === null) return;
+    heading = next;
+    maybeRedraw();
+  };
+
+  function listen() {
+    window.addEventListener('deviceorientationabsolute', onOrientation as EventListener);
+    window.addEventListener('deviceorientation', onOrientation as EventListener);
+  }
+
+  type OrientationPermission = { requestPermission?: () => Promise<PermissionState> };
+  const orientationApi = window.DeviceOrientationEvent as unknown as OrientationPermission | undefined;
+  if (orientationApi && typeof orientationApi.requestPermission !== 'function') listen();
+
+  return {
+    requestHeadingPermission: async () => {
+      if (disposed || !orientationApi || typeof orientationApi.requestPermission !== 'function') return;
+      try {
+        if ((await orientationApi.requestPermission()) === 'granted') listen();
+      } catch {
+        /* denied or not called from a gesture -- the dot just has no cone */
+      }
     },
-    fallback,
-    { timeout: 8000, maximumAge: 60_000 },
-  );
+    dispose: () => {
+      disposed = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      window.removeEventListener('deviceorientationabsolute', onOrientation as EventListener);
+      window.removeEventListener('deviceorientation', onOrientation as EventListener);
+      marker?.remove();
+      marker = null;
+    },
+  };
 }
 
 // =========================================================================

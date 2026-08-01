@@ -4,11 +4,10 @@
     "catchphrase": "Let's keep protecting everyone's Kamogawa"
   },
   "common": {
-    "skip": "Skip",
     "loading": "Loading…",
     "retry": "Retry",
     "close": "Close",
-    "offlineStale": "You're offline — showing saved content"
+    "offlineStale": "You're offline. Showing saved content."
   },
   "onboarding": {
     "title": "A little about you",
@@ -46,7 +45,6 @@
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
     "dragHint": "Drag to look around",
     "moreActivities": "More activities",
-    "youAreHere": "You Are Here!",
     "mapError": "Couldn't load the map.",
     "placeActivityCount_one": "{{count}} activity happening now",
     "placeActivityCount_other": "{{count}} activities happening now",
@@ -72,20 +70,11 @@
     "error": "Couldn't load activities.",
     "placeEmpty": "No activities here yet. Post the first one.",
     "createMain": "Post an activity",
-    "addSub": "Add to this activity",
     "viewArchived": "See earlier posts",
     "like": "Like",
     "dislike": "Dislike",
-    "report": "Report",
-    "reported": "Reported",
-    "reportTitle": "Report this post",
-    "reportSubtitle": "Let us know what's wrong with it.",
-    "reportReasons": {
-      "inappropriate": "Inappropriate content",
-      "spam": "Spam",
-      "off_topic": "Off-topic",
-      "other": "Other"
-    }
+    "recenter": "Show everything",
+    "addSub": "Add to this activity"
   },
   "composer": {
     "mainTitle": "Post an activity",
@@ -95,36 +84,28 @@
     "phrasePlaceholder": "e.g. I write here because it's calm",
     "addPhoto": "Add a photo",
     "changePhoto": "Change photo",
-    "photoOptional": "Photo optional",
     "submit": "Post",
     "submitting": "Posting…",
     "cancel": "Cancel",
-    "error": "Couldn't post. Try again."
+    "error": "Couldn't post. Try again.",
+    "otherType": "Other",
+    "otherTypePlaceholder": "Name the activity",
+    "otherTypeAdd": "Add",
+    "photoRequired": "A photo is required"
   },
   "mapStyle": {
-    "realistic": "Photo",
-    "graphical": "Map",
+    "realistic": "3D",
+    "graphical": "2D",
     "labelsOff": "No labels",
     "labelsOn": "Labels",
     "labelsOffUnavailable": "Label-free map view isn't configured"
   },
   "duck": {
-    "title": "Ducks of the Kamogawa",
-    "loading": "Loading…",
-    "error": "Couldn't load the duck page.",
-    "addPhoto": "Share a duck photo",
-    "stampButton": "Stamp card",
     "testMode": "Test mode: scan any QR without being there",
-    "posting": "Sharing…",
-    "report": "Report",
-    "reported": "Reported",
-    "stampCardTitle": "Duck stamp rally",
-    "stampProgress": "{{earned}} / 10 spots",
-    "certificateLocked": "Collect all 10 stamps to unlock your certificate.",
     "certificateUnlocked": "Certificate unlocked!",
     "viewCertificate": "View certificate",
-    "stamped": "Stamp collected",
-    "notStamped": "Scan the QR here for a stamp"
+    "addPhoto": "Share a duck photo",
+    "stamped": "Found"
   },
   "scan": {
     "locating": "Finding your location…",
@@ -134,7 +115,7 @@
     "tooFar": "Get closer to the duck spot",
     "tooFarDetail": "You're about {{distance}} m away. You need to be within 120 m to collect this stamp.",
     "locationNeeded": "Location needed",
-    "locationDenied": "Please allow location access to collect stamps — it proves you were really at the river.",
+    "locationDenied": "Please allow location access to collect stamps. It proves you were really at the river.",
     "locationUnavailable": "Couldn't get your location. Try again near the spot.",
     "notFound": "This spot code wasn't recognized.",
     "missingSpot": "No spot code in this link.",
@@ -153,30 +134,50 @@
   },
   "tutorial": {
     "heading": "How it works",
-    "mediaPlaceholder": "Photo / video",
     "previous": "Previous",
     "next": "Next",
     "slides": [
       {
-        "title": "Welcome to the Kamogawa",
-        "body": "This map shows what's happening on the riverbank right now, live."
+        "title": "What's happening now",
+        "body": "A live map of what people are doing along the Kamogawa."
       },
       {
-        "title": "Duck markers",
-        "body": "Every duck on the map is a real spot on the river. Tap one to see what's happening there."
+        "title": "Tap a duck",
+        "body": "Each duck is a real spot on the river. Tap one to see what's happening there."
       },
       {
-        "title": "The spot's web",
-        "body": "That spot's duck sits in the middle, with the activities happening around it."
+        "title": "See the spot",
+        "body": "The duck sits in the middle. Activities at that spot circle around it."
       },
       {
         "title": "Join in",
-        "body": "Post your own activity, or add on to someone else's -- everyone's welcome."
+        "body": "Add to someone's activity, or post your own. A photo is all it takes."
       },
       {
         "title": "Collect stamps",
-        "body": "Scan the QR code at a real duck spot along the river to earn a stamp."
+        "body": "Scan the QR code at a duck spot to earn its stamp. Collect all ten for a certificate."
       }
     ]
+  },
+  "collection": {
+    "title": "Duck Collection",
+    "search": "Search the collection",
+    "filter": {
+      "all": "All",
+      "collected": "Found",
+      "missing": "Not found"
+    },
+    "byDate": "By date",
+    "collected": "FOUND",
+    "savedOn": "Found",
+    "saving": "Saving…",
+    "loading": "Loading your collection…",
+    "error": "Couldn't load your collection.",
+    "noMatches": "Nothing matches that.",
+    "justCollected": "Found it! Added to your collection.",
+    "alreadyHad": "Already in your collection. Photo updated.",
+    "tooFar": "Photo shared. You're about {{distance}} m away, so it isn't collected yet.",
+    "needLocation": "Photo shared. Turn on location to collect it.",
+    "postFailed": "Couldn't save that photo. Try again."
   }
 }

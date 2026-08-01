@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ActivityType } from '../../lib/toukou';
+import { createActivityType, type ActivityType } from '../../lib/toukou';
 
 export interface ComposerResult {
   activityTypeId: string | null;
@@ -11,6 +11,9 @@ export interface ComposerResult {
 interface ComposerProps {
   mode: 'main' | 'sub';
   activityTypes: ActivityType[]; // only used for 'main'
+  /** A type the visitor just invented, so the picker can show it immediately
+   * without waiting for a refetch. */
+  onTypeCreated: (type: ActivityType) => void;
   submitting: boolean;
   error: boolean;
   onSubmit: (result: ComposerResult) => void;
@@ -19,12 +22,13 @@ interface ComposerProps {
 
 /**
  * Shared composer for creating a main or a sub (§5.5). Mains pick an activity
- * type; subs inherit their parent's, so the type picker is main-only. Photo
- * is optional in both.
+ * type; subs inherit their parent's, so the type picker is main-only. A photo
+ * is required in both.
  */
 export function Composer({
   mode,
   activityTypes,
+  onTypeCreated,
   submitting,
   error,
   onSubmit,
@@ -35,15 +39,45 @@ export function Composer({
   const [activityTypeId, setActivityTypeId] = useState<string | null>(null);
   const [phrase, setPhrase] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [creatingType, setCreatingType] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** Add a type the seeded list doesn't cover. The colour is chosen server-side
+   * from the §4.1 palette, so the board can't end up with an off-brand hue. */
+  async function submitCustomType() {
+    const name = customName.trim();
+    if (!name || creatingType) return;
+    setCreatingType(true);
+    try {
+      const created = await createActivityType(name);
+      if (created) {
+        onTypeCreated(created);
+        setActivityTypeId(created.id);
+        setCustomOpen(false);
+        setCustomName('');
+      }
+    } catch {
+      /* leave the field open so it can be retried */
+    } finally {
+      setCreatingType(false);
+    }
+  }
 
   const photoPreview = useMemo(
     () => (photoFile ? URL.createObjectURL(photoFile) : null),
     [photoFile],
   );
 
+  // A photo is required, not optional: the board is a picture of what the
+  // riverbank looks like right now, and text-only cards fall back to the shared
+  // placeholder, which makes every one of them look like the same post.
   const canSubmit =
-    !submitting && phrase.trim().length > 0 && (mode === 'sub' || activityTypeId !== null);
+    !submitting &&
+    phrase.trim().length > 0 &&
+    photoFile !== null &&
+    (mode === 'sub' || activityTypeId !== null);
 
   function handleSubmit() {
     if (!canSubmit) return;
@@ -82,7 +116,41 @@ export function Composer({
                   {isJa ? type.name_ja : type.name_en}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setCustomOpen((v) => !v)}
+                aria-expanded={customOpen}
+                className="rounded-full border border-dashed border-kamo-ink/30 px-3 py-1.5 font-ui text-sm text-kamo-ink/70"
+              >
+                + {t('composer.otherType')}
+              </button>
             </div>
+
+            {customOpen && (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void submitCustomType();
+                    }
+                  }}
+                  placeholder={t('composer.otherTypePlaceholder')}
+                  maxLength={24}
+                  className="min-w-0 flex-1 rounded-lg border border-kamo-ink/15 bg-white/60 px-2 py-1.5 font-ui text-sm outline-none focus:border-kamo-river"
+                />
+                <button
+                  type="button"
+                  onClick={() => void submitCustomType()}
+                  disabled={!customName.trim() || creatingType}
+                  className="shrink-0 rounded-full bg-kamo-indigo px-3 py-1.5 font-ui text-sm text-kamo-stone disabled:opacity-40"
+                >
+                  {t('composer.otherTypeAdd')}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -122,7 +190,9 @@ export function Composer({
             )}
             {photoFile ? t('composer.changePhoto') : t('composer.addPhoto')}
           </button>
-          <p className="mt-1 font-ui text-xs text-kamo-ink/50">{t('composer.photoOptional')}</p>
+          {!photoFile && (
+            <p className="mt-1 font-ui text-xs text-kamo-ink/50">{t('composer.photoRequired')}</p>
+          )}
         </div>
 
         {error && <p className="mt-3 font-ui text-sm text-kamo-sunset">{t('composer.error')}</p>}

@@ -4,11 +4,10 @@
     "catchphrase": "皆んなの鴨川、守り続けよう"
   },
   "common": {
-    "skip": "スキップ",
     "loading": "読み込み中…",
     "retry": "再試行",
     "close": "閉じる",
-    "offlineStale": "オフラインです — 保存された内容を表示しています"
+    "offlineStale": "オフラインです。保存された内容を表示しています。"
   },
   "onboarding": {
     "title": "少しだけ教えてください",
@@ -46,7 +45,6 @@
     "qrWelcome": "鴨川への隠れた入口を見つけました",
     "dragHint": "ドラッグして周りを見渡そう",
     "moreActivities": "活動を見る",
-    "youAreHere": "ここにいます!",
     "mapError": "地図を読み込めませんでした。",
     "placeActivityCount_other": "現在 {{count}} 件の活動",
     "duckCollection": "鴨コレクション"
@@ -70,20 +68,11 @@
     "error": "活動を読み込めませんでした。",
     "placeEmpty": "この場所にはまだ活動がありません。最初の投稿をしてみましょう。",
     "createMain": "活動を投稿",
-    "addSub": "この活動に加わる",
     "viewArchived": "過去の投稿を見る",
     "like": "いいね",
     "dislike": "よくないね",
-    "report": "報告",
-    "reported": "報告しました",
-    "reportTitle": "この投稿を報告",
-    "reportSubtitle": "どこが問題か教えてください。",
-    "reportReasons": {
-      "inappropriate": "不適切な内容",
-      "spam": "スパム",
-      "off_topic": "無関係な内容",
-      "other": "その他"
-    }
+    "recenter": "全体を表示",
+    "addSub": "この活動に加わる"
   },
   "composer": {
     "mainTitle": "活動を投稿",
@@ -93,36 +82,28 @@
     "phrasePlaceholder": "例:静かだからここで書いています",
     "addPhoto": "写真を追加",
     "changePhoto": "写真を変更",
-    "photoOptional": "写真は任意",
     "submit": "投稿",
     "submitting": "投稿中…",
     "cancel": "キャンセル",
-    "error": "投稿できませんでした。もう一度お試しください。"
+    "error": "投稿できませんでした。もう一度お試しください。",
+    "otherType": "その他",
+    "otherTypePlaceholder": "活動の名前",
+    "otherTypeAdd": "追加",
+    "photoRequired": "写真が必要です"
   },
   "mapStyle": {
-    "realistic": "写真",
-    "graphical": "地図",
+    "realistic": "3D",
+    "graphical": "2D",
     "labelsOff": "文字なし",
     "labelsOn": "文字あり",
     "labelsOffUnavailable": "文字なしの地図は未設定です"
   },
   "duck": {
-    "title": "鴨川の鴨",
-    "loading": "読み込み中…",
-    "error": "鴨ページを読み込めませんでした。",
-    "addPhoto": "鴨の写真を共有",
-    "stampButton": "スタンプカード",
     "testMode": "テストモード:現地にいなくてもどのQRでも読み取れる",
-    "posting": "共有中…",
-    "report": "報告",
-    "reported": "報告しました",
-    "stampCardTitle": "鴨スタンプラリー",
-    "stampProgress": "{{earned}} / 10 スポット",
-    "certificateLocked": "10個すべて集めると証明書が手に入ります。",
     "certificateUnlocked": "証明書を獲得しました!",
     "viewCertificate": "証明書を見る",
-    "stamped": "スタンプ取得済み",
-    "notStamped": "ここでQRを読み取るとスタンプ"
+    "addPhoto": "鴨の写真を共有",
+    "stamped": "採取済み"
   },
   "scan": {
     "locating": "現在地を確認中…",
@@ -151,30 +132,50 @@
   },
   "tutorial": {
     "heading": "使い方",
-    "mediaPlaceholder": "写真・動画",
     "previous": "前へ",
     "next": "次へ",
     "slides": [
       {
-        "title": "鴨川へようこそ",
-        "body": "この地図には、今まさに川辺で起きていることがリアルタイムで映し出されます。"
+        "title": "いま起きていること",
+        "body": "鴨川で人々が何をしているかがリアルタイムでわかる地図です。"
       },
       {
-        "title": "🦆マーク",
-        "body": "地図の鴨は川辺の実際の場所です。タップするとそこで起きていることが見られます。"
+        "title": "鴨をタップ",
+        "body": "地図の鴨は川辺の実際の場所です。タップするとその場所の様子が見られます。"
       },
       {
-        "title": "その場所の輪",
+        "title": "その場所を見る",
         "body": "中央に鴨、まわりにその場所の活動が並びます。"
       },
       {
         "title": "参加してみよう",
-        "body": "自分の活動を投稿したり、誰かの投稿に加わったり -- みんな歓迎です。"
+        "body": "誰かの活動に加わるか、自分の活動を投稿しましょう。写真が1枚あれば大丈夫です。"
       },
       {
         "title": "スタンプを集めよう",
-        "body": "川沿いの実際の鴨スポットでQRコードを読み取ると、スタンプがもらえます。"
+        "body": "鴨スポットでQRコードを読み取るとスタンプがもらえます。10個集めると証明書が手に入ります。"
       }
     ]
+  },
+  "collection": {
+    "title": "カモ・コレクション",
+    "search": "コレクションを検索",
+    "filter": {
+      "all": "全コレクション",
+      "collected": "採取済み",
+      "missing": "未採取"
+    },
+    "byDate": "日付順",
+    "collected": "採取済み",
+    "savedOn": "保存日",
+    "saving": "保存中…",
+    "loading": "コレクションを読み込み中…",
+    "error": "コレクションを読み込めませんでした。",
+    "noMatches": "該当するものがありません。",
+    "justCollected": "見つけました!コレクションに追加しました。",
+    "alreadyHad": "すでにコレクション済みです。写真を更新しました。",
+    "tooFar": "写真を共有しました。約{{distance}}m離れているため、まだ採取できていません。",
+    "needLocation": "写真を共有しました。位置情報をオンにすると採取できます。",
+    "postFailed": "写真を保存できませんでした。もう一度お試しください。"
   }
 }

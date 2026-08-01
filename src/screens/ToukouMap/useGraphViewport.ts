@@ -5,6 +5,33 @@ const MIN_SCALE = 0.4;
 const MAX_SCALE = 2;
 const FIT_PADDING = 90; // room for card size around the extreme nodes
 
+/** How far past the outermost card you may pan, as a fraction of the viewport.
+ * Enough slack to drag a node to the edge and work comfortably, not enough to
+ * lose the graph off-screen and be unable to find it again. */
+const PAN_SLACK = 0.5;
+
+/** How far the opening animation closes in from the fit-everything view. Now
+ * that it lands on a specific node rather than the graph's centre, the move has
+ * to be decisive enough to read as "here is the duck" -- too small and it just
+ * looks like the board twitched. Raising it further costs pan comfort: less
+ * graph on screen means one swipe crosses more of it. */
+const INTRO_ZOOM_IN = 1.5;
+
+/**
+ * Screen pixels of content movement per pixel of finger movement.
+ *
+ * 1 is exact tracking, which is what a map does and what direct manipulation
+ * normally wants. Slightly under that trades a little of the "stuck to my
+ * finger" feel for control on a dense board, where 1:1 at close zoom sends
+ * cards off-screen faster than you can follow. Put it back to 1 for exact
+ * tracking.
+ */
+const PAN_SENSITIVITY = 0.8;
+/** How long the whole board stays in frame before that move begins. */
+const INTRO_HOLD_MS = 900;
+/** Duration of the ease-in, mirrored by the CSS transition the caller applies. */
+const INTRO_GLIDE_MS = 1400;
+
 export interface ViewTransform {
   tx: number;
   ty: number;
@@ -34,6 +61,39 @@ function fitView(positions: Map<string, NodePosition>, size: { w: number; h: num
   return { scale, tx: (-(minX + maxX) / 2) * scale, ty: (-(minY + maxY) / 2) * scale };
 }
 
+/**
+ * Keeps the content within reach. `tx`/`ty` place the graph's origin, so the
+ * bounds on them come from the node extents mapped through the current scale;
+ * anything further than PAN_SLACK viewports beyond the outermost card is
+ * clamped away. Without this the canvas is infinite and it's entirely possible
+ * to pan into empty space and never find the cards again.
+ */
+function clampPan(
+  view: ViewTransform,
+  positions: Map<string, NodePosition>,
+  size: { w: number; h: number },
+): ViewTransform {
+  const pts = [...positions.values()];
+  if (pts.length === 0 || size.w === 0) return view;
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const slackX = size.w * PAN_SLACK;
+  const slackY = size.h * PAN_SLACK;
+  // Screen position of a node = centre + t + world * scale. Require the extreme
+  // nodes to stay within half a viewport (plus slack) of the centre.
+  const limit = (min: number, max: number, half: number, slack: number) => ({
+    lo: -max * view.scale - half - slack,
+    hi: -min * view.scale + half + slack,
+  });
+  const x = limit(Math.min(...xs), Math.max(...xs), size.w / 2, slackX);
+  const y = limit(Math.min(...ys), Math.max(...ys), size.h / 2, slackY);
+  return {
+    scale: view.scale,
+    tx: Math.min(x.hi, Math.max(x.lo, view.tx)),
+    ty: Math.min(y.hi, Math.max(y.lo, view.ty)),
+  };
+}
+
 export interface GraphDragHandlers {
   startDrag: (id: string) => void;
   drag: (id: string, x: number, y: number) => void;
@@ -49,17 +109,78 @@ export interface GraphDragHandlers {
  * and on the background pans; a second pointer converts to a pinch about the
  * midpoint and cancels any in-progress node drag.
  *
+ * On open it holds the whole graph in frame, then eases in on `focusId`.
+ *
  * The view auto-fits to frame the whole graph until the user interacts, then
  * `userView` takes over -- derived during render (not via a setState effect)
  * so it doesn't cascade a render on every simulation tick.
  */
-export function useGraphViewport(positions: Map<string, NodePosition>, drag: GraphDragHandlers) {
+export function useGraphViewport(
+  positions: Map<string, NodePosition>,
+  drag: GraphDragHandlers,
+  /** Node the opening glide settles on — the place's duck, so you always arrive
+   * looking at it. Omitted, the glide just closes in on the graph's centre. */
+  focusId?: string,
+) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userView, setUserView] = useState<ViewTransform | null>(null);
-  const view = userView ?? fitView(positions, size);
+  // The opening move: hold the whole board in frame so you can see how much is
+  // here, then ease in on the focus node.
+  //
+  // Interpolated in JS rather than handed to a CSS transition. The force
+  // simulation re-renders this component on every tick and rewrites the inline
+  // transform with it, which restarts or swallows a CSS transition -- the
+  // earlier attempts snapped for exactly that reason. Owning the value means
+  // the animation is unaffected by how often the graph re-renders underneath.
+  const [introT, setIntroT] = useState(0); // 0 = whole board, 1 = settled on focus
+  const introCancelled = useRef(false);
+
+  const fitted = fitView(positions, size);
+  const focus = focusId ? positions.get(focusId) : undefined;
+
+  // Where the glide lands. Placing a world point at the viewport centre means
+  // tx = -x * scale, since a point renders at (centre + t + world * scale).
+  const targetScale = Math.min(fitted.scale * INTRO_ZOOM_IN, MAX_SCALE);
+  const target: ViewTransform = focus
+    ? { scale: targetScale, tx: -focus.x * targetScale, ty: -focus.y * targetScale }
+    : { ...fitted, scale: targetScale };
+
+  const view =
+    userView ??
+    (introT === 0
+      ? fitted
+      : {
+          scale: fitted.scale + (target.scale - fitted.scale) * introT,
+          tx: fitted.tx + (target.tx - fitted.tx) * introT,
+          ty: fitted.ty + (target.ty - fitted.ty) * introT,
+        });
   const gesture = useRef<Gesture | null>(null);
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  // Starts once the graph has laid out and been measured -- not on mount, or it
+  // would animate away from an empty board before any card had a position.
+  const ready = size.w > 0 && positions.size > 0;
+  useEffect(() => {
+    if (!ready || introCancelled.current) return;
+    let raf = 0;
+    let startedAt = 0;
+    const hold = setTimeout(() => {
+      const step = (now: number) => {
+        if (introCancelled.current) return;
+        if (!startedAt) startedAt = now;
+        const t = Math.min((now - startedAt) / INTRO_GLIDE_MS, 1);
+        // easeInOutCubic -- matches the calm motion the rest of the app uses.
+        setIntroT(t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+        if (t < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }, INTRO_HOLD_MS);
+    return () => {
+      clearTimeout(hold);
+      cancelAnimationFrame(raf);
+    };
+  }, [ready]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -97,6 +218,8 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
 
   function onPointerDown(e: React.PointerEvent) {
     const target = e.target as HTMLElement;
+    // A finger on the board outranks the opening glide.
+    introCancelled.current = true;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointers.current.size === 2) {
@@ -134,13 +257,25 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
       const { dist, midX, midY } = pinchMetrics();
       const rect = viewportRef.current!.getBoundingClientRect();
       const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, g.startScale * (dist / g.startDist)));
-      setUserView({ scale, tx: midX - rect.left - cx - g.worldX * scale, ty: midY - rect.top - cy - g.worldY * scale });
+      setUserView(
+        clampPan(
+          { scale, tx: midX - rect.left - cx - g.worldX * scale, ty: midY - rect.top - cy - g.worldY * scale },
+          positions,
+          size,
+        ),
+      );
     } else if (g.kind === 'pan') {
-      setUserView((v) => ({
-        scale: v?.scale ?? view.scale,
-        tx: g.startTx + (e.clientX - g.startX),
-        ty: g.startTy + (e.clientY - g.startY),
-      }));
+      setUserView((v) =>
+        clampPan(
+          {
+            scale: v?.scale ?? view.scale,
+            tx: g.startTx + (e.clientX - g.startX) * PAN_SENSITIVITY,
+            ty: g.startTy + (e.clientY - g.startY) * PAN_SENSITIVITY,
+          },
+          positions,
+          size,
+        ),
+      );
     } else {
       const world = toWorld(e.clientX, e.clientY);
       drag.drag(g.id, world.x, world.y);
@@ -171,12 +306,24 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
     });
   }
 
+  /** Drop back to the auto-fit transform, framing every node. `fitView()` is
+   * already what renders before the first interaction, so this is just letting
+   * it take over again. */
+  function resetView() {
+    // "Show me everything" is the fitted view, and it must not re-trigger the
+    // opening glide afterwards.
+    introCancelled.current = true;
+    setIntroT(0);
+    setUserView(null);
+  }
+
   return {
     viewportRef,
     size,
     cx,
     cy,
     view,
+    resetView,
     containerHandlers: {
       onPointerDown,
       onPointerMove,

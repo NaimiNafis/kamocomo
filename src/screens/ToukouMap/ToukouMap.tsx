@@ -9,7 +9,6 @@ import {
   fetchActivityTypes,
   fetchPlaceBoard,
   getActiveEvent,
-  reportContent,
   setVote,
   subscribeToToukou,
   type ActivityType,
@@ -17,15 +16,15 @@ import {
   type PlaceBoard,
   type ToukouNode,
 } from '../../lib/toukou';
-import { createDuckPost } from '../../lib/duck';
-import { duckIconDataUri } from '../../lib/ducks';
+import { collectDuckByPhoto } from '../../lib/duck';
+import { duckVariantDataUri } from '../../lib/ducks';
 import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
 import { NodeCard } from './NodeCard';
 import { AddCard } from './AddCard';
 import { Composer, type ComposerResult } from './Composer';
-import { ReportDialog, type ReportReason } from './ReportDialog';
+import { RecenterIcon } from '../../components/icons';
 import { useForceGraph, type GraphNode } from './useForceGraph';
 import { useGraphViewport } from './useGraphViewport';
 
@@ -62,8 +61,6 @@ export function ToukouMap() {
   const [composer, setComposer] = useState<ComposerState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
-  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
-  const [reportTarget, setReportTarget] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,11 +95,13 @@ export function ToukouMap() {
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-  const { viewportRef, cx, cy, view, containerHandlers } = useGraphViewport(positions, {
-    startDrag,
-    drag,
-    endDrag,
-  });
+  const { viewportRef, cx, cy, view, resetView, containerHandlers } = useGraphViewport(
+    positions,
+    { startDrag, drag, endDrag },
+    // Arrive looking at the place's duck -- it's the anchor of the board, so
+    // it's what should be under your eyes when the opening glide settles.
+    duck ? DUCK_ID : undefined,
+  );
 
   // Every place marker passes ?place=; a bare /toukou visit has nowhere to go.
   useEffect(() => {
@@ -174,18 +173,6 @@ export function ToukouMap() {
     }
   }
 
-  async function handleReportSubmit(reason: ReportReason) {
-    if (!userId || !reportTarget) return;
-    const id = reportTarget;
-    setReportTarget(null);
-    setReportedIds((prev) => new Set(prev).add(id));
-    try {
-      await reportContent(userId, 'activity', id, reason);
-    } catch {
-      /* leave it marked reported in the UI regardless */
-    }
-  }
-
   async function handleComposerSubmit(result: ComposerResult) {
     if (!userId || !composer || !board) return;
     setSubmitting(true);
@@ -220,14 +207,15 @@ export function ToukouMap() {
     }
   }
 
-  /** Post a photo onto this place's duck — the same thing the duck page's "+"
-   * did, now that the duck lives at the centre of this board. */
+  /** Post a photo onto this place's duck. Same call the collection uses: the
+   * photo always joins the shared feed here, and if you happen to be standing
+   * within range it also fills your own 図鑑 entry for that duck. */
   async function handlePhotoChosen(file: File | undefined) {
     if (photoInputRef.current) photoInputRef.current.value = '';
     if (!file || !userId || !duck) return;
     setUploadingPhoto(true);
     try {
-      await createDuckPost(userId, file, duck.id);
+      await collectDuckByPhoto(userId, file, duck.id);
       await refetchBoard();
     } catch {
       /* swallow; the board just won't gain the photo */
@@ -251,7 +239,12 @@ export function ToukouMap() {
       <div ref={viewportRef} className="absolute inset-0 touch-none" {...containerHandlers}>
         <div
           className="absolute left-0 top-0 origin-top-left"
-          style={{ transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})` }}
+          style={{
+            // No CSS transition here on purpose: the opening glide is
+            // interpolated in the hook, and easing this would also lag every
+            // drag behind the finger.
+            transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})`,
+          }}
         >
           <svg
             className="pointer-events-none absolute overflow-visible"
@@ -278,9 +271,15 @@ export function ToukouMap() {
 
           {layoutNodes.map((ln) => {
             const pos = positionOf(ln.id);
+            // `data-node-id` is what useGraphViewport looks for to start a
+            // node drag -- without it a pointer-down here falls through to
+            // panning the whole board, which is why the duck and its photos
+            // couldn't be moved. Add cards are <button>s, and the handler
+            // short-circuits on those, so they still click rather than drag.
             const wrap = (children: React.ReactNode, extra?: string) => (
               <div
                 key={ln.id}
+                data-node-id={ln.id}
                 className={`absolute -translate-x-1/2 -translate-y-1/2 ${extra ?? ''}`}
                 style={{ left: pos.x, top: pos.y }}
               >
@@ -296,18 +295,27 @@ export function ToukouMap() {
                   style={{ backgroundColor: duck.color, color: readableOn(duck.color) }}
                 >
                   <img
-                    src={duckIconDataUri(duck.color)}
+                    src={duckVariantDataUri(duck.number - 1, duck.color)}
                     alt=""
                     className="h-14 w-14"
                     draggable={false}
                   />
-                  <span className="line-clamp-1 text-center font-display text-sm">
+                  {/* Wraps rather than truncating -- "Kamogawa Delta" reading
+                      as "Kamogawa …" told you less than the space allowed. */}
+                  <span className="text-balance text-center font-display text-sm leading-tight">
                     {isJa ? duck.nameJa : duck.nameEn}
                   </span>
-                  <span className="font-ui text-[10px] opacity-80">
-                    {duck.earned ? `✓ ${t('duck.stamped')}` : t('duck.notStamped')}
-                  </span>
+                  {/* Earned shows a mark, not a sentence; the instruction line
+                      that used to sit here was the same on every unstamped duck
+                      and pushed the name around. The label keeps it readable to
+                      a screen reader. */}
+                  {duck.earned && (
+                    <span className="font-ui text-[11px] opacity-80" title={t('duck.stamped')}>
+                      ✓
+                    </span>
+                  )}
                 </div>,
+                'cursor-grab active:cursor-grabbing',
               );
             }
 
@@ -370,12 +378,8 @@ export function ToukouMap() {
               >
                 <NodeCard
                   node={node}
-                  reported={reportedIds.has(node.id)}
                   onLike={() => void handleVote(node, 1)}
                   onDislike={() => void handleVote(node, -1)}
-                  onReport={() => {
-                    if (!reportedIds.has(node.id)) setReportTarget(node.id);
-                  }}
                   onViewArchived={() => navigate(`/archive?main=${node.id}`)}
                 />
               </div>
@@ -444,7 +448,17 @@ export function ToukouMap() {
 
       {/* Place-level "post an activity" (the daily gathering is always live) */}
       {status === 'ready' && (
-        <div className="absolute inset-x-0 bottom-0 flex justify-center p-4">
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 p-4">
+          {/* The pan clamp stops you leaving the graph behind; this puts it all
+              back in frame in one tap when you've wandered. */}
+          <button
+            type="button"
+            onClick={resetView}
+            aria-label={t('toukou.recenter')}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-kamo-ink/15 bg-kamo-stone/90 text-kamo-ink shadow-lg backdrop-blur"
+          >
+            <RecenterIcon />
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -462,6 +476,7 @@ export function ToukouMap() {
         <Composer
           mode={composer.mode}
           activityTypes={activityTypes}
+          onTypeCreated={(type) => setActivityTypes((prev) => [...prev, type])}
           submitting={submitting}
           error={submitError}
           onSubmit={(result) => void handleComposerSubmit(result)}
@@ -469,12 +484,6 @@ export function ToukouMap() {
         />
       )}
 
-      {reportTarget && (
-        <ReportDialog
-          onSubmit={(reason) => void handleReportSubmit(reason)}
-          onCancel={() => setReportTarget(null)}
-        />
-      )}
     </div>
   );
 }

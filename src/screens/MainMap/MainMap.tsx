@@ -5,12 +5,12 @@ import {
   addPlaceFraming,
   applyKamogawaConstraints,
   createMarkerLayer,
+  createUserLocationMarker,
   flyIntroSequence,
   flyToHomeView,
   flyToPlace,
   initialCamera,
   loadMaps3d,
-  locateAndMarkVisitor,
   orbitPlace,
   setHomeView,
   applyMapView,
@@ -18,6 +18,7 @@ import {
   type Maps3D,
   type MapStyle,
   type MarkerPoint,
+  type UserLocationMarker,
 } from '../../lib/map3d';
 import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
 import { logQrEntry } from '../../lib/duck';
@@ -35,6 +36,9 @@ const HAS_SEEN_MAP_HINT_KEY = 'hasSeenMapHint';
 const TITLE_HOLD_MS = 1800;
 const CATCHPHRASE_HOLD_MS = 1900;
 const MAP_HINT_AUTO_DISMISS_MS = 4000;
+/** Title + catchphrase + the 7s flight, plus slack. The upper bound on how
+ * long the intro can hold the screen when there's no Skip to escape with. */
+const INTRO_WATCHDOG_MS = TITLE_HOLD_MS + CATCHPHRASE_HOLD_MS + 12_000;
 
 /**
  * Full-screen Google Maps 3D globe, constrained to the Kamogawa corridor
@@ -60,8 +64,9 @@ export function MainMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map3D | null>(null);
   const constraintsCleanupRef = useRef<(() => void) | null>(null);
-  const skipRef = useRef<() => void>(() => {});
   const closeCinematicRef = useRef<() => void>(() => {});
+  const userLocationRef = useRef<UserLocationMarker | null>(null);
+  const headingAskedRef = useRef(false);
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
@@ -118,7 +123,9 @@ export function MainMap() {
       container.appendChild(map);
       mapRef.current = map;
 
-      locateAndMarkVisitor(maps3d, map, t('mainMap.youAreHere'), () => mounted);
+      const userMarker = createUserLocationMarker(maps3d, map);
+      userLocationRef.current = userMarker;
+      disposers.push(userMarker.dispose);
 
       // Tapping a place marker plays a cinematic (framing highlight -> fly-in ->
       // slow orbit) around it, then shows its popup -- one place at a time. The
@@ -220,11 +227,18 @@ export function MainMap() {
         // corridor clamp doesn't engage until the flight lands (finishIntro).
         map.style.pointerEvents = 'none';
 
-        skipRef.current = () => {
-          signal.cancelled = true;
-          map?.stopCameraAnimation();
-          finishIntro();
-        };
+        // With no Skip button there's no manual way out, so a flight that
+        // never reports completion (a backgrounded tab can swallow
+        // gmp-animationend) would strand the visitor on the overlay forever.
+        // Land the intro regardless once it has had comfortably long enough.
+        timers.push(
+          setTimeout(() => {
+            if (finished) return;
+            signal.cancelled = true;
+            map?.stopCameraAnimation();
+            finishIntro();
+          }, INTRO_WATCHDOG_MS),
+        );
 
         timers.push(
           setTimeout(() => {
@@ -251,10 +265,11 @@ export function MainMap() {
       constraintsCleanupRef.current?.();
       constraintsCleanupRef.current = null;
       disposers.forEach((dispose) => dispose());
+      userLocationRef.current = null;
       map?.remove();
       mapRef.current = null;
     };
-    // Runs once: the intro plays out (or is skipped) exactly once per mount.
+    // Runs once: the intro plays out exactly once per mount.
     // navigate()/t() are stable references, safe to omit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -285,6 +300,15 @@ export function MainMap() {
   function closeTutorial() {
     localStorage.setItem(HAS_SEEN_TUTORIAL_KEY, 'true');
     setTutorialOverride(false);
+  }
+
+  /** iOS 13+ only grants compass access from a user gesture, so the first touch
+   * on the map is where we ask. Everywhere else this is a no-op. */
+  function handleMapPointerDown() {
+    dismissMapHint();
+    if (headingAskedRef.current) return;
+    headingAskedRef.current = true;
+    void userLocationRef.current?.requestHeadingPermission();
   }
 
   function dismissMapHint() {
@@ -321,7 +345,7 @@ export function MainMap() {
         ref={containerRef}
         className="h-full w-full"
         data-testid="map-3d"
-        onPointerDown={dismissMapHint}
+        onPointerDown={handleMapPointerDown}
       />
 
       {mapFailed && (
@@ -407,7 +431,7 @@ export function MainMap() {
         </>
       )}
 
-      {introPhase !== 'done' && <Intro phase={introPhase} onSkip={() => skipRef.current()} />}
+      {introPhase !== 'done' && <Intro phase={introPhase} />}
       {showOnboarding && <Onboarding onComplete={(fields) => void completeOnboarding(fields)} />}
       {tutorialOpen && <Tutorial onClose={closeTutorial} />}
       {placePopup && (
