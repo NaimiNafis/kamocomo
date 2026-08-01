@@ -72,7 +72,7 @@ supabase/
   seed.sql      demo activity types, events, duck spots (places ship in a migration)
 scripts/        generate-qr.ts, seed-demo-places.mjs, seed-full-nodes.mjs, …
 img/
-  marks/        custom duck + exclamation SVG marks (no stock/AI art)
+  marks/        custom duck SVG mark, generated into 10 variants (no stock art)
   kamogawa/     real Kamogawa photos, incl. the shared placeholder image
 ```
 
@@ -98,18 +98,19 @@ INTRO (once/session)
      |
 MAIN MAP (Google Maps 3D, Kamogawa-corridor-locked)
   location dot (heading cone) · tutorial · language toggle · map style switch
+  duck spots are the same 10 as the 図鑑 -- find the object, photograph it
   "duck collection" button -> /duck (図鑑)
-  markers (one per PLACE, plus colored duck markers):
-    duck -> tap plays a cinematic (frame, fly in, orbit), then a popup with
+  markers -- ONE duck per place, drawn as that duck's variant:
+    duck -> tap plays a cinematic (frame, fly in, 45 deg sweep), then a popup with
        the place's name/photos and a button into ->
        |
        v
-  /toukou?place=<id>  (that place's board)        /duck
-  MANY mains, each its own color, subs lighter;    10 duck nodes + photo subs;
-  subs vote, mains rated by child count;           tap a duck's "+" to post a
-  a "+" node adds a sub; "post an activity"        photo; 10-slot stamp card
-  adds a main; 10 dislikes auto-hides a post
-  -> /archive?main=<id>                            -> /duck/scan -> stamp -> certificate
+  /toukou?place=<id>  (that place's board)        /duck  (the 図鑑)
+  MANY mains, each its own color, subs lighter;    10 numbered entries;
+  subs vote, mains rated by child count;           unfound = silhouette,
+  a "+" node adds a sub; "post an activity"        found = your photo + 保存日;
+  adds a main; 10 dislikes auto-hides a post       photograph one to collect it
+  -> /archive?main=<id>                            -> certificate at 10
 ```
 
 A duck-QR scan doesn't dead-end on a scan screen: it collects the stamp, then
