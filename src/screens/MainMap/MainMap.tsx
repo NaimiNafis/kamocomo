@@ -11,14 +11,17 @@ import {
   flyToPlace,
   initialCamera,
   loadMaps3d,
+  onMapsAuthFailure,
   orbitPlace,
   setHomeView,
   applyMapView,
   type Map3D,
   type Maps3D,
+  type MapStyle,
   type MarkerPoint,
   type UserLocationMarker,
 } from '../../lib/map3d';
+import { createMap2D, type Map2DHandle } from '../../lib/map2d';
 import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
 import { logQrEntry } from '../../lib/duck';
 import { HAS_SEEN_INTRO_KEY, OPEN_DUCK_AFTER_INTRO_KEY } from '../../lib/entryFlags';
@@ -65,12 +68,19 @@ export function MainMap() {
   const constraintsCleanupRef = useRef<(() => void) | null>(null);
   const closeCinematicRef = useRef<() => void>(() => {});
   const userLocationRef = useRef<UserLocationMarker | null>(null);
+  // The flat map is built the first time someone actually asks for it. A 2D map
+  // load bills to its own SKU, so a visitor who never leaves 3D never spends one.
+  const map2dRef = useRef<Map2DHandle | null>(null);
+  const map2dContainerRef = useRef<HTMLDivElement>(null);
+  const placePointsRef = useRef<MarkerPoint[]>([]);
+  const pendingCameraRef = useRef<{ lat: number; lng: number; range: number } | null>(null);
   const headingAskedRef = useRef(false);
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
-  // Label-free by default: no place names, road names or text at all, which is
-  // the view the app is designed around.
+  // Label-free 3D by default: no place names, road names or text at all, which
+  // is the view the app is designed around.
+  const [mapStyle, setMapStyleState] = useState<MapStyle>('3d');
   const [showLabels, setShowLabels] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [tutorialOverride, setTutorialOverride] = useState<boolean | null>(null);
@@ -194,7 +204,11 @@ export function MainMap() {
       void fetchPlaceMarkers().then((points) => {
         if (!mounted) return;
         placePoints = points;
+        // The flat map draws the same set, and it may be built long after this
+        // resolves, so the points have to outlive this closure.
+        placePointsRef.current = points;
         markerLayer.setMarkers(placePoints);
+        map2dRef.current?.setMarkers(points);
       });
 
       function finishIntro() {
@@ -263,6 +277,8 @@ export function MainMap() {
       constraintsCleanupRef.current?.();
       constraintsCleanupRef.current = null;
       disposers.forEach((dispose) => dispose());
+      map2dRef.current?.dispose();
+      map2dRef.current = null;
       userLocationRef.current = null;
       map?.remove();
       mapRef.current = null;
@@ -271,6 +287,12 @@ export function MainMap() {
     // navigate()/t() are stable references, safe to omit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Quota exhausted, referrer rejected, billing lapsed: Google refuses the map
+  // long after the library promise resolved, so the load path can't catch it.
+  // This turns that into the app's own error state with a retry, instead of
+  // Google's grey panel.
+  useEffect(() => onMapsAuthFailure(() => setMapFailed(true)), []);
 
   // §A.2a photogenic-spot QR entry: log the analytics row once identity is
   // ready (a hidden-QR scan can be the visitor's very first touch). Read-only
@@ -328,6 +350,85 @@ export function MainMap() {
   function handleLabelsChange(next: boolean) {
     setShowLabels(next);
     if (mapRef.current) applyMapView(mapRef.current, next);
+    map2dRef.current?.setLabels(next);
+  }
+
+  /**
+   * Switch surfaces, handing the camera across so you keep looking at the same
+   * stretch of river rather than being dropped somewhere else.
+   *
+   * Only records where to go; the flat map is built and moved in the effect
+   * below. Building it here would run before React re-rendered, while its
+   * container is still `visibility: hidden` — and Google Maps sizes itself from
+   * its container at construction, so it would come up blank.
+   */
+  function handleMapStyleChange(next: MapStyle) {
+    if (next === mapStyle) return;
+    const height = containerRef.current?.clientHeight ?? 800;
+
+    if (next === '2d') {
+      const centre = mapRef.current?.center;
+      pendingCameraRef.current =
+        centre && typeof centre.lat === 'number' && typeof centre.lng === 'number'
+          ? { lat: centre.lat, lng: centre.lng, range: mapRef.current?.range ?? 4500 }
+          : null;
+    } else {
+      // Coming back: point the 3D camera where the flat map was looking.
+      const view = map2dRef.current?.readView(height);
+      const map3d = mapRef.current;
+      if (view && map3d) {
+        map3d.center = { lat: view.lat, lng: view.lng, altitude: 0 };
+        map3d.range = view.range;
+      }
+    }
+    setMapStyleState(next);
+  }
+
+  // Builds the flat map the first time it's shown, and points it wherever the
+  // 3D camera was. Runs after the render that makes its container visible.
+  useEffect(() => {
+    if (mapStyle !== '2d') return;
+    const container = map2dContainerRef.current;
+    if (!container) return;
+    let cancelled = false;
+
+    void (async () => {
+      if (!map2dRef.current) {
+        try {
+          const handle = await createMap2D(container, openPlaceFrom2D);
+          if (cancelled) return;
+          map2dRef.current = handle;
+          handle.setLabels(showLabels);
+          handle.setMarkers(placePointsRef.current);
+        } catch {
+          if (!cancelled) setMapStyleState('3d'); // couldn't build it; stay put
+          return;
+        }
+      }
+      const target = pendingCameraRef.current;
+      pendingCameraRef.current = null;
+      if (target) {
+        map2dRef.current.moveTo(
+          target.lat,
+          target.lng,
+          target.range,
+          containerRef.current?.clientHeight ?? 800,
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // showLabels is applied by handleLabelsChange; re-running on it would
+    // rebuild nothing and re-move the camera under the user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapStyle]);
+
+  /** A duck tapped on the flat map goes straight to its board -- the fly-in and
+   * sweep are a 3D camera move and have no meaning here. */
+  function openPlaceFrom2D(placeId: string) {
+    navigate(`/toukou?place=${placeId}`);
   }
 
   const showChrome = introPhase === 'done';
@@ -337,8 +438,17 @@ export function MainMap() {
       <div
         ref={containerRef}
         className="h-full w-full"
+        style={{ visibility: mapStyle === '3d' ? 'visible' : 'hidden' }}
         data-testid="map-3d"
         onPointerDown={handleMapPointerDown}
+      />
+      {/* Kept mounted rather than unmounted so switching back doesn't rebuild
+          the map -- a rebuild would be another billable map load. */}
+      <div
+        ref={map2dContainerRef}
+        className="absolute inset-0 h-full w-full"
+        style={{ visibility: mapStyle === '2d' ? 'visible' : 'hidden' }}
+        data-testid="map-2d"
       />
 
       {mapFailed && (
@@ -378,7 +488,12 @@ export function MainMap() {
           </div>
 
           <div className="absolute bottom-4 right-4 z-10">
-            <MapStyleSwitch showLabels={showLabels} onLabelsChange={handleLabelsChange} />
+            <MapStyleSwitch
+              style={mapStyle}
+              showLabels={showLabels}
+              onStyleChange={handleMapStyleChange}
+              onLabelsChange={handleLabelsChange}
+            />
           </div>
 
           {qrSpot && (

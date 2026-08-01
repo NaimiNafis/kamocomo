@@ -93,7 +93,9 @@
   },
   "mapStyle": {
     "labelsOff": "文字なし",
-    "labelsOn": "文字あり"
+    "labelsOn": "文字あり",
+    "threeD": "3D",
+    "twoD": "2D"
   },
   "duck": {
     "testMode": "テストモード:現地にいなくてもどのQRでも読み取れる",

@@ -15,12 +15,14 @@ duck-spot QR stamp rally. Live at https://kamokamo.vercel.app.
 ## Stack (fixed — do not substitute)
 
 - React 18 + Vite + TypeScript, React Router, Zustand
-- Google Maps Platform 3D Maps (`Map3DElement`) via `@googlemaps/js-api-loader`,
-  pinned to the **`weekly`** (stable) channel. Do not move it to `v=alpha`: that
-  channel is documented as development-only and can change without notice, which
-  is not acceptable for a deployed site. The cost is that `MapMode.ROADMAP` (a
-  flat cartoonish basemap) is unavailable, since it's pre-GA and exists nowhere
-  else — the map view is photorealistic with labels on or off.
+- Google Maps Platform via `@googlemaps/js-api-loader`, pinned to the
+  **`weekly`** (stable) channel. Two surfaces: `Map3DElement` for 3D
+  (`lib/map3d.ts`) and the classic `google.maps.Map` for 2D (`lib/map2d.ts`).
+  **Never set `v: 'alpha'`** — it renders a "For development purposes only"
+  banner above the map for every visitor, and the channel can change without
+  notice. `MapMode.ROADMAP` is the only thing alpha would buy, and the classic
+  2D API gives the same flat map on GA. The 2D map must stay **`mapId`-free**,
+  or it loses inline `styles` and with it the label toggle.
 - Supabase (`@supabase/supabase-js`): Postgres, anonymous auth, Storage, Realtime
 - i18next / react-i18next — every user-facing string goes through i18n (en + ja), no hardcoded copy
 - Tailwind CSS, with design tokens (`docs/ARCHITECTURE.md`) defined as CSS variables
