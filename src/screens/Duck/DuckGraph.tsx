@@ -50,7 +50,8 @@ export function DuckGraph({ graph, uploading, onUpload }: DuckGraphProps) {
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-  const { viewportRef, cx, cy, view, resetView, containerHandlers } = useGraphViewport(positions, {
+  const { viewportRef, cx, cy, view, introGliding, introGlideMs, resetView, containerHandlers } =
+    useGraphViewport(positions, {
     startDrag,
     drag,
     endDrag,
@@ -89,7 +90,10 @@ export function DuckGraph({ graph, uploading, onUpload }: DuckGraphProps) {
       />
       <div
         className="absolute left-0 top-0 origin-top-left"
-        style={{ transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})` }}
+        style={{
+          transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})`,
+          transition: introGliding ? undefined : `transform ${introGlideMs}ms ease-in-out`,
+        }}
       >
         <svg
           className="pointer-events-none absolute overflow-visible"

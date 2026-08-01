@@ -10,6 +10,13 @@ const FIT_PADDING = 90; // room for card size around the extreme nodes
  * lose the graph off-screen and be unable to find it again. */
 const PAN_SLACK = 0.5;
 
+/** How far the opening animation closes in from the fit-everything view. */
+const INTRO_ZOOM_IN = 1.6;
+/** How long the whole board stays in frame before that move begins. */
+const INTRO_HOLD_MS = 900;
+/** Duration of the ease-in, mirrored by the CSS transition the caller applies. */
+const INTRO_GLIDE_MS = 1400;
+
 export interface ViewTransform {
   tx: number;
   ty: number;
@@ -95,9 +102,23 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userView, setUserView] = useState<ViewTransform | null>(null);
-  const view = userView ?? fitView(positions, size);
+  // The opening move: hold the whole board in frame for a beat so you can see
+  // how much is here, then ease in to the middle. Without it you land mid-zoom
+  // with no sense of what's off-screen.
+  const [introDone, setIntroDone] = useState(false);
+  const fitted = fitView(positions, size);
+  const view = userView ?? (introDone ? { ...fitted, scale: Math.min(fitted.scale * INTRO_ZOOM_IN, MAX_SCALE) } : fitted);
   const gesture = useRef<Gesture | null>(null);
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  // Fires once the graph has laid out and been measured -- not on mount, or it
+  // would animate away from an empty board before any card had a position.
+  const ready = size.w > 0 && positions.size > 0;
+  useEffect(() => {
+    if (!ready || introDone) return;
+    const timer = setTimeout(() => setIntroDone(true), INTRO_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [ready, introDone]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -226,6 +247,7 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
    * it take over again. */
   function resetView() {
     setUserView(null);
+    setIntroDone(true); // recentre means "show me everything", not "replay the intro"
   }
 
   return {
@@ -234,6 +256,10 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
     cx,
     cy,
     view,
+    /** True while the opening move is still running, so the caller can put a
+     * CSS transition on the transform for exactly that long. */
+    introGliding: ready && !introDone,
+    introGlideMs: INTRO_GLIDE_MS,
     resetView,
     containerHandlers: {
       onPointerDown,

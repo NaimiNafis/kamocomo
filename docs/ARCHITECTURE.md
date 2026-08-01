@@ -70,7 +70,7 @@ supabase/
   migrations/   versioned SQL — schema, RLS, triggers, RPCs (never edit an
                 applied migration; add a new file)
   seed.sql      demo activity types, events, duck spots (places ship in a migration)
-scripts/        generate-qr.ts, seed-demo-places.mjs, seed-demo-ducks.mjs, …
+scripts/        generate-qr.ts, seed-demo-places.mjs, seed-full-nodes.mjs, …
 img/
   marks/        custom duck + exclamation SVG marks (no stock/AI art)
   kamogawa/     real Kamogawa photos, incl. the shared placeholder image
@@ -237,10 +237,14 @@ an animation library — ~50KB of runtime for two transforms is a poor trade on 
 screen built for flaky outdoor signal.
 
 Mains with overflowed subs also get a "see earlier posts" link into the archive.
-**Adding a sub is a dedicated "+" node** beside each main (colored like it); a
-place-level "post an activity" button creates a new main, and its type picker
-carries ten seeded types plus a "+" that creates one through
-`create_activity_type` (colour assigned server-side from the §4.1 palette).
+**Adding a sub is a dedicated "+" node** beside each main (colored like it),
+carrying nothing but a "+" — at card size a caption was two lines of small type
+explaining a symbol that already says it, so the label survives only as the
+accessible name. A place-level "post an activity" button creates a new main, and
+its type picker carries ten seeded types plus a "+" that creates one through
+`create_activity_type` (colour assigned server-side from the §4.1 palette). **A
+photo is required** on every post: text-only cards fall back to the shared
+placeholder, which makes them all look like the same post.
 
 **There is no report button** — see Moderation below.
 
@@ -251,6 +255,13 @@ nodes**. Panning is clamped to roughly half a viewport past the outermost card
 and a **recenter control** restores the auto-fit transform — between them you
 can't pan into empty space and lose the graph, which an unbounded canvas
 otherwise makes easy.
+
+The board **opens zoomed out**, holds the whole graph in frame for a beat, then
+eases in to the middle, so you see how much is here before you're in among it.
+Only that opening move is animated — drags and pinches track the finger with no
+easing lag. Every node is draggable, the duck and its photos included; that
+depends on `data-node-id` being present on the wrapper, which is what the
+viewport hook hit-tests for.
 
 Realtime keeps the board current: any insert/update to `activities` or `votes`
 triggers a debounced refetch.

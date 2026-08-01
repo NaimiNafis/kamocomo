@@ -95,7 +95,8 @@ export function ToukouMap() {
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-  const { viewportRef, cx, cy, view, resetView, containerHandlers } = useGraphViewport(positions, {
+  const { viewportRef, cx, cy, view, introGliding, introGlideMs, resetView, containerHandlers } =
+    useGraphViewport(positions, {
     startDrag,
     drag,
     endDrag,
@@ -236,7 +237,12 @@ export function ToukouMap() {
       <div ref={viewportRef} className="absolute inset-0 touch-none" {...containerHandlers}>
         <div
           className="absolute left-0 top-0 origin-top-left"
-          style={{ transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})` }}
+          style={{
+            transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})`,
+            // Only the opening move is animated; dragging and pinching must
+            // track the finger exactly, with no easing lag.
+            transition: introGliding ? undefined : `transform ${introGlideMs}ms ease-in-out`,
+          }}
         >
           <svg
             className="pointer-events-none absolute overflow-visible"
@@ -263,9 +269,15 @@ export function ToukouMap() {
 
           {layoutNodes.map((ln) => {
             const pos = positionOf(ln.id);
+            // `data-node-id` is what useGraphViewport looks for to start a
+            // node drag -- without it a pointer-down here falls through to
+            // panning the whole board, which is why the duck and its photos
+            // couldn't be moved. Add cards are <button>s, and the handler
+            // short-circuits on those, so they still click rather than drag.
             const wrap = (children: React.ReactNode, extra?: string) => (
               <div
                 key={ln.id}
+                data-node-id={ln.id}
                 className={`absolute -translate-x-1/2 -translate-y-1/2 ${extra ?? ''}`}
                 style={{ left: pos.x, top: pos.y }}
               >
@@ -293,6 +305,7 @@ export function ToukouMap() {
                     {duck.earned ? `✓ ${t('duck.stamped')}` : t('duck.notStamped')}
                   </span>
                 </div>,
+                'cursor-grab active:cursor-grabbing',
               );
             }
 

@@ -22,8 +22,8 @@ interface ComposerProps {
 
 /**
  * Shared composer for creating a main or a sub (§5.5). Mains pick an activity
- * type; subs inherit their parent's, so the type picker is main-only. Photo
- * is optional in both.
+ * type; subs inherit their parent's, so the type picker is main-only. A photo
+ * is required in both.
  */
 export function Composer({
   mode,
@@ -70,8 +70,14 @@ export function Composer({
     [photoFile],
   );
 
+  // A photo is required, not optional: the board is a picture of what the
+  // riverbank looks like right now, and text-only cards fall back to the shared
+  // placeholder, which makes every one of them look like the same post.
   const canSubmit =
-    !submitting && phrase.trim().length > 0 && (mode === 'sub' || activityTypeId !== null);
+    !submitting &&
+    phrase.trim().length > 0 &&
+    photoFile !== null &&
+    (mode === 'sub' || activityTypeId !== null);
 
   function handleSubmit() {
     if (!canSubmit) return;
@@ -184,7 +190,9 @@ export function Composer({
             )}
             {photoFile ? t('composer.changePhoto') : t('composer.addPhoto')}
           </button>
-          <p className="mt-1 font-ui text-xs text-kamo-ink/50">{t('composer.photoOptional')}</p>
+          {!photoFile && (
+            <p className="mt-1 font-ui text-xs text-kamo-ink/50">{t('composer.photoRequired')}</p>
+          )}
         </div>
 
         {error && <p className="mt-3 font-ui text-sm text-kamo-sunset">{t('composer.error')}</p>}

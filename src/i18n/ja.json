@@ -68,13 +68,11 @@
     "error": "活動を読み込めませんでした。",
     "placeEmpty": "この場所にはまだ活動がありません。最初の投稿をしてみましょう。",
     "createMain": "活動を投稿",
-    "addSub": "この活動に加わる",
     "viewArchived": "過去の投稿を見る",
     "like": "いいね",
     "dislike": "よくないね",
     "recenter": "全体を表示",
-    "joinedCount_other": "{{count}}人が参加中",
-    "beTheFirst": "最初の一人になろう"
+    "addSub": "この活動に加わる"
   },
   "composer": {
     "mainTitle": "活動を投稿",
@@ -84,14 +82,14 @@
     "phrasePlaceholder": "例:静かだからここで書いています",
     "addPhoto": "写真を追加",
     "changePhoto": "写真を変更",
-    "photoOptional": "写真は任意",
     "submit": "投稿",
     "submitting": "投稿中…",
     "cancel": "キャンセル",
     "error": "投稿できませんでした。もう一度お試しください。",
     "otherType": "その他",
     "otherTypePlaceholder": "活動の名前",
-    "otherTypeAdd": "追加"
+    "otherTypeAdd": "追加",
+    "photoRequired": "写真が必要です"
   },
   "mapStyle": {
     "realistic": "3D",

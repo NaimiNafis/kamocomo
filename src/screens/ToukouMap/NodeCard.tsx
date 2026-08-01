@@ -165,15 +165,9 @@ export function NodeCard({ node, onLike, onDislike, onViewArchived }: NodeCardPr
           </p>
         )}
 
-        {isMain ? (
-          // No thumbs on a main. Its standing is the count below, which doubles
-          // as the nudge to add to it.
-          <p className="mt-1 font-ui opacity-80" style={{ fontSize: 10 }}>
-            {node.subCount > 0
-              ? t('toukou.joinedCount', { count: node.subCount })
-              : t('toukou.beTheFirst')}
-          </p>
-        ) : (
+        {/* A main carries no vote buttons and no join count -- its standing is
+            the ring, which is already sized by how many children it drew. */}
+        {!isMain && (
           <div className="mt-1.5 flex items-center gap-1">
             <VoteButton
               count={node.likes}

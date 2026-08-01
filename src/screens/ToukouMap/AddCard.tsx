@@ -9,11 +9,14 @@ interface AddCardProps {
 }
 
 /**
- * The "add" node on a graph -- a blank card the size of a sub card with a "+"
- * and a caption (matching the way sub cards carry a phrase), reading as one
- * empty slot to fill. Shared by the toukou board's add-sub node and the duck
- * graph's add-photo node. It's a <button>, so the graph's container-level
- * pointer handler leaves it alone and its own click fires.
+ * The "add" node on a graph -- a blank card the size of a sub card carrying
+ * nothing but a "+", reading as one empty slot to fill. The caption came out
+ * because at card size it was two lines of small type explaining a symbol that
+ * already says it; `label` survives as the accessible name.
+ *
+ * Shared by the toukou board's add-sub node and the duck graph's add-photo
+ * node. It's a <button>, so the graph's container-level pointer handler leaves
+ * it alone and its own click fires.
  */
 export function AddCard({ color, label, disabled, onClick, testId }: AddCardProps) {
   return (
@@ -23,14 +26,11 @@ export function AddCard({ color, label, disabled, onClick, testId }: AddCardProp
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex w-24 flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed bg-kamo-stone px-2 shadow-lg disabled:opacity-50"
+      className="flex w-24 items-center justify-center rounded-2xl border-2 border-dashed bg-kamo-stone shadow-lg transition-transform duration-150 hover:scale-[1.03] active:scale-[0.96] disabled:opacity-50"
       style={{ height: 112, borderColor: `${color}66` }}
     >
-      <span className="text-3xl font-light leading-none" style={{ color }}>
+      <span className="text-4xl font-light leading-none" style={{ color }}>
         +
-      </span>
-      <span className="line-clamp-2 text-center font-ui text-[10px] leading-snug text-kamo-ink/60">
-        {label}
       </span>
     </button>
   );

@@ -70,14 +70,11 @@
     "error": "Couldn't load activities.",
     "placeEmpty": "No activities here yet. Post the first one.",
     "createMain": "Post an activity",
-    "addSub": "Add to this activity",
     "viewArchived": "See earlier posts",
     "like": "Like",
     "dislike": "Dislike",
     "recenter": "Show everything",
-    "joinedCount_one": "{{count}} person joined in",
-    "joinedCount_other": "{{count}} people joined in",
-    "beTheFirst": "Be the first to join in"
+    "addSub": "Add to this activity"
   },
   "composer": {
     "mainTitle": "Post an activity",
@@ -87,14 +84,14 @@
     "phrasePlaceholder": "e.g. I write here because it's calm",
     "addPhoto": "Add a photo",
     "changePhoto": "Change photo",
-    "photoOptional": "Photo optional",
     "submit": "Post",
     "submitting": "Posting…",
     "cancel": "Cancel",
     "error": "Couldn't post. Try again.",
     "otherType": "Other",
     "otherTypePlaceholder": "Name the activity",
-    "otherTypeAdd": "Add"
+    "otherTypeAdd": "Add",
+    "photoRequired": "A photo is required"
   },
   "mapStyle": {
     "realistic": "3D",
