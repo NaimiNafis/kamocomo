@@ -6,6 +6,7 @@ import type { DuckGraph as DuckGraphData, DuckNode } from '../../lib/duck';
 import { useForceGraph, type GraphNode } from '../ToukouMap/useForceGraph';
 import { useGraphViewport } from '../ToukouMap/useGraphViewport';
 import { AddCard } from '../ToukouMap/AddCard';
+import { RecenterIcon } from '../../components/icons';
 
 const EDGE_OFFSET = 4000;
 const ADD_PREFIX = 'add:';
@@ -21,10 +22,8 @@ function readableText(hex: string): string {
 
 interface DuckGraphProps {
   graph: DuckGraphData;
-  reportedIds: Set<string>;
   uploading: boolean;
   onUpload: (duckSpotId: string, file: File) => void;
-  onReport: (postId: string) => void;
 }
 
 /**
@@ -33,7 +32,7 @@ interface DuckGraphProps {
  * photo. Reuses the same force layout + pan/pinch viewport as the activity
  * board.
  */
-export function DuckGraph({ graph, reportedIds, uploading, onUpload, onReport }: DuckGraphProps) {
+export function DuckGraph({ graph, uploading, onUpload }: DuckGraphProps) {
   const { t, i18n } = useTranslation();
   const isJa = i18n.language.startsWith('ja');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +50,7 @@ export function DuckGraph({ graph, reportedIds, uploading, onUpload, onReport }:
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-  const { viewportRef, cx, cy, view, containerHandlers } = useGraphViewport(positions, {
+  const { viewportRef, cx, cy, view, resetView, containerHandlers } = useGraphViewport(positions, {
     startDrag,
     drag,
     endDrag,
@@ -73,6 +72,14 @@ export function DuckGraph({ graph, reportedIds, uploading, onUpload, onReport }:
 
   return (
     <div ref={viewportRef} className="absolute inset-0 touch-none" {...containerHandlers}>
+      <button
+        type="button"
+        onClick={resetView}
+        aria-label={t('toukou.recenter')}
+        className="absolute bottom-4 left-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-kamo-ink/15 bg-kamo-stone/90 text-kamo-ink shadow-lg backdrop-blur"
+      >
+        <RecenterIcon />
+      </button>
       <input
         ref={fileInputRef}
         type="file"
@@ -137,12 +144,7 @@ export function DuckGraph({ graph, reportedIds, uploading, onUpload, onReport }:
               {node.kind === 'main' ? (
                 <DuckMainCard node={node} name={isJa ? node.nameJa : node.nameEn} />
               ) : (
-                <DuckPhotoCard
-                  node={node}
-                  reported={reportedIds.has(node.id)}
-                  reportLabel={reportedIds.has(node.id) ? t('duck.reported') : t('duck.report')}
-                  onReport={() => onReport(node.id)}
-                />
+                <DuckPhotoCard node={node} />
               )}
             </div>
           );
@@ -166,37 +168,15 @@ function DuckMainCard({ node, name }: { node: DuckNode; name: string }) {
   );
 }
 
-function DuckPhotoCard({
-  node,
-  reported,
-  reportLabel,
-  onReport,
-}: {
-  node: DuckNode;
-  reported: boolean;
-  reportLabel: string;
-  onReport: () => void;
-}) {
+function DuckPhotoCard({ node }: { node: DuckNode }) {
   return (
-    <div className="relative w-24 overflow-hidden rounded-2xl shadow-lg" style={{ backgroundColor: node.color }}>
+    <div className="w-24 overflow-hidden rounded-2xl shadow-lg" style={{ backgroundColor: node.color }}>
       <img
         src={node.photoUrl ?? placeholderPhoto}
         alt=""
         className="block aspect-square w-full object-cover"
         draggable={false}
       />
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onReport();
-        }}
-        aria-label={reportLabel}
-        className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full font-ui"
-        style={{ fontSize: 10, backgroundColor: 'rgba(0,0,0,0.25)', color: '#E9E4D8', opacity: reported ? 1 : 0.8 }}
-      >
-        {reported ? '✓' : '⚑'}
-      </button>
     </div>
   );
 }

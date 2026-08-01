@@ -106,8 +106,9 @@ MAIN MAP (Google Maps 3D, Kamogawa-corridor-locked)
        v
   /toukou?place=<id>  (that place's board)        /duck
   MANY mains, each its own color, subs lighter;    10 duck nodes + photo subs;
-  thumbs up/down; a "+" node adds a sub;           tap a duck's "+" to post a
-  "post an activity" adds a main; report (reason)  photo; 10-slot stamp card
+  subs vote, mains rated by child count;           tap a duck's "+" to post a
+  a "+" node adds a sub; "post an activity"        photo; 10-slot stamp card
+  adds a main; 10 dislikes auto-hides a post
   -> /archive?main=<id>                            -> /duck/scan -> stamp -> certificate
 ```
 
@@ -221,15 +222,35 @@ with collision radii sized to each card's full bounding circle and a
 synchronous pre-warm before first paint, so even a busy board opens already
 settled instead of visibly untangling.
 
-A node card shows a photo (or the shared placeholder), the phrase, and thumbs
-up/down (one vote per user, switchable); mains with overflowed subs also get a
-"see earlier posts" link into the archive. **Adding a sub is a dedicated "+"
-node** beside each main (colored like it); a place-level "post an activity"
-button creates a new main here. The report button (every card) opens a reason
-picker (inappropriate / spam / off-topic / other). The pan / wheel / pinch /
-node-drag interaction is a shared `useGraphViewport` hook (also used by the
-duck graph): one finger pans or drags a node, and a second finger pinch-zooms
-about the midpoint **even when both fingers are on nodes**.
+A node card shows a photo (or the shared placeholder), its phrase, and a **ring
+that thickens as it earns standing** — nothing at zero, so the rings that exist
+read as signal. The two kinds are rated differently on purpose: a **sub** votes
+(one per user, switchable) and its ring follows the net score, while a **main
+has no vote buttons** and its ring follows how many children it drew. On a sub
+the ring turns `--kamo-sunset` once the score goes negative, so a post drifting
+toward auto-hide warns before it goes.
+
+The vote control is a pill that lifts on hover, squashes on press, and fills its
+thumb in `--kamo-moss` / `--kamo-sunset`. Icon and count only, no label: two
+have to fit inside a 96px sub card. Done with Tailwind transitions rather than
+an animation library — ~50KB of runtime for two transforms is a poor trade on a
+screen built for flaky outdoor signal.
+
+Mains with overflowed subs also get a "see earlier posts" link into the archive.
+**Adding a sub is a dedicated "+" node** beside each main (colored like it); a
+place-level "post an activity" button creates a new main, and its type picker
+carries ten seeded types plus a "+" that creates one through
+`create_activity_type` (colour assigned server-side from the §4.1 palette).
+
+**There is no report button** — see Moderation below.
+
+The pan / wheel / pinch / node-drag interaction is a shared `useGraphViewport`
+hook (also used by the duck graph): one finger pans or drags a node, and a
+second finger pinch-zooms about the midpoint **even when both fingers are on
+nodes**. Panning is clamped to roughly half a viewport past the outermost card
+and a **recenter control** restores the auto-fit transform — between them you
+can't pan into empty space and lose the graph, which an unbounded canvas
+otherwise makes easy.
 
 Realtime keeps the board current: any insert/update to `activities` or `votes`
 triggers a debounced refetch.
@@ -259,7 +280,7 @@ edit an applied migration, add a new file). Summary:
 | Table | Purpose |
 |---|---|
 | `profiles` | One row per anonymous user; nationality/age/gender from onboarding |
-| `activity_types` | Seeded palette (writing, reading, walking, music, yoga…) |
+| `activity_types` | Ten seeded types (writing, reading, walking, music, yoga, talking, eating, sketching, exercise, resting). Visitors can add more via the `create_activity_type` RPC, which assigns the colour server-side; `created_by` marks those. A user-made type exists only in the language it was typed in |
 | `places` | Riverbank locations, one per duck spot. Each links 1:1 to a `duck_spot` via `duck_spot_id` (`20260801120000`), and a place without one is rejected by a CHECK (`20260801170000`) — so the 10 places *are* the 10 ducks. The earlier 8- and 16-place sets, and the activities posted at them, were deleted in `20260801170000` |
 | `events` | Daily gathering windows; today's is upserted on read by `ensure_todays_event()` |
 | `activities` | Both mains and subs (`kind`); mains carry `place_id` + `event_id`; also `parent_id`, `activity_type`, `photo_url`, `phrase`, `lat/lng`, `likes`/`dislikes`, `archived`, `hidden` |
@@ -268,7 +289,7 @@ edit an applied migration, add a new file). Summary:
 | `duck_spots` | The 10 physical stamp locations / ducks, each with an opaque `qr_token` |
 | `stamps` | One row per `(user_id, duck_spot_id)` a user has earned |
 | `certificates` | Issued once a user has 10 distinct stamps |
-| `reports` | Moderation flags, with a reason, on an activity or duck post |
+| `reports` | Legacy. In-app reporting was replaced by dislike-driven auto-hide; the table stays so it can return without a schema change |
 | `qr_entries` | Analytics: which photogenic-spot QR drove an app entry |
 
 Enforced server-side (RLS policies, triggers, or the `scan_duck_spot` RPC —
@@ -283,8 +304,17 @@ client checks are UX sugar only):
 - **Stamp geofence**: `scan_duck_spot` recomputes the distance server-side
   from whatever point the client submits and only awards the stamp within
   ~120 m — the client never grants a stamp itself.
-- **Moderation**: every feed/map query filters `hidden = true`; the team
-  flips it by hand in Supabase Studio after reviewing `reports`.
+- **Moderation**: every feed/map query filters `hidden = true`. Two things set
+  it. The vote-count trigger hides any post reaching **10 dislikes** — this
+  replaced in-app reporting, which is why the thumbs are load-bearing. It is
+  deliberately one-way: dropping back under the threshold does not un-hide,
+  since coming back should be a human decision, not something a vote toggles.
+  The team can still flip `hidden` by hand in Studio.
+
+  The trade is explicit: with no report queue there is no human between ten
+  annoyed users and someone else's post. `hidden` rather than `DELETE` is what
+  keeps that recoverable — and there is no DELETE policy on `activities` at
+  all, so removal could never have come from the client.
 
 ## Identity — no accounts
 

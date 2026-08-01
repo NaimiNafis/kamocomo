@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { uploadPhoto, reportContent, subShade, type ToukouEdge } from './toukou';
+import { uploadPhoto, subShade, type ToukouEdge } from './toukou';
 import { KAMOGAWA_DELTA, getPosition } from './geo';
 import { duckColor } from './ducks';
 
@@ -96,10 +96,6 @@ export async function createDuckPost(userId: string, photoFile: File, duckSpotId
     .from('duck_posts')
     .insert({ author_id: userId, photo_url: photoUrl, duck_spot_id: duckSpotId, lat, lng });
   if (error) throw error;
-}
-
-export function reportDuckPost(reporterId: string, postId: string): Promise<void> {
-  return reportContent(reporterId, 'duck_post', postId);
 }
 
 /** Realtime: new duck photos appear in the graph without a reload. */

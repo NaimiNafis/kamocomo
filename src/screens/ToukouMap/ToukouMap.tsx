@@ -9,7 +9,6 @@ import {
   fetchActivityTypes,
   fetchPlaceBoard,
   getActiveEvent,
-  reportContent,
   setVote,
   subscribeToToukou,
   type ActivityType,
@@ -25,7 +24,7 @@ import { StaleBanner } from '../../components/StaleBanner';
 import { NodeCard } from './NodeCard';
 import { AddCard } from './AddCard';
 import { Composer, type ComposerResult } from './Composer';
-import { ReportDialog, type ReportReason } from './ReportDialog';
+import { RecenterIcon } from '../../components/icons';
 import { useForceGraph, type GraphNode } from './useForceGraph';
 import { useGraphViewport } from './useGraphViewport';
 
@@ -62,8 +61,6 @@ export function ToukouMap() {
   const [composer, setComposer] = useState<ComposerState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
-  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
-  const [reportTarget, setReportTarget] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,7 +95,7 @@ export function ToukouMap() {
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-  const { viewportRef, cx, cy, view, containerHandlers } = useGraphViewport(positions, {
+  const { viewportRef, cx, cy, view, resetView, containerHandlers } = useGraphViewport(positions, {
     startDrag,
     drag,
     endDrag,
@@ -171,18 +168,6 @@ export function ToukouMap() {
       else await setVote(userId, node.id, value);
     } finally {
       void refetchBoard();
-    }
-  }
-
-  async function handleReportSubmit(reason: ReportReason) {
-    if (!userId || !reportTarget) return;
-    const id = reportTarget;
-    setReportTarget(null);
-    setReportedIds((prev) => new Set(prev).add(id));
-    try {
-      await reportContent(userId, 'activity', id, reason);
-    } catch {
-      /* leave it marked reported in the UI regardless */
     }
   }
 
@@ -370,12 +355,8 @@ export function ToukouMap() {
               >
                 <NodeCard
                   node={node}
-                  reported={reportedIds.has(node.id)}
                   onLike={() => void handleVote(node, 1)}
                   onDislike={() => void handleVote(node, -1)}
-                  onReport={() => {
-                    if (!reportedIds.has(node.id)) setReportTarget(node.id);
-                  }}
                   onViewArchived={() => navigate(`/archive?main=${node.id}`)}
                 />
               </div>
@@ -444,7 +425,17 @@ export function ToukouMap() {
 
       {/* Place-level "post an activity" (the daily gathering is always live) */}
       {status === 'ready' && (
-        <div className="absolute inset-x-0 bottom-0 flex justify-center p-4">
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 p-4">
+          {/* The pan clamp stops you leaving the graph behind; this puts it all
+              back in frame in one tap when you've wandered. */}
+          <button
+            type="button"
+            onClick={resetView}
+            aria-label={t('toukou.recenter')}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-kamo-ink/15 bg-kamo-stone/90 text-kamo-ink shadow-lg backdrop-blur"
+          >
+            <RecenterIcon />
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -462,6 +453,7 @@ export function ToukouMap() {
         <Composer
           mode={composer.mode}
           activityTypes={activityTypes}
+          onTypeCreated={(type) => setActivityTypes((prev) => [...prev, type])}
           submitting={submitting}
           error={submitError}
           onSubmit={(result) => void handleComposerSubmit(result)}
@@ -469,12 +461,6 @@ export function ToukouMap() {
         />
       )}
 
-      {reportTarget && (
-        <ReportDialog
-          onSubmit={(reason) => void handleReportSubmit(reason)}
-          onCancel={() => setReportTarget(null)}
-        />
-      )}
     </div>
   );
 }

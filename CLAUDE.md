@@ -40,7 +40,7 @@ duck-spot QR stamp rally. Live at https://kamokamo.vercel.app.
 2. **Identity:** anonymous only. `lib/identity.ts` owns `signInAnonymously()`, session restore, and the local profile cache. Never build email/password auth.
 3. **Server-authoritative rules:** event-gating of main activities, the 10-sub cap → archive, one-vote-per-user, stamp uniqueness, and the duck-scan geofence are enforced in Postgres (RLS policies, triggers, or RPCs) — client checks are UX sugar only.
 4. **Map cost control:** the camera is locked to the Kamogawa corridor (`bounds`), with `minAltitude`/`maxAltitude` and a `maxTilt` cap, set in `applyKamogawaConstraints()` in `lib/map3d.ts`. Never remove these limits. They're lifted only for the intro flight and the marker-tap cinematic, and restored right after.
-5. **Moderation:** every feed/map query filters `hidden = true`. The report button opens a reason picker and inserts into `reports`.
+5. **Moderation:** every feed/map query filters `hidden = true`. There is **no in-app reporting** — voting replaced it: the vote-count trigger sets `hidden` on any post reaching 10 dislikes (one-way; un-hiding is a human decision in Studio). The `reports` table and its RLS stay in place, unused.
 6. **Offline-friendly:** every network call has a loading state, an error state with retry, and a cached fallback where it matters. Assume flaky outdoor mobile signal.
 7. **Routes** are fixed: `/` (intro → main map), `/?from=qr&spot=<slug>` (QR entry), `/toukou?place=<id>` (always entered from a specific place marker), `/archive`, `/duck`, `/duck/scan?spot=<qr_token>`. Don't rename them — physical QR codes will encode these URLs.
 

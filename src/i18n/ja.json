@@ -72,16 +72,9 @@
     "viewArchived": "過去の投稿を見る",
     "like": "いいね",
     "dislike": "よくないね",
-    "report": "報告",
-    "reported": "報告しました",
-    "reportTitle": "この投稿を報告",
-    "reportSubtitle": "どこが問題か教えてください。",
-    "reportReasons": {
-      "inappropriate": "不適切な内容",
-      "spam": "スパム",
-      "off_topic": "無関係な内容",
-      "other": "その他"
-    }
+    "recenter": "全体を表示",
+    "joinedCount_other": "{{count}}人が参加中",
+    "beTheFirst": "最初の一人になろう"
   },
   "composer": {
     "mainTitle": "活動を投稿",
@@ -95,7 +88,10 @@
     "submit": "投稿",
     "submitting": "投稿中…",
     "cancel": "キャンセル",
-    "error": "投稿できませんでした。もう一度お試しください。"
+    "error": "投稿できませんでした。もう一度お試しください。",
+    "otherType": "その他",
+    "otherTypePlaceholder": "活動の名前",
+    "otherTypeAdd": "追加"
   },
   "mapStyle": {
     "realistic": "3D",
@@ -112,8 +108,6 @@
     "stampButton": "スタンプカード",
     "testMode": "テストモード:現地にいなくてもどのQRでも読み取れる",
     "posting": "共有中…",
-    "report": "報告",
-    "reported": "報告しました",
     "stampCardTitle": "鴨スタンプラリー",
     "stampProgress": "{{earned}} / 10 スポット",
     "certificateLocked": "10個すべて集めると証明書が手に入ります。",

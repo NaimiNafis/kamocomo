@@ -8,7 +8,6 @@ import {
   fetchCertificate,
   fetchDuckGraph,
   fetchStampCard,
-  reportDuckPost,
   subscribeToDuckPosts,
   type DuckGraph as DuckGraphData,
   type StampCardSlot,
@@ -39,7 +38,6 @@ export function Duck() {
   const [slots, setSlots] = useState<StampCardSlot[]>([]);
   const [certIssuedAt, setCertIssuedAt] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [showCertificate, setShowCertificate] = useState(false);
   const [showStampCard, setShowStampCard] = useState(false);
   const [stale, setStale] = useState(false);
@@ -127,16 +125,6 @@ export function Duck() {
     }
   }
 
-  async function handleReport(postId: string) {
-    if (!userId || reportedIds.has(postId)) return;
-    setReportedIds((prev) => new Set(prev).add(postId));
-    try {
-      await reportDuckPost(userId, postId);
-    } catch {
-      /* keep it marked reported regardless */
-    }
-  }
-
   const hasCert = certIssuedAt !== null;
   const earned = slots.filter((s) => s.earned).length;
 
@@ -214,10 +202,8 @@ export function Duck() {
         <div className="relative flex-1 overflow-hidden border-t border-kamo-ink/10">
           <DuckGraph
             graph={graph}
-            reportedIds={reportedIds}
             uploading={uploading}
             onUpload={(spotId, file) => void handleUpload(spotId, file)}
-            onReport={(postId) => void handleReport(postId)}
           />
           {uploading && (
             <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">

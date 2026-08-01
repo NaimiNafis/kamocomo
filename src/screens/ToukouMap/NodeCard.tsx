@@ -2,6 +2,10 @@ import { useTranslation } from 'react-i18next';
 import type { ToukouNode } from '../../lib/toukou';
 import placeholderPhoto from '../../../img/kamogawa/placeholder-riverbank.jpg?url';
 
+const MOSS = '#7C8C5A'; // --kamo-moss, the approving side
+const SUNSET = '#E0885E'; // --kamo-sunset, the disapproving side
+const STONE = '#E9E4D8'; // --kamo-stone
+
 /** Dark or light text depending on the background's luminance, so phrases stay
  * legible on both saturated mains and pale subs. */
 function readableText(hex: string): string {
@@ -13,61 +17,138 @@ function readableText(hex: string): string {
   return luminance > 0.6 ? '#1C1C1A' : '#E9E4D8';
 }
 
-/** A single thumb glyph; the dislike button flips it upside down. */
-function ThumbIcon({ down }: { down?: boolean }) {
+/**
+ * A post's standing, drawn as a ring that thickens in steps. Nothing at zero,
+ * so the rings that do exist read as signal rather than as decoration.
+ *
+ * The two kinds of card feed it different numbers on purpose: a sub is rated by
+ * people voting on it, a main has no vote buttons and is rated by how many
+ * children it drew.
+ */
+function ratingRingWidth(magnitude: number): number {
+  if (magnitude >= 10) return 6;
+  if (magnitude >= 5) return 4;
+  if (magnitude >= 2) return 2;
+  return 0;
+}
+
+/** A single thumb; the dislike button flips it upside down. Filled or outlined
+ * depending on whether this is the vote you've cast. */
+function ThumbIcon({ down, filled }: { down?: boolean; filled: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="11"
-      height="11"
-      fill="currentColor"
+      width="13"
+      height="13"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth={filled ? 0 : 1.8}
+      strokeLinejoin="round"
       aria-hidden
-      className={down ? 'rotate-180' : undefined}
+      className={`shrink-0 transition-colors duration-300 ${down ? 'rotate-180' : ''}`}
     >
       <path d="M7 22H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3v11ZM9 22a1 1 0 0 1-1-1V10.72a1 1 0 0 1 .3-.71l6-6a1 1 0 0 1 1.06-.22c.38.14.64.5.64.9V8h4.5A2.5 2.5 0 0 1 23 10.5a2.47 2.47 0 0 1-.24 1.06l-3 6.42A2.5 2.5 0 0 1 17.5 22H9Z" />
     </svg>
   );
 }
 
+/**
+ * One vote control. Icon and count only — two of these have to sit inside a
+ * 96px sub card, so there is no room for a word alongside them.
+ *
+ * The motion is the reference button's, done with Tailwind rather than a
+ * physics library: it lifts on hover, squashes on press, and the thumb fills
+ * and takes the accent colour on hover or once cast. Adding ~50KB of animation
+ * runtime for two transforms would be a poor trade on a screen built for flaky
+ * outdoor signal.
+ */
+function VoteButton({
+  count,
+  down,
+  active,
+  accent,
+  label,
+  onClick,
+}: {
+  count: number;
+  down?: boolean;
+  active: boolean;
+  accent: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      aria-label={label}
+      aria-pressed={active}
+      className="group flex h-7 flex-1 items-center justify-center gap-1 rounded-full border font-ui transition-[transform,background-color,border-color] duration-150 hover:scale-[1.03] active:scale-[0.96]"
+      style={{
+        fontSize: 11,
+        color: active ? accent : STONE,
+        backgroundColor: active ? `${accent}2E` : 'rgba(255,255,255,0.14)',
+        borderColor: active ? accent : 'rgba(255,255,255,0.18)',
+      }}
+    >
+      <span
+        className="flex items-center transition-colors duration-300"
+        style={{ color: active ? accent : undefined }}
+      >
+        <span className="group-hover:hidden">
+          <ThumbIcon down={down} filled={active} />
+        </span>
+        {/* Hover swaps in the filled, accented thumb — the colour-morph beat
+            from the reference, without needing JS hover state. */}
+        <span className="hidden group-hover:inline" style={{ color: accent }}>
+          <ThumbIcon down={down} filled />
+        </span>
+      </span>
+      {count}
+    </button>
+  );
+}
+
 interface NodeCardProps {
   node: ToukouNode;
-  reported: boolean;
   onLike: () => void;
   onDislike: () => void;
-  onReport: () => void;
   onViewArchived: () => void;
 }
 
 /**
- * A single post in the toukou web (§5.5). Mains are larger and, when they have
- * overflowed subs, carry an "earlier posts" link to the archive; subs are
- * smaller. Adding a sub is a separate "+" node beside the main, not a button
- * on the card (item 5). Photo-less posts fall back to the shared riverbank
- * placeholder (§C6). The report button sits in the card's bottom-right corner
- * (§C5) and opens a reason picker elsewhere.
+ * A single post in the toukou web (§5.5).
+ *
+ * Mains are larger, carry no vote buttons, and show how many people have joined
+ * in; when they have overflowed subs they also link to the archive. Subs vote.
+ * Both wear a ring once they have standing — and on a sub that ring turns
+ * `--kamo-sunset` once the score goes negative, so a post drifting toward the
+ * 10-dislike auto-hide warns before it goes rather than vanishing without
+ * notice. Photo-less posts fall back to the shared placeholder (§C6).
  */
-export function NodeCard({
-  node,
-  reported,
-  onLike,
-  onDislike,
-  onReport,
-  onViewArchived,
-}: NodeCardProps) {
+export function NodeCard({ node, onLike, onDislike, onViewArchived }: NodeCardProps) {
   const { t } = useTranslation();
   const isMain = node.kind === 'main';
   const textColor = readableText(node.color);
   const width = isMain ? 128 : 96;
 
-  const stop = (fn: () => void) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    fn();
-  };
+  const score = isMain ? node.subCount : node.likes - node.dislikes;
+  const ringWidth = ratingRingWidth(Math.abs(score));
+  // Thickness carries magnitude, colour carries direction.
+  const ringColor = score < 0 ? SUNSET : node.color;
 
   return (
     <div
       className="relative overflow-hidden rounded-2xl shadow-lg"
-      style={{ width, backgroundColor: node.color, color: textColor }}
+      style={{
+        width,
+        backgroundColor: node.color,
+        color: textColor,
+        boxShadow: ringWidth ? `0 0 0 ${ringWidth}px ${ringColor}${score < 0 ? 'AA' : '66'}` : undefined,
+      }}
     >
       <img
         src={node.photoUrl ?? placeholderPhoto}
@@ -77,52 +158,48 @@ export function NodeCard({
         draggable={false}
       />
 
-      <div className="px-2 py-1.5 pb-5">
+      <div className="px-2 py-1.5 pb-2">
         {node.phrase && (
-          <p
-            className="line-clamp-2 font-ui leading-snug"
-            style={{ fontSize: isMain ? 11 : 10 }}
-          >
+          <p className="line-clamp-2 font-ui leading-snug" style={{ fontSize: isMain ? 11 : 10 }}>
             {node.phrase}
           </p>
         )}
 
-        <div className="mt-1 flex items-center gap-1 font-ui" style={{ fontSize: 11 }}>
-          <button
-            type="button"
-            onClick={stop(onLike)}
-            aria-label={t('toukou.like')}
-            aria-pressed={node.myVote === 1}
-            className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5"
-            style={{
-              backgroundColor: node.myVote === 1 ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.18)',
-              color: node.myVote === 1 ? '#1C1C1A' : textColor,
-            }}
-          >
-            <ThumbIcon />
-            {node.likes}
-          </button>
-          <button
-            type="button"
-            onClick={stop(onDislike)}
-            aria-label={t('toukou.dislike')}
-            aria-pressed={node.myVote === -1}
-            className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5"
-            style={{
-              backgroundColor:
-                node.myVote === -1 ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.18)',
-              color: node.myVote === -1 ? '#1C1C1A' : textColor,
-            }}
-          >
-            <ThumbIcon down />
-            {node.dislikes}
-          </button>
-        </div>
+        {isMain ? (
+          // No thumbs on a main. Its standing is the count below, which doubles
+          // as the nudge to add to it.
+          <p className="mt-1 font-ui opacity-80" style={{ fontSize: 10 }}>
+            {node.subCount > 0
+              ? t('toukou.joinedCount', { count: node.subCount })
+              : t('toukou.beTheFirst')}
+          </p>
+        ) : (
+          <div className="mt-1.5 flex items-center gap-1">
+            <VoteButton
+              count={node.likes}
+              active={node.myVote === 1}
+              accent={MOSS}
+              label={t('toukou.like')}
+              onClick={onLike}
+            />
+            <VoteButton
+              count={node.dislikes}
+              down
+              active={node.myVote === -1}
+              accent={SUNSET}
+              label={t('toukou.dislike')}
+              onClick={onDislike}
+            />
+          </div>
+        )}
 
         {isMain && node.hasArchivedSubs && (
           <button
             type="button"
-            onClick={stop(onViewArchived)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewArchived();
+            }}
             className="mt-1 block w-full text-left font-ui underline"
             style={{ fontSize: 9 }}
           >
@@ -130,20 +207,6 @@ export function NodeCard({
           </button>
         )}
       </div>
-
-      <button
-        type="button"
-        onClick={stop(onReport)}
-        aria-label={reported ? t('toukou.reported') : t('toukou.report')}
-        className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full font-ui"
-        style={{
-          fontSize: 10,
-          backgroundColor: 'rgba(0,0,0,0.15)',
-          opacity: reported ? 1 : 0.7,
-        }}
-      >
-        {reported ? '✓' : '⚑'}
-      </button>
     </div>
   );
 }

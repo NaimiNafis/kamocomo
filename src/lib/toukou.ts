@@ -15,6 +15,10 @@ export interface ToukouNode {
   likes: number;
   dislikes: number;
   myVote: 1 | -1 | null;
+  /** Mains only: how many live children. A main has no vote buttons -- this is
+   * its rating, on the reasoning that "it drew people in" is what's worth
+   * seeing at a glance on a board. */
+  subCount: number;
   hasArchivedSubs: boolean; // mains only -- drives the "archived" stub link
 }
 
@@ -169,6 +173,12 @@ export async function fetchPlaceBoard(
     mainsWithArchivedSubs = new Set(archived.map((a) => a.parent_id));
   }
 
+  // A main's rating is how many children it drew, so tally them per parent.
+  const subCountByMain = new Map<string, number>();
+  for (const sub of subs) {
+    if (sub.parent_id) subCountByMain.set(sub.parent_id, (subCountByMain.get(sub.parent_id) ?? 0) + 1);
+  }
+
   // Subs inherit their parent's activity_type, so a sub's own activity_type is
   // already the parent's hue -- its color is just the lighter shade of that.
   const nodes: ToukouNode[] = [...mains, ...subs].map((row) => {
@@ -183,6 +193,7 @@ export async function fetchPlaceBoard(
       likes: row.likes,
       dislikes: row.dislikes,
       myVote: voteByActivity.get(row.id) ?? null,
+      subCount: row.kind === 'main' ? (subCountByMain.get(row.id) ?? 0) : 0,
       hasArchivedSubs: row.kind === 'main' && mainsWithArchivedSubs.has(row.id),
     };
   });
@@ -256,6 +267,28 @@ export async function fetchActivityTypes(): Promise<ActivityType[]> {
     .order('name_en');
   if (error) throw error;
   return data;
+}
+
+/**
+ * Creates an activity type the seeded list doesn't cover, or returns the
+ * existing one when the name already matches. Goes through an RPC rather than a
+ * direct insert so the colour is assigned server-side from the §4.1 palette --
+ * a client able to insert freely could put an arbitrary hex on the board.
+ *
+ * A type named at post time only exists in the language it was typed in; the
+ * RPC stores the same string in both name columns.
+ */
+export async function createActivityType(name: string): Promise<ActivityType | null> {
+  const { data, error } = await supabase.rpc('create_activity_type', { p_name: name });
+  if (error) throw error;
+  const r = data as { status: string; id?: string; name_en?: string; name_ja?: string; color?: string };
+  if (r.status !== 'ok' || !r.id) return null;
+  return {
+    id: r.id,
+    name_en: r.name_en ?? name,
+    name_ja: r.name_ja ?? name,
+    color: r.color ?? '#6e8ca0',
+  };
 }
 
 // =========================================================================
@@ -375,25 +408,10 @@ export async function clearVote(userId: string, activityId: string): Promise<voi
   if (error) throw error;
 }
 
-// =========================================================================
-// Moderation
-// =========================================================================
-
-export async function reportContent(
-  reporterId: string,
-  targetType: 'activity' | 'duck_post',
-  targetId: string,
-  reason?: string,
-): Promise<void> {
-  const { error } = await supabase.from('reports').insert({
-    reporter_id: reporterId,
-    target_type: targetType,
-    target_id: targetId,
-    reason: reason ?? null,
-  });
-  // Duplicate report (unique constraint) is a silent no-op, not an error.
-  if (error && error.code !== '23505') throw error;
-}
+// Moderation has no in-app report button any more. Two things replace it: a
+// post that reaches 10 dislikes hides itself (the vote-count trigger, see
+// 20260801200000), and the team can still flip `hidden` by hand in Studio.
+// Every feed query filters `hidden`, so both routes take effect everywhere.
 
 // =========================================================================
 // Event gating: the gathering is a daily-rotating window computed from the

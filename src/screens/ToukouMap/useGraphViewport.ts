@@ -5,6 +5,11 @@ const MIN_SCALE = 0.4;
 const MAX_SCALE = 2;
 const FIT_PADDING = 90; // room for card size around the extreme nodes
 
+/** How far past the outermost card you may pan, as a fraction of the viewport.
+ * Enough slack to drag a node to the edge and work comfortably, not enough to
+ * lose the graph off-screen and be unable to find it again. */
+const PAN_SLACK = 0.5;
+
 export interface ViewTransform {
   tx: number;
   ty: number;
@@ -32,6 +37,39 @@ function fitView(positions: Map<string, NodePosition>, size: { w: number; h: num
     Math.max(MIN_SCALE, Math.min((size.w - FIT_PADDING) / Math.max(maxX - minX, 1), (size.h - FIT_PADDING) / Math.max(maxY - minY, 1))),
   );
   return { scale, tx: (-(minX + maxX) / 2) * scale, ty: (-(minY + maxY) / 2) * scale };
+}
+
+/**
+ * Keeps the content within reach. `tx`/`ty` place the graph's origin, so the
+ * bounds on them come from the node extents mapped through the current scale;
+ * anything further than PAN_SLACK viewports beyond the outermost card is
+ * clamped away. Without this the canvas is infinite and it's entirely possible
+ * to pan into empty space and never find the cards again.
+ */
+function clampPan(
+  view: ViewTransform,
+  positions: Map<string, NodePosition>,
+  size: { w: number; h: number },
+): ViewTransform {
+  const pts = [...positions.values()];
+  if (pts.length === 0 || size.w === 0) return view;
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const slackX = size.w * PAN_SLACK;
+  const slackY = size.h * PAN_SLACK;
+  // Screen position of a node = centre + t + world * scale. Require the extreme
+  // nodes to stay within half a viewport (plus slack) of the centre.
+  const limit = (min: number, max: number, half: number, slack: number) => ({
+    lo: -max * view.scale - half - slack,
+    hi: -min * view.scale + half + slack,
+  });
+  const x = limit(Math.min(...xs), Math.max(...xs), size.w / 2, slackX);
+  const y = limit(Math.min(...ys), Math.max(...ys), size.h / 2, slackY);
+  return {
+    scale: view.scale,
+    tx: Math.min(x.hi, Math.max(x.lo, view.tx)),
+    ty: Math.min(y.hi, Math.max(y.lo, view.ty)),
+  };
 }
 
 export interface GraphDragHandlers {
@@ -134,13 +172,25 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
       const { dist, midX, midY } = pinchMetrics();
       const rect = viewportRef.current!.getBoundingClientRect();
       const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, g.startScale * (dist / g.startDist)));
-      setUserView({ scale, tx: midX - rect.left - cx - g.worldX * scale, ty: midY - rect.top - cy - g.worldY * scale });
+      setUserView(
+        clampPan(
+          { scale, tx: midX - rect.left - cx - g.worldX * scale, ty: midY - rect.top - cy - g.worldY * scale },
+          positions,
+          size,
+        ),
+      );
     } else if (g.kind === 'pan') {
-      setUserView((v) => ({
-        scale: v?.scale ?? view.scale,
-        tx: g.startTx + (e.clientX - g.startX),
-        ty: g.startTy + (e.clientY - g.startY),
-      }));
+      setUserView((v) =>
+        clampPan(
+          {
+            scale: v?.scale ?? view.scale,
+            tx: g.startTx + (e.clientX - g.startX),
+            ty: g.startTy + (e.clientY - g.startY),
+          },
+          positions,
+          size,
+        ),
+      );
     } else {
       const world = toWorld(e.clientX, e.clientY);
       drag.drag(g.id, world.x, world.y);
@@ -171,12 +221,20 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
     });
   }
 
+  /** Drop back to the auto-fit transform, framing every node. `fitView()` is
+   * already what renders before the first interaction, so this is just letting
+   * it take over again. */
+  function resetView() {
+    setUserView(null);
+  }
+
   return {
     viewportRef,
     size,
     cx,
     cy,
     view,
+    resetView,
     containerHandlers: {
       onPointerDown,
       onPointerMove,

@@ -74,16 +74,10 @@
     "viewArchived": "See earlier posts",
     "like": "Like",
     "dislike": "Dislike",
-    "report": "Report",
-    "reported": "Reported",
-    "reportTitle": "Report this post",
-    "reportSubtitle": "Let us know what's wrong with it.",
-    "reportReasons": {
-      "inappropriate": "Inappropriate content",
-      "spam": "Spam",
-      "off_topic": "Off-topic",
-      "other": "Other"
-    }
+    "recenter": "Show everything",
+    "joinedCount_one": "{{count}} person joined in",
+    "joinedCount_other": "{{count}} people joined in",
+    "beTheFirst": "Be the first to join in"
   },
   "composer": {
     "mainTitle": "Post an activity",
@@ -97,7 +91,10 @@
     "submit": "Post",
     "submitting": "Posting…",
     "cancel": "Cancel",
-    "error": "Couldn't post. Try again."
+    "error": "Couldn't post. Try again.",
+    "otherType": "Other",
+    "otherTypePlaceholder": "Name the activity",
+    "otherTypeAdd": "Add"
   },
   "mapStyle": {
     "realistic": "3D",
@@ -114,8 +111,6 @@
     "stampButton": "Stamp card",
     "testMode": "Test mode: scan any QR without being there",
     "posting": "Sharing…",
-    "report": "Report",
-    "reported": "Reported",
     "stampCardTitle": "Duck stamp rally",
     "stampProgress": "{{earned}} / 10 spots",
     "certificateLocked": "Collect all 10 stamps to unlock your certificate.",
