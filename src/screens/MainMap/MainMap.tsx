@@ -11,6 +11,7 @@ import {
   flyToPlace,
   initialCamera,
   loadMaps3d,
+  onMapsAuthFailure,
   orbitPlace,
   setHomeView,
   applyMapView,
@@ -285,6 +286,12 @@ export function MainMap() {
     // navigate()/t() are stable references, safe to omit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Quota exhausted, referrer rejected, billing lapsed: Google refuses the map
+  // long after the library promise resolved, so the load path can't catch it.
+  // This turns that into the app's own error state with a retry, instead of
+  // Google's grey panel.
+  useEffect(() => onMapsAuthFailure(() => setMapFailed(true)), []);
 
   // §A.2a photogenic-spot QR entry: log the analytics row once identity is
   // ready (a hidden-QR scan can be the visitor's very first touch). Read-only

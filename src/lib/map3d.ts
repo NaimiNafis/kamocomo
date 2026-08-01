@@ -60,6 +60,50 @@ const MAX_TILT_DEGREES = 55;
 
 let optionsSet = false;
 
+declare global {
+  interface Window {
+    /** Google calls this on auth failures. Not in @types/google.maps. */
+    gm_authFailure?: () => void;
+  }
+}
+
+const authFailureHandlers = new Set<() => void>();
+
+/**
+ * Fires when Google rejects the map: `OverQuotaMapError`,
+ * `RefererNotAllowedMapError`, `BillingNotEnabledMapError` and friends.
+ *
+ * This exists because those failures are **not catchable** where you'd expect.
+ * `importLibrary()` resolves fine — the library loaded, it's the *map* that was
+ * refused — so `loadMaps3d().catch()` never sees them. Google's only signal is
+ * the `window.gm_authFailure` global, and without hooking it the app shows
+ * Google's grey "Oops!" panel instead of its own error state with a retry.
+ *
+ * Returns an unsubscriber.
+ */
+export function onMapsAuthFailure(handler: () => void): () => void {
+  authFailureHandlers.add(handler);
+  return () => authFailureHandlers.delete(handler);
+}
+
+/**
+ * Assignments to a map Google refused are unsafe: its internals were never
+ * initialised, so setting `bounds` or `center` throws from inside the Maps
+ * bundle. That surfaced as `TypeError: can't access property "hi", a.lat is
+ * undefined` in the `bounds` setter, on top of the real error.
+ *
+ * Swallowing is deliberate here. The map is already broken and the auth-failure
+ * hook above has told the UI; a second, unhandled exception from camera setup
+ * adds nothing and takes the rest of the screen down with it.
+ */
+function safely(apply: () => void): void {
+  try {
+    apply();
+  } catch {
+    /* map never initialised -- see onMapsAuthFailure for what the user sees */
+  }
+}
+
 /**
  * Loads the `maps3d` library. The Maps JS API is fetched from Google's CDN on
  * first call and cached by the loader, so repeat calls are cheap.
@@ -76,6 +120,9 @@ let optionsSet = false;
  */
 export function loadMaps3d(): Promise<Maps3D> {
   if (!optionsSet) {
+    // Installed before the API script loads, which is the only time Google
+    // reliably picks it up.
+    window.gm_authFailure = () => authFailureHandlers.forEach((handler) => handler());
     const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     setOptions({ key, v: 'weekly' });
     optionsSet = true;
@@ -124,10 +171,12 @@ const PLACE_VIEW_TILT = 52; // was Cesium pitch -38°
 
 /** Instantly places the camera at the resting home view (no animation). */
 export function setHomeView(map: Map3D): void {
-  map.center = HERO_VIEW.center;
-  map.range = HERO_VIEW.range;
-  map.tilt = HERO_VIEW.tilt;
-  map.heading = HERO_VIEW.heading;
+  safely(() => {
+    map.center = HERO_VIEW.center;
+    map.range = HERO_VIEW.range;
+    map.tilt = HERO_VIEW.tilt;
+    map.heading = HERO_VIEW.heading;
+  });
 }
 
 /**
@@ -264,17 +313,20 @@ export function orbitPlace(
  * MainMap lifts them for those and restores them after.
  */
 export function applyKamogawaConstraints(map: Map3D): () => void {
-  map.bounds = KAMOGAWA_BOUNDS;
-  map.minAltitude = MIN_ALTITUDE_M;
-  map.maxAltitude = MAX_ALTITUDE_M;
-  map.maxTilt = MAX_TILT_DEGREES;
+  safely(() => {
+    map.bounds = KAMOGAWA_BOUNDS;
+    map.minAltitude = MIN_ALTITUDE_M;
+    map.maxAltitude = MAX_ALTITUDE_M;
+    map.maxTilt = MAX_TILT_DEGREES;
+  });
 
-  return () => {
-    map.bounds = null;
-    map.minAltitude = null;
-    map.maxAltitude = null;
-    map.maxTilt = null;
-  };
+  return () =>
+    safely(() => {
+      map.bounds = null;
+      map.minAltitude = null;
+      map.maxAltitude = null;
+      map.maxTilt = null;
+    });
 }
 
 // =========================================================================

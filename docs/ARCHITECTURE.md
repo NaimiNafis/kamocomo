@@ -145,6 +145,28 @@ overlay with no way out. The corridor clamp (see
 below) only engages once the flight lands — it would otherwise fight the
 flight, which legitimately passes through views far outside Kyoto.
 
+### When Google refuses the map
+
+Quota exhaustion, a referrer the key doesn't allow, lapsed billing: Google
+rejects the *map* while the *library* loads perfectly well, so
+`loadMaps3d().catch()` never sees it. Its only signal is the
+`window.gm_authFailure` global, hooked in `lib/map3d.ts` and surfaced through
+`onMapsAuthFailure()`; MainMap turns that into its own error state with a retry
+rather than Google's grey "Oops!" panel.
+
+Camera and constraint assignments also go through a `safely()` wrapper, because
+setting `bounds` or `center` on a map that was refused throws from inside the
+Maps bundle — it showed up as `TypeError: can't access property "hi", a.lat is
+undefined` stacked on top of the real error. The map is already broken at that
+point and the hook has told the UI, so a second unhandled exception only takes
+the rest of the screen down with it.
+
+> Worth knowing when debugging: `OverQuotaMapError` usually means the daily
+> quota cap, not the monthly free allowance — exceeding the allowance bills you,
+> it doesn't error. And there are two similarly-named rows in the console,
+> `Map loads per day` (2D) and `3D Map loads per day`; raising the wrong one
+> changes nothing.
+
 ### Tutorial (`src/screens/Tutorial`)
 
 Five slides in a **cover flow**: the active card faces you, its neighbours are
