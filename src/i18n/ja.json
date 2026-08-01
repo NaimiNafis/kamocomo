@@ -101,7 +101,8 @@
   },
   "mapStyle": {
     "satellite": "文字なし",
-    "hybrid": "文字あり"
+    "hybrid": "文字あり",
+    "roadmap": "地図"
   },
   "duck": {
     "title": "鴨川の鴨",

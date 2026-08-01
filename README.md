@@ -64,10 +64,13 @@ settings, so don't skip steps 4 and 5.
    upgraded accounts — if the trial simply lapses, the API stops and the map
    breaks. On an upgraded account you are charged ¥0 as long as you stay under
    the allowance.
-5. **Set a quota cap.** APIs & Services → Maps JavaScript API → Quotas → set
-   *Requests per day* to **~160**. That works out to ~4,800/month, just under
-   the free allowance, and it's what actually guarantees no bill. Add a budget
-   alert too, as a backstop.
+5. **Set a quota cap.** Go to
+   [Maps quotas](https://console.cloud.google.com/google/maps-apis/quotas),
+   pick **Maps JavaScript API**, and set **`3D Map loads per day`** to **160**
+   (it ships as `Unlimited`). ~160/day ≈ 4,960/month, just under the free
+   allowance — this is what actually guarantees no bill. `Map loads per day` is
+   the separate 2D counter and should stay at 0; leave it alone. Add a budget
+   alert as a backstop.
 
 ### What the free allowance is
 
@@ -82,9 +85,12 @@ roughly **1,200–1,600 visitor sessions per month**, not 5,000.
 Local development spends the same quota — every hot reload that remounts
 `MainMap` is another load. Keep the dev server closed when you aren't using it.
 
-The map is pinned to the Maps JS `weekly` (stable) channel in
-[`src/lib/map3d.ts`](src/lib/map3d.ts). `MapMode.ROADMAP` is deliberately not
-used — it's pre-GA and only exists on the `v=alpha` channel.
+The map is pinned to the Maps JS **`alpha`** channel in
+[`src/lib/map3d.ts`](src/lib/map3d.ts), because `MapMode.ROADMAP` — the flat
+cartoonish "Map" style in the switch — is pre-GA and exists only there. This is
+a deliberate trade: Google can change the alpha channel without notice. If the
+map ever breaks with no code change on our side, switch `loadMaps3d()` back to
+`v: 'weekly'` and drop `'roadmap'` from `MapStyle`.
 
 ### One-time Supabase configuration
 

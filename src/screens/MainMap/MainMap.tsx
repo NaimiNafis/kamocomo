@@ -8,6 +8,7 @@ import {
   flyIntroSequence,
   flyToHomeView,
   flyToPlace,
+  initialCamera,
   loadMaps3d,
   locateAndMarkVisitor,
   orbitPlace,
@@ -18,7 +19,6 @@ import {
   type MapStyle,
   type MarkerPoint,
 } from '../../lib/map3d';
-import { addRiverOverlay } from '../../lib/river';
 import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
 import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
 import { logQrEntry } from '../../lib/duck';
@@ -111,13 +111,15 @@ export function MainMap() {
         // `mode` MUST be set or the map doesn't render at all.
         mode: 'SATELLITE',
         defaultUIHidden: true,
+        // Start already framed on the globe (intro) or the Delta (no intro),
+        // so the first painted frame is the right one instead of a jump.
+        ...initialCamera(!finished),
       });
       map.className = 'h-full w-full';
       container.appendChild(map);
       mapRef.current = map;
 
       locateAndMarkVisitor(maps3d, map, t('mainMap.youAreHere'), () => mounted);
-      disposers.push(addRiverOverlay(maps3d, map));
 
       // Tapping a place marker plays a cinematic (framing highlight -> fly-in ->
       // slow orbit) around it, then shows its popup -- one place at a time. The

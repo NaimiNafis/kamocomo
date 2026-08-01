@@ -16,9 +16,11 @@ duck-spot QR stamp rally. Live at https://kamokamo.vercel.app.
 
 - React 18 + Vite + TypeScript, React Router, Zustand
 - Google Maps Platform 3D Maps (`Map3DElement`) via `@googlemaps/js-api-loader`,
-  pinned to the `weekly` (stable) channel. Never switch to `v=alpha` — that's
-  the only place `MapMode.ROADMAP` lives, and it isn't worth putting a live
-  site on a pre-GA channel for.
+  pinned to the **`alpha`** channel. That's a known, accepted risk: `MapMode.ROADMAP`
+  (the flat cartoonish "Map" style) is pre-GA and exists nowhere else. If the map
+  breaks unannounced in production, `loadMaps3d()` in `lib/map3d.ts` is the first
+  suspect — reverting to `weekly` and dropping `'roadmap'` from `MapStyle` restores
+  a working map.
 - Supabase (`@supabase/supabase-js`): Postgres, anonymous auth, Storage, Realtime
 - i18next / react-i18next — every user-facing string goes through i18n (en + ja), no hardcoded copy
 - Tailwind CSS, with design tokens (`docs/ARCHITECTURE.md`) defined as CSS variables

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { MapStyle } from '../lib/map3d';
 
-const STYLES: MapStyle[] = ['satellite', 'hybrid'];
+const STYLES: MapStyle[] = ['satellite', 'hybrid', 'roadmap'];
 
 interface MapStyleSwitchProps {
   value: MapStyle;
@@ -9,7 +9,8 @@ interface MapStyleSwitchProps {
 }
 
 /** §5.3 bottom-right map-style switch. SATELLITE is photorealistic 3D with no
- * labels at all; HYBRID adds roads and place names over the same imagery. */
+ * labels at all, HYBRID adds roads and place names over the same imagery, and
+ * ROADMAP is the flat cartoonish basemap where the river reads as clear blue. */
 export function MapStyleSwitch({ value, onChange }: MapStyleSwitchProps) {
   const { t } = useTranslation();
 

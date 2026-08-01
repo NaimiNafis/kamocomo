@@ -33,11 +33,24 @@ export const KAMOGAWA_BOUNDS: google.maps.LatLngBoundsLiteral = {
   south: 34.96,
   north: 35.065,
   west: 135.745,
+  // Must stay east of Takano River N (135.785238) or that place's marker
+  // becomes unreachable — the corridor has to contain every active place.
   east: 135.8,
 };
 
 export const MIN_ALTITUDE_M = 300; // keep the camera from clipping into the ground
-export const MAX_ALTITUDE_M = 20_000; // keep it from zooming out to a globe/space view
+
+/**
+ * How far out you can zoom — and, in practice, how much of Japan you can see
+ * past the corridor.
+ *
+ * `bounds` only constrains where the camera's *centre* may sit; at altitude
+ * with a tilted camera you still see far beyond it. At the old 20 km this
+ * meant a lot of northern Kyoto and the mountains were visible even though
+ * you couldn't fly there. 8 km keeps the whole Delta-to-Gojo stretch in frame
+ * while cutting that surrounding context — and loads fewer tiles doing it.
+ */
+export const MAX_ALTITUDE_M = 8_000;
 
 /**
  * A shallow (near-horizontal) camera reveals ground far past the horizon even
@@ -55,16 +68,20 @@ let optionsSet = false;
  * Loads the `maps3d` library. The Maps JS API is fetched from Google's CDN on
  * first call and cached by the loader, so repeat calls are cheap.
  *
- * Pinned to the `weekly` (stable) channel deliberately: `MapMode.ROADMAP` is
- * documented as Experimental (pre-GA) and only exists on `v=alpha`, and
- * putting a live site on the alpha channel to get it isn't a trade worth
- * making. The river overlay (lib/river.ts) covers what roadmap mode would
- * have given us.
+ * ⚠ Pinned to `alpha`, not the stable `weekly` channel, and that is a
+ * deliberate trade. `MapMode.ROADMAP` — the flat, cartoonish basemap with blue
+ * water that the style switch offers as "Map" — is documented as Experimental
+ * (pre-GA) and exists ONLY on `v=alpha`. Taking it puts the whole 3D map,
+ * intro flight included, on a channel Google may change without notice.
+ *
+ * If the map ever breaks unannounced in production, this line is the first
+ * suspect: switch back to `weekly` and drop 'roadmap' from MapStyle, and
+ * everything else keeps working.
  */
 export function loadMaps3d(): Promise<Maps3D> {
   if (!optionsSet) {
     const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    setOptions({ key, v: 'weekly' });
+    setOptions({ key, v: 'alpha' });
     optionsSet = true;
   }
   return importLibrary('maps3d');
@@ -99,21 +116,12 @@ const FAR_SIDE_VIEW: CameraView = {
   heading: 0,
 };
 
-/** Japan-scale overview — first stop of the intro flight. */
-const JAPAN_VIEW: CameraView = {
-  center: { lat: 36.5, lng: 137.5, altitude: 0 },
-  range: 1_600_000,
-  tilt: 0,
-  heading: 0,
-};
-
-/** Kyoto-scale overview — second stop of the intro flight. */
-const KYOTO_OVERVIEW_VIEW: CameraView = {
-  center: { lat: KAMOGAWA_DELTA.latitude, lng: KAMOGAWA_DELTA.longitude, altitude: 0 },
-  range: 80_000,
-  tilt: 0,
-  heading: 0,
-};
+/** The camera the map is constructed with, so it renders already at the right
+ * place instead of jumping there on the first frame. */
+export function initialCamera(playIntro: boolean): Partial<google.maps.maps3d.Map3DElementOptions> {
+  const view = playIntro ? FAR_SIDE_VIEW : HERO_VIEW;
+  return { center: view.center, range: view.range, tilt: view.tilt, heading: view.heading };
+}
 
 const PLACE_VIEW_RANGE_M = 350;
 const PLACE_VIEW_TILT = 52; // was Cesium pitch -38°
@@ -162,26 +170,31 @@ export function flyToHomeView(map: Map3D, durationMillis = 1200): Promise<void> 
   return flyToStep(map, HERO_VIEW, durationMillis);
 }
 
+/** How long the whole Earth-to-Kamogawa flight takes. It's one continuous
+ * move, so this is the only timing knob — raise it for a slower, statelier
+ * sweep, lower it to get to the map faster. */
+const INTRO_FLIGHT_MS = 7000;
+
 /**
- * §5.1 intro flight: the far side of Earth -> Japan -> Kyoto -> Kamogawa
- * Delta, ~5s total. Starts from FAR_SIDE_VIEW instantly (the reveal happens
- * in the overlay, not here) so the first leg visibly sweeps across the whole
- * globe to bring Japan into view -- more dramatic than starting already
- * facing it. Pass a `signal` and flip `signal.cancelled = true` (alongside
- * `map.stopCameraAnimation()`) to stop the sequence early, e.g. for the
- * intro's Skip button.
+ * §5.1 intro flight: the far side of Earth straight down to the Kamogawa
+ * Delta, as ONE `flyCameraTo`.
+ *
+ * This used to be three chained legs (Earth -> Japan -> Kyoto -> Delta), which
+ * read as jerky: `flyCameraTo` eases out to a complete stop at the end of each
+ * leg, so the viewer got accelerate/halt/accelerate/halt, plus a frame or two
+ * of dead air per leg while the `gmp-animationend` round-trip resolved. Google
+ * moves the camera *parabolically*, which already arcs up and over the globe on
+ * its own, so a single long flight gives the sweep the three legs were trying
+ * to fake — and it never stops halfway.
+ *
+ * The map is constructed already at FAR_SIDE_VIEW (see `initialCamera`), so
+ * there's no jump before the flight starts. Pass a `signal` and flip
+ * `signal.cancelled = true` (alongside `map.stopCameraAnimation()`) to stop
+ * early, e.g. for the intro's Skip button.
  */
 export async function flyIntroSequence(map: Map3D, signal: { cancelled: boolean }): Promise<void> {
-  map.center = FAR_SIDE_VIEW.center;
-  map.range = FAR_SIDE_VIEW.range;
-  map.tilt = FAR_SIDE_VIEW.tilt;
-  map.heading = FAR_SIDE_VIEW.heading;
   if (signal.cancelled) return;
-  await flyToStep(map, JAPAN_VIEW, 2200, signal);
-  if (signal.cancelled) return;
-  await flyToStep(map, KYOTO_OVERVIEW_VIEW, 1300, signal);
-  if (signal.cancelled) return;
-  await flyToStep(map, HERO_VIEW, 1500, signal);
+  await flyToStep(map, HERO_VIEW, INTRO_FLIGHT_MS, signal);
 }
 
 /** Flies in close and low over the spot (oblique, not top-down) so its
@@ -262,14 +275,26 @@ export function applyKamogawaConstraints(map: Map3D): () => void {
 // =========================================================================
 
 /**
- * SATELLITE renders photorealistic 3D with NO labels, names or road text at
- * all; HYBRID is the same imagery with roads and place names on top. That's
- * the whole "hide every label" feature — one property.
+ * The three views the switch offers:
+ *   satellite — photorealistic 3D, NO labels, names or road text at all
+ *   hybrid    — the same imagery with roads and place names on top
+ *   roadmap   — the flat cartoonish basemap (blue water, green parks), so the
+ *               Kamogawa is unmistakable. Pre-GA, alpha channel only.
+ *
+ * There is no label-free ROADMAP mode; hiding labels there would need a
+ * Cloud-styled Map ID, which can't be swapped at runtime without rebuilding
+ * the map element (and paying for another map load).
  */
-export type MapStyle = 'satellite' | 'hybrid';
+export type MapStyle = 'satellite' | 'hybrid' | 'roadmap';
+
+const MODE_BY_STYLE: Record<MapStyle, google.maps.maps3d.MapModeString> = {
+  satellite: 'SATELLITE',
+  hybrid: 'HYBRID',
+  roadmap: 'ROADMAP',
+};
 
 export function setMapStyle(map: Map3D, style: MapStyle): void {
-  map.mode = style === 'satellite' ? 'SATELLITE' : 'HYBRID';
+  map.mode = MODE_BY_STYLE[style];
 }
 
 /** Reads a color straight from the §4.1 CSS tokens, so map graphics never
@@ -342,7 +367,7 @@ export function locateAndMarkVisitor(
 // §5.3/§4.4 markers -- exclamation (activity places) and duck (duck spots)
 // =========================================================================
 
-const MARKER_PIXEL_SIZE = 30;
+const MARKER_PIXEL_SIZE = 26;
 
 export interface MarkerPoint {
   id: string;
@@ -377,12 +402,22 @@ function markerWithIcon(
     position: { lat: point.lat, lng: point.lng, altitude: 0 },
     altitudeMode: 'CLAMP_TO_GROUND',
     collisionBehavior: 'REQUIRED',
+    // Without this the marker is sized in WORLD space, so it grows as the
+    // camera closes in -- during the place cinematic (350 m) the icons ended
+    // up swallowing the screen. Keeps them a constant on-screen size instead.
+    sizePreserved: true,
   });
 
   const img = document.createElement('img');
   img.src = point.iconUrl ?? defaultIconUrl;
+  // Both marks are `viewBox="0 0 64 64"` with no intrinsic width/height, so a
+  // rasterizer is free to pick its own size. Pin it in CSS as well as in the
+  // attributes, or the SVG comes out far larger than MARKER_PIXEL_SIZE.
   img.width = MARKER_PIXEL_SIZE;
   img.height = MARKER_PIXEL_SIZE;
+  img.style.width = `${MARKER_PIXEL_SIZE}px`;
+  img.style.height = `${MARKER_PIXEL_SIZE}px`;
+  img.style.display = 'block';
   const template = document.createElement('template');
   template.content.append(img);
   marker.append(template);

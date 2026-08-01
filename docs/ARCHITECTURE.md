@@ -39,7 +39,7 @@ signage. The app is a discovery layer over the real place:
 | Layer | Choice |
 |---|---|
 | Framework | React 18 + Vite + TypeScript |
-| 3D map | Google Maps Platform 3D Maps (`Map3DElement`, `weekly` channel) |
+| 3D map | Google Maps Platform 3D Maps (`Map3DElement`, `alpha` channel — see below) |
 | Routing | React Router, code-split per screen |
 | State | Zustand (identity), otherwise local component state |
 | Styling | Tailwind CSS v4, design tokens as CSS variables |
@@ -63,7 +63,7 @@ src/
   components/   shared UI (language toggle, map-style switch, stale banner)
   lib/          all Supabase/map/identity access lives here — screens never
                 import @supabase/supabase-js directly. map3d.ts owns the
-                Google Maps 3D wrapper; river.ts draws the blue Kamogawa
+                Google Maps 3D wrapper
   i18n/         en.json, ja.json (ja is never allowed to lag behind en)
   store/        zustand stores (identity)
 supabase/
@@ -92,7 +92,7 @@ URLs, so paths must not be renamed:
 
 ```
 INTRO (once/session)
-  title -> catchphrase -> Earth (far side) -> Japan -> Kyoto -> Kamogawa Delta
+  title -> catchphrase -> one continuous flight: Earth (far side) -> Delta
      |
      v (first visit only) ONBOARDING: nationality / age / gender
      |
@@ -122,17 +122,27 @@ plays the full intro and lands on `/duck` with a result banner.
 Plays once per session (`hasSeenIntro` in `sessionStorage`, Skip button always
 available): the title fades in, cross-fades to the localized catchphrase, then
 the camera flies from the far side of the globe (deliberately the hemisphere
-*opposite* Japan, so the flight visibly sweeps across the whole Earth) through
-Japan and Kyoto to the Kamogawa Delta. Each leg is a `flyCameraTo()` awaited on
-the map's `gmp-animationend` event. The corridor clamp (see below) only engages
-once the flight lands — it would otherwise fight the flight, since the flight
-legitimately passes through views far outside Kyoto.
+*opposite* Japan, so the flight visibly sweeps across the whole Earth) to the
+Kamogawa Delta.
+
+That flight is **one** `flyCameraTo()`, awaited on the map's `gmp-animationend`
+event. It began as three chained legs (Earth → Japan → Kyoto → Delta), which
+read as jerky: `flyCameraTo` eases out to a full stop at the end of every leg,
+so the viewer got accelerate/halt/accelerate/halt plus dead air while each
+event round-tripped. Google moves the camera *parabolically*, which already
+arcs over the globe, so a single long move gives the sweep the three legs were
+imitating. `INTRO_FLIGHT_MS` in `lib/map3d.ts` is the only timing knob.
+
+The map is constructed already framed on the far side (`initialCamera()`), so
+the first painted frame is correct rather than a jump. The corridor clamp (see
+below) only engages once the flight lands — it would otherwise fight the
+flight, which legitimately passes through views far outside Kyoto.
 
 ### Main map (`src/screens/MainMap`)
 
 A full-screen `Map3DElement`, camera-locked to the **Kamogawa corridor**
 (34.960–35.065 N, 135.745–135.800 E) with `minAltitude` 300 m, `maxAltitude`
-20 km and a 55° `maxTilt` (`applyKamogawaConstraints()` in `lib/map3d.ts` —
+8 km and a 55° `maxTilt` (`applyKamogawaConstraints()` in `lib/map3d.ts` —
 **never remove these**; they're the cost control that keeps tile billing
 bounded to the stretch of river the app is actually about). The corridor is
 derived from the seeded data — every active place and duck spot, plus ~1.5 km
@@ -141,16 +151,19 @@ which sprawls north into the Sakyo-ku mountains and west past Arashiyama and
 would be looser than this. A one-time "drag to look around" hint appears for
 first-time mobile visitors.
 
-The **style switch** is a single property: `SATELLITE` renders photorealistic
-3D with no labels, names or road text at all (the default), and `HYBRID` puts
-roads and place names over the same imagery. `MapMode.ROADMAP` is deliberately
-unused — it's pre-GA and only exists on the `v=alpha` channel.
+Note that `bounds` constrains where the camera's *centre* may sit, not what
+is visible — at altitude with a tilted camera you see well past it. `maxAltitude`
+is therefore the lever that controls how much surrounding Kyoto is in frame, and
+it's set to 8 km to keep the view on the river.
 
-Because photoreal imagery makes the river easy to lose, the Kamogawa is drawn
-as a blue `--kamo-river` polyline (`lib/river.ts`) in three strands — 高野川
-and 賀茂川 meeting at the Delta, then the main stretch south past the bridges.
-It's always on, in both modes, so "where is the river?" is answered whether or
-not labels are showing.
+The **style switch** is a single property, `mode`, with three values:
+`SATELLITE` (photorealistic 3D, no labels/names/road text at all — the default),
+`HYBRID` (the same imagery with roads and place names), and `ROADMAP` (the flat
+cartoonish basemap, where water renders a clear blue and the Kamogawa is
+unmistakable). ROADMAP is why the API is pinned to the `alpha` channel — it is
+pre-GA and exists nowhere else. There is no label-free ROADMAP; that would need
+a Cloud-styled Map ID, which can't be swapped at runtime without rebuilding the
+map element and paying for another map load.
 
 There is **one exclamation marker per fixed PLACE** (not per main), so the map
 stays uncluttered no matter how many mains a place accrues during a gathering.

@@ -103,7 +103,8 @@
   },
   "mapStyle": {
     "satellite": "No labels",
-    "hybrid": "Labels"
+    "hybrid": "Labels",
+    "roadmap": "Map"
   },
   "duck": {
     "title": "Ducks of the Kamogawa",
