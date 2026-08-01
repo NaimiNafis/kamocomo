@@ -88,16 +88,42 @@ Local development spends the same quota — every hot reload that remounts
 ### Optional: the label-free graphical map
 
 Three of the four style combinations are native Google modes. Graphical
-*without* labels has no native mode, so it needs a Cloud-styled Map ID:
+*without* labels has no native mode, so it needs a Cloud-styled Map ID.
 
-1. [Map Management](https://console.cloud.google.com/google/maps-apis/studio/maps)
-   → **Create Map ID** → map type **JavaScript**, tick **Vector**.
-2. Create a **map style**, turn every label/POI feature off, and associate it
-   with that Map ID.
-3. Put the id in `.env.local` as `VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`.
+The console's style editor no longer exposes per-feature label checkboxes, so
+do it through the JSON tab:
 
-Skip this and the app still works — the labels-off control simply disables
-itself while the graphical map is selected, instead of silently doing nothing.
+1. [Map Styles](https://console.cloud.google.com/google/maps-apis/studio/styles)
+   → **Create style** → **JSON** tab → paste:
+   ```json
+   [
+     {
+       "elementType": "labels",
+       "stylers": [{ "visibility": "off" }]
+     }
+   ]
+   ```
+   `elementType: "labels"` covers both text and icons across every feature and
+   leaves geometry alone, so water stays blue and parks stay green. Do *not*
+   use `{"featureType": "poi", "stylers": [{"visibility": "off"}]}` without an
+   `elementType` — that hides POI geometry too and the parks go grey.
+2. Set the map type to the **hybrid** option and **Light mode**. 3D cloud
+   styling requires this, and **dark mode is not supported for 3D at all** —
+   pick it and the style silently won't apply. Save the style.
+3. [Map Management](https://console.cloud.google.com/google/maps-apis/studio/maps)
+   → **Create Map ID** → type **JavaScript**, tick **Vector**. Under its
+   **Map styles** section, associate the style from step 1.
+4. Put the id in `.env.local` as `VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`, and
+   **restart the dev server** — Vite reads env vars at start.
+
+**The console preview doesn't work for 3D cloud styles** (Google doesn't
+support preview for them), so the editor will look wrong. Ignore it and verify
+in the app: switch to **Map**, then **No labels**. Propagation takes a few
+minutes.
+
+Skip all of this and the app still works — the labels-off control simply
+disables itself while the graphical map is selected, instead of silently doing
+nothing.
 
 The map is pinned to the Maps JS **`alpha`** channel in
 [`src/lib/map3d.ts`](src/lib/map3d.ts), because `MapMode.ROADMAP` — the flat
