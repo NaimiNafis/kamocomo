@@ -13,6 +13,33 @@ interface IconProps {
   className?: string;
 }
 
+function chevron(size: number, className: string | undefined, d: string) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={className}
+    >
+      <path d={d} />
+    </svg>
+  );
+}
+
+export function ChevronLeftIcon({ size = 18, className }: IconProps) {
+  return chevron(size, className, 'M15 5.5 8.5 12l6.5 6.5');
+}
+
+export function ChevronRightIcon({ size = 18, className }: IconProps) {
+  return chevron(size, className, 'M9 5.5 15.5 12 9 18.5');
+}
+
 /** Recenter: a viewfinder closing on a point — "bring everything back into
  * frame", which is exactly what it does to a force graph. */
 export function RecenterIcon({ size = 20, className }: IconProps) {

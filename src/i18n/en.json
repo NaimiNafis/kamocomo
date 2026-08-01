@@ -7,7 +7,7 @@
     "loading": "Loading…",
     "retry": "Retry",
     "close": "Close",
-    "offlineStale": "You're offline — showing saved content"
+    "offlineStale": "You're offline. Showing saved content."
   },
   "onboarding": {
     "title": "A little about you",
@@ -123,7 +123,7 @@
     "tooFar": "Get closer to the duck spot",
     "tooFarDetail": "You're about {{distance}} m away. You need to be within 120 m to collect this stamp.",
     "locationNeeded": "Location needed",
-    "locationDenied": "Please allow location access to collect stamps — it proves you were really at the river.",
+    "locationDenied": "Please allow location access to collect stamps. It proves you were really at the river.",
     "locationUnavailable": "Couldn't get your location. Try again near the spot.",
     "notFound": "This spot code wasn't recognized.",
     "missingSpot": "No spot code in this link.",
@@ -142,29 +142,28 @@
   },
   "tutorial": {
     "heading": "How it works",
-    "mediaPlaceholder": "Photo / video",
     "previous": "Previous",
     "next": "Next",
     "slides": [
       {
-        "title": "Welcome to the Kamogawa",
-        "body": "This map shows what's happening on the riverbank right now, live."
+        "title": "What's happening now",
+        "body": "A live map of what people are doing along the Kamogawa."
       },
       {
-        "title": "Duck markers",
-        "body": "Every duck on the map is a real spot on the river. Tap one to see what's happening there."
+        "title": "Tap a duck",
+        "body": "Each duck is a real spot on the river. Tap one to see what's happening there."
       },
       {
-        "title": "The spot's web",
-        "body": "That spot's duck sits in the middle, with the activities happening around it."
+        "title": "See the spot",
+        "body": "The duck sits in the middle. Activities at that spot circle around it."
       },
       {
         "title": "Join in",
-        "body": "Post your own activity, or add on to someone else's -- everyone's welcome."
+        "body": "Add to someone's activity, or post your own. A photo is all it takes."
       },
       {
         "title": "Collect stamps",
-        "body": "Scan the QR code at a real duck spot along the river to earn a stamp."
+        "body": "Scan the QR code at a duck spot to earn its stamp. Collect all ten for a certificate."
       }
     ]
   }

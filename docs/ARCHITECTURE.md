@@ -144,6 +144,22 @@ overlay with no way out. The corridor clamp (see
 below) only engages once the flight lands — it would otherwise fight the
 flight, which legitimately passes through views far outside Kyoto.
 
+### Tutorial (`src/screens/Tutorial`)
+
+Five slides in a **cover flow**: the active card faces you, its neighbours are
+turned away in 3D and stacked behind, and moving through them rotates the rack.
+It replaced a static grey "photo / video" box, which told a first-time visitor
+nothing and read as an image that had failed to load. Swipe, arrow keys, the
+chevrons, the dots or tapping a card all move it; Escape closes.
+
+Built from CSS transforms on a `preserve-3d` stage rather than an animation
+library — the whole effect is one `transform` per card, and this screen opens
+automatically on a first visit, often outdoors on bad signal.
+
+> `SLIDE_IMAGES` currently points every slide at the shared placeholder, because
+> `img/kamogawa/` holds exactly one photo. Drop five real shots in, import them,
+> list them there. Nothing else changes, and no image is fetched remotely.
+
 ### Main map (`src/screens/MainMap`)
 
 A full-screen `Map3DElement`, camera-locked to the **Kamogawa corridor**
