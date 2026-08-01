@@ -4,16 +4,19 @@ export type IntroPhase = 'title' | 'catchphrase' | 'reveal';
 
 interface IntroProps {
   phase: IntroPhase;
-  onSkip: () => void;
 }
 
 /**
  * §5.1 intro overlay: title fades in, cross-fades to the catchphrase, then
- * fades away to reveal the globe (rendered by the parent) while it flies
- * Earth -> Japan -> Kyoto -> Kamogawa Delta. Purely presentational -- timing
+ * fades away to reveal the globe (rendered by the parent) while it flies from
+ * the far side of Earth to the Kamogawa Delta. Purely presentational -- timing
  * and the camera flight live in MainMap, which owns the map element.
+ *
+ * There is deliberately no Skip: the flight is the app's opening statement and
+ * plays once per session. MainMap keeps a watchdog so a stalled flight can't
+ * strand anyone on this overlay now that there's no manual way out.
  */
-export function Intro({ phase, onSkip }: IntroProps) {
+export function Intro({ phase }: IntroProps) {
   const { t } = useTranslation();
 
   return (
@@ -37,13 +40,6 @@ export function Intro({ phase, onSkip }: IntroProps) {
           </p>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onSkip}
-        className="absolute bottom-8 right-8 font-ui text-sm text-kamo-stone underline underline-offset-4"
-      >
-        {t('common.skip')}
-      </button>
     </div>
   );
 }

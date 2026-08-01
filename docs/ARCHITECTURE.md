@@ -118,8 +118,7 @@ plays the full intro and lands on `/duck` with a result banner.
 
 ### Intro (`src/screens/Intro`)
 
-Plays once per session (`hasSeenIntro` in `sessionStorage`, Skip button always
-available): the title fades in, cross-fades to the localized catchphrase, then
+Plays once per session (`hasSeenIntro` in `sessionStorage`): the title fades in, cross-fades to the localized catchphrase, then
 the camera flies from the far side of the globe (deliberately the hemisphere
 *opposite* Japan, so the flight visibly sweeps across the whole Earth) to the
 Kamogawa Delta.
@@ -133,7 +132,14 @@ arcs over the globe, so a single long move gives the sweep the three legs were
 imitating. `INTRO_FLIGHT_MS` in `lib/map3d.ts` is the only timing knob.
 
 The map is constructed already framed on the far side (`initialCamera()`), so
-the first painted frame is correct rather than a jump. The corridor clamp (see
+the first painted frame is correct rather than a jump.
+
+There is **no Skip**: the flight is the app's opening statement and runs once
+per session. Because that removes the only manual escape, MainMap arms a
+watchdog — if the flight hasn't reported completion by title + catchphrase +
+12 s, the intro lands anyway. A backgrounded tab can swallow
+`gmp-animationend`, and without that guard a visitor would be stranded on the
+overlay with no way out. The corridor clamp (see
 below) only engages once the flight lands — it would otherwise fight the
 flight, which legitimately passes through views far outside Kyoto.
 
