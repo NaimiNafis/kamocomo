@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   addPlaceFraming,
   applyKamogawaConstraints,
-  createMarkerLayers,
+  createMarkerLayer,
   flyIntroSequence,
   flyToHomeView,
   flyToPlace,
@@ -20,7 +20,6 @@ import {
   type MarkerPoint,
 } from '../../lib/map3d';
 import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
-import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
 import { logQrEntry } from '../../lib/duck';
 import { HAS_SEEN_INTRO_KEY, OPEN_DUCK_AFTER_INTRO_KEY } from '../../lib/entryFlags';
 import { Intro, type IntroPhase } from '../Intro/Intro';
@@ -44,10 +43,9 @@ const MAP_HINT_AUTO_DISMISS_MS = 4000;
  * tutorial popup. The river itself is drawn as a blue overlay so it's findable
  * in both map modes.
  *
- * Markers are one per fixed PLACE (not per main activity), so the map stays
- * uncluttered no matter how busy a place gets during a gathering. Tapping a
- * place plays a cinematic and opens its board of activities; tapping a duck
- * goes to the duck page.
+ * One duck marker per place, so the map stays uncluttered no matter how busy a
+ * place gets during a gathering. Tapping one plays a cinematic and opens that
+ * place's board; the duck collection button is the way to the stamp card.
  *
  * The §5.1 intro (title -> catchphrase -> Earth-to-Kamogawa flight) plays
  * once per session before the corridor lock engages -- the clamp would
@@ -147,9 +145,9 @@ export function MainMap() {
       }
       closeCinematicRef.current = closeCinematic;
 
-      // One exclamation marker per PLACE + a colored duck marker per duck spot.
-      // Both sets are fixed seed data, so no realtime subscription is needed --
-      // new mains show up inside a place's board, not as new markers.
+      // One duck marker per place, and a place IS a duck spot -- fixed seed
+      // data, so no realtime subscription is needed. New mains show up inside
+      // a place's board, not as new markers.
       let placePoints: MarkerPoint[] = [];
 
       async function startPlaceCinematic(placeId: string) {
@@ -183,23 +181,15 @@ export function MainMap() {
         setPlacePopup({ placeId, preview });
       }
 
-      const markerLayers = createMarkerLayers(maps3d, map, (kind, refId) => {
-        if (kind === 'duckSpot') {
-          navigate('/duck');
-          return;
-        }
-        void startPlaceCinematic(refId);
+      const markerLayer = createMarkerLayer(maps3d, map, (placeId) => {
+        void startPlaceCinematic(placeId);
       });
-      disposers.push(markerLayers.dispose);
+      disposers.push(markerLayer.dispose);
 
       void fetchPlaceMarkers().then((points) => {
         if (!mounted) return;
         placePoints = points;
-        markerLayers.setActivities(placePoints);
-      });
-      void fetchActiveDuckSpotMarkers().then((points) => {
-        if (!mounted) return;
-        markerLayers.setDuckSpots(points);
+        markerLayer.setMarkers(placePoints);
       });
 
       function finishIntro() {

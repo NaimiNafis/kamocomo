@@ -1,6 +1,4 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
-import exclamationIconUrl from '../../img/marks/exclamation.svg?url';
-import duckIconUrl from '../../img/marks/duck.svg?url';
 import { KAMOGAWA_DELTA } from './geo';
 
 /**
@@ -390,30 +388,24 @@ export interface MarkerPoint {
   id: string;
   lat: number;
   lng: number;
-  /** Optional per-marker icon (used by the colored duck markers). */
-  iconUrl?: string;
+  /** This place's duck, recolored — every marker carries its own. */
+  iconUrl: string;
 }
 
-export type MarkerKind = 'activity' | 'duckSpot';
-
-export interface MarkerLayers {
-  setActivities(points: MarkerPoint[]): void;
-  setDuckSpots(points: MarkerPoint[]): void;
+export interface MarkerLayer {
+  setMarkers(points: MarkerPoint[]): void;
   dispose(): void;
 }
 
 /**
  * Custom marker art: an `<img>` wrapped in a `<template>` and appended to the
  * marker's default slot. Google rasterizes it into the 3D scene, so the
- * existing `exclamation.svg` and the per-duck `duckIconDataUri()` data URIs
- * both carry over unchanged.
+ * per-duck `duckIconDataUri()` data URIs carry over unchanged.
  */
 function markerWithIcon(
   maps3d: Maps3D,
   point: MarkerPoint,
-  kind: MarkerKind,
-  defaultIconUrl: string,
-  onTap: (kind: MarkerKind, refId: string) => void,
+  onTap: (refId: string) => void,
 ): google.maps.maps3d.Marker3DInteractiveElement {
   const marker = new maps3d.Marker3DInteractiveElement({
     position: { lat: point.lat, lng: point.lng, altitude: 0 },
@@ -426,7 +418,7 @@ function markerWithIcon(
   });
 
   const img = document.createElement('img');
-  img.src = point.iconUrl ?? defaultIconUrl;
+  img.src = point.iconUrl;
   // Both marks are `viewBox="0 0 64 64"` with no intrinsic width/height, so a
   // rasterizer is free to pick its own size. Pin it in CSS as well as in the
   // attributes, or the SVG comes out far larger than MARKER_PIXEL_SIZE.
@@ -439,50 +431,35 @@ function markerWithIcon(
   template.content.append(img);
   marker.append(template);
 
-  marker.addEventListener('gmp-click', () => onTap(kind, point.id));
+  marker.addEventListener('gmp-click', () => onTap(point.id));
   return marker;
 }
 
 /**
- * Creates the two marker layers: exclamation markers for the fixed activity
- * PLACES (one marker per place, so the map stays uncluttered no matter how
- * many mains a place accrues during a gathering) and colored duck markers for
- * the duck spots (each carries its own recolored icon via
- * `MarkerPoint.iconUrl`). Each marker is individually tappable — tapping runs
- * `onTap(kind, refId)` so the caller can route to that place's own content.
+ * The map's single marker layer: one duck per place.
+ *
+ * There used to be two overlapping layers — exclamation markers for activity
+ * places and duck markers for stamp spots. Once a place became a duck spot
+ * those sat at identical coordinates, so a tap hit whichever happened to be on
+ * top and the app would sometimes open the board and sometimes the duck page.
+ * One layer, one destination.
  */
-export function createMarkerLayers(
+export function createMarkerLayer(
   maps3d: Maps3D,
   map: Map3D,
-  onTap: (kind: MarkerKind, refId: string) => void,
-): MarkerLayers {
-  let activityMarkers: google.maps.maps3d.Marker3DInteractiveElement[] = [];
-  let duckMarkers: google.maps.maps3d.Marker3DInteractiveElement[] = [];
-
-  const replace = (
-    existing: google.maps.maps3d.Marker3DInteractiveElement[],
-    points: MarkerPoint[],
-    kind: MarkerKind,
-    defaultIconUrl: string,
-  ) => {
-    existing.forEach((m) => m.remove());
-    const next = points.map((p) => markerWithIcon(maps3d, p, kind, defaultIconUrl, onTap));
-    next.forEach((m) => map.appendChild(m));
-    return next;
-  };
+  onTap: (placeId: string) => void,
+): MarkerLayer {
+  let markers: google.maps.maps3d.Marker3DInteractiveElement[] = [];
 
   return {
-    setActivities: (points) => {
-      activityMarkers = replace(activityMarkers, points, 'activity', exclamationIconUrl);
-    },
-    setDuckSpots: (points) => {
-      duckMarkers = replace(duckMarkers, points, 'duckSpot', duckIconUrl);
+    setMarkers: (points) => {
+      markers.forEach((m) => m.remove());
+      markers = points.map((p) => markerWithIcon(maps3d, p, onTap));
+      markers.forEach((m) => map.appendChild(m));
     },
     dispose: () => {
-      activityMarkers.forEach((m) => m.remove());
-      duckMarkers.forEach((m) => m.remove());
-      activityMarkers = [];
-      duckMarkers = [];
+      markers.forEach((m) => m.remove());
+      markers = [];
     },
   };
 }

@@ -67,25 +67,3 @@ export function duckIconDataUri(color: string, sizePx = 64): string {
     sizePx,
   );
 }
-
-/**
- * The map marker: the same duck with the exclamation mark worked into it.
- *
- * There used to be two marker sets on the map — exclamation marks for activity
- * places and ducks for stamp spots — which put 26 icons over a narrow strip of
- * river and made taps ambiguous. Now a place IS a duck spot, so one mark has to
- * say both "something is happening here" and "this is duck N". The "!" sits in
- * a small indigo badge clipped to the rim, which stays legible at marker size
- * without fighting the duck for the middle of the circle.
- */
-export function duckPlaceIconDataUri(color: string, sizePx = 64): string {
-  return svgDataUri(
-    `<circle cx="32" cy="32" r="29" fill="${SURFACE}" stroke="${color}" stroke-width="2.5"/>` +
-      duckBody(color) +
-      // Badge: indigo disc on the upper-left rim, carrying a stone "!".
-      `<circle cx="15" cy="15" r="12.5" fill="${BEAK}" stroke="${SURFACE}" stroke-width="2.5"/>` +
-      `<path d="M15 7.5c1.15 0 2.05 0.85 1.95 2.1l-0.85 7.4c-0.1 0.9-2.1 0.9-2.2 0l-0.85-7.4C12.95 8.35 13.85 7.5 15 7.5z" fill="${SURFACE}"/>` +
-      `<circle cx="15" cy="20.6" r="1.85" fill="${SURFACE}"/>`,
-    sizePx,
-  );
-}

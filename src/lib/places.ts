@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type { MarkerPoint } from './map3d';
-import { duckColor, duckPlaceIconDataUri } from './ducks';
+import { duckColor, duckIconDataUri } from './ducks';
 
 /**
  * Canonical duck ordering: lat descending, north-to-south. Everything that
@@ -20,7 +20,7 @@ async function fetchDuckOrder(): Promise<Map<string, number>> {
 /**
  * The map's markers: one per active place, and since 20260801120000 every
  * active place IS a duck spot, so each is drawn with its duck's colored icon
- * (the duck with the "!" worked in). Places whose duck link is missing are
+ * (its duck, recolored). Places whose duck link is missing are
  * skipped rather than drawn with a fallback color — an unlinked place is
  * stale data from before that migration, and showing it would put a marker on
  * the map that the combined board can't render a duck for.
@@ -40,7 +40,7 @@ export async function fetchPlaceMarkers(): Promise<MarkerPoint[]> {
         id: place.id,
         lat: place.lat,
         lng: place.lng,
-        iconUrl: duckPlaceIconDataUri(duckColor(index)),
+        iconUrl: duckIconDataUri(duckColor(index)),
       },
     ];
   });

@@ -98,6 +98,7 @@ do it through the JSON tab:
    ```json
    [
      {
+      "variant": "dark",
        "elementType": "labels",
        "stylers": [{ "visibility": "off" }]
      }

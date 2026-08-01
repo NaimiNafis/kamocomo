@@ -67,11 +67,12 @@ export function ToukouMap() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  // Layout: the place's duck sits at the centre, every main activity hangs off
-  // it, and each main carries its own subs plus a "+" to add another. The
-  // duck's shared photos hang off the duck the same way subs hang off a main,
-  // so one graph shows both what's happening here and the duck that lives here.
-  // The full card data lives in `nodeById`; the layout only needs id+kind.
+  // Layout: two kinds of cluster, deliberately NOT wired to each other. The
+  // duck sits with its own shared photos, and each main activity sits with its
+  // own subs. Stringing every main to the duck (as this first did) made one
+  // tangled hairball where the duck looked like the parent of activities it has
+  // nothing to do with. The full card data lives in `nodeById`; the layout only
+  // needs id+kind.
   const cards = board?.nodes ?? [];
   const nodeById = new Map(cards.map((n) => [n.id, n]));
   const mains = cards.filter((n) => n.kind === 'main');
@@ -90,8 +91,6 @@ export function ToukouMap() {
     ...mains.map((m) => ({ source: `${ADD_PREFIX}${m.id}`, target: m.id })),
     ...(duck
       ? [
-          // Mains orbit the duck, which is what pins it in the middle.
-          ...mains.map((m) => ({ source: m.id, target: DUCK_ID })),
           ...duckPhotos.map((p) => ({ source: `${DUCK_PHOTO_PREFIX}${p.id}`, target: DUCK_ID })),
           { source: `${ADD_PREFIX}${DUCK_ID}`, target: DUCK_ID },
         ]
