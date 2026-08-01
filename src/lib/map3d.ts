@@ -30,12 +30,10 @@ export type Map3D = google.maps.maps3d.Map3DElement;
  * than this — the point is to keep visitors on the river.
  */
 export const KAMOGAWA_BOUNDS: google.maps.LatLngBoundsLiteral = {
-  south: 34.96,
-  north: 35.065,
-  west: 135.745,
-  // Must stay east of Takano River N (135.785238) or that place's marker
-  // becomes unreachable — the corridor has to contain every active place.
-  east: 135.8,
+  south: 34.953, //  34°57'10.8"N
+  north: 35.062, //  35°03'43.4"N
+  west: 135.7401, // 135°44'24.5"E
+  east: 135.8106, // 135°48'38.0"E
 };
 
 export const MIN_ALTITUDE_M = 300; // keep the camera from clipping into the ground
@@ -275,26 +273,45 @@ export function applyKamogawaConstraints(map: Map3D): () => void {
 // =========================================================================
 
 /**
- * The three views the switch offers:
- *   satellite — photorealistic 3D, NO labels, names or road text at all
- *   hybrid    — the same imagery with roads and place names on top
- *   roadmap   — the flat cartoonish basemap (blue water, green parks), so the
+ * Two independent choices, four combinations:
+ *   realistic — photorealistic 3D imagery
+ *   graphical — the flat cartoonish basemap (blue water, green parks), so the
  *               Kamogawa is unmistakable. Pre-GA, alpha channel only.
+ * crossed with labels on/off.
  *
- * There is no label-free ROADMAP mode; hiding labels there would need a
- * Cloud-styled Map ID, which can't be swapped at runtime without rebuilding
- * the map element (and paying for another map load).
+ * Google only has native modes for three of the four. SATELLITE is realistic
+ * without labels, HYBRID is realistic with them, ROADMAP is graphical with
+ * them — but there is no label-free ROADMAP. That combination is done with a
+ * Cloud-styled Map ID whose style hides every label layer, applied only for
+ * that one case and cleared otherwise. `mapId` is runtime-settable, so this
+ * costs no map rebuild and no extra billable load.
+ *
+ * Without VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID configured, graphical + labels-off
+ * degrades to graphical *with* labels rather than breaking; `labelFreeGraphical
+ * Available()` lets the UI show that honestly instead of offering a dead toggle.
  */
-export type MapStyle = 'satellite' | 'hybrid' | 'roadmap';
+export type MapStyle = 'realistic' | 'graphical';
 
-const MODE_BY_STYLE: Record<MapStyle, google.maps.maps3d.MapModeString> = {
-  satellite: 'SATELLITE',
-  hybrid: 'HYBRID',
-  roadmap: 'ROADMAP',
-};
+function labelFreeMapId(): string | undefined {
+  return import.meta.env.VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID || undefined;
+}
 
-export function setMapStyle(map: Map3D, style: MapStyle): void {
-  map.mode = MODE_BY_STYLE[style];
+/** Whether the graphical + no-labels combination can actually be honored. */
+export function labelFreeGraphicalAvailable(): boolean {
+  return labelFreeMapId() !== undefined;
+}
+
+export function applyMapView(map: Map3D, style: MapStyle, showLabels: boolean): void {
+  if (style === 'realistic') {
+    map.mapId = null;
+    map.mode = showLabels ? 'HYBRID' : 'SATELLITE';
+    return;
+  }
+
+  const styledId = labelFreeMapId();
+  // ROADMAP always draws labels; the Map ID is what removes them.
+  map.mapId = !showLabels && styledId ? styledId : null;
+  map.mode = 'ROADMAP';
 }
 
 /** Reads a color straight from the §4.1 CSS tokens, so map graphics never

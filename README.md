@@ -85,6 +85,20 @@ roughly **1,200–1,600 visitor sessions per month**, not 5,000.
 Local development spends the same quota — every hot reload that remounts
 `MainMap` is another load. Keep the dev server closed when you aren't using it.
 
+### Optional: the label-free graphical map
+
+Three of the four style combinations are native Google modes. Graphical
+*without* labels has no native mode, so it needs a Cloud-styled Map ID:
+
+1. [Map Management](https://console.cloud.google.com/google/maps-apis/studio/maps)
+   → **Create Map ID** → map type **JavaScript**, tick **Vector**.
+2. Create a **map style**, turn every label/POI feature off, and associate it
+   with that Map ID.
+3. Put the id in `.env.local` as `VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`.
+
+Skip this and the app still works — the labels-off control simply disables
+itself while the graphical map is selected, instead of silently doing nothing.
+
 The map is pinned to the Maps JS **`alpha`** channel in
 [`src/lib/map3d.ts`](src/lib/map3d.ts), because `MapMode.ROADMAP` — the flat
 cartoonish "Map" style in the switch — is pre-GA and exists only there. This is

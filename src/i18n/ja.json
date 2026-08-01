@@ -100,9 +100,11 @@
     "error": "投稿できませんでした。もう一度お試しください。"
   },
   "mapStyle": {
-    "satellite": "文字なし",
-    "hybrid": "文字あり",
-    "roadmap": "地図"
+    "realistic": "写真",
+    "graphical": "地図",
+    "labelsOff": "文字なし",
+    "labelsOn": "文字あり",
+    "labelsOffUnavailable": "文字なしの地図は未設定です"
   },
   "duck": {
     "title": "鴨川の鴨",
@@ -118,7 +120,9 @@
     "stampProgress": "{{earned}} / 10 スポット",
     "certificateLocked": "10個すべて集めると証明書が手に入ります。",
     "certificateUnlocked": "証明書を獲得しました!",
-    "viewCertificate": "証明書を見る"
+    "viewCertificate": "証明書を見る",
+    "stamped": "スタンプ取得済み",
+    "notStamped": "ここでQRを読み取るとスタンプ"
   },
   "scan": {
     "locating": "現在地を確認中…",
@@ -156,12 +160,12 @@
         "body": "この地図には、今まさに川辺で起きていることがリアルタイムで映し出されます。"
       },
       {
-        "title": "❗マーク",
-        "body": "❗マークをタップすると、その場所で行われている活動と参加者が見られます。"
+        "title": "🦆マーク",
+        "body": "地図の鴨は川辺の実際の場所です。タップするとそこで起きていることが見られます。"
       },
       {
-        "title": "🦆マーク",
-        "body": "🦆マークをタップすると、鴨の写真や近くのスタンプスポットが見られます。"
+        "title": "その場所の輪",
+        "body": "中央に鴨、まわりにその場所の活動が並びます。"
       },
       {
         "title": "参加してみよう",

@@ -100,9 +100,8 @@ MAIN MAP (Google Maps 3D, Kamogawa-corridor-locked)
   "you are here" marker · tutorial · language toggle · map style switch
   "duck collection" button -> /duck
   markers (one per PLACE, plus colored duck markers):
-    !  place -> tap plays a cinematic (frame, fly in, orbit), then a popup with
+    duck -> tap plays a cinematic (frame, fly in, orbit), then a popup with
        the place's name/photos and a button into ->
-    duck -> /duck
        |
        v
   /toukou?place=<id>  (that place's board)        /duck
@@ -156,18 +155,24 @@ is visible — at altitude with a tilted camera you see well past it. `maxAltitu
 is therefore the lever that controls how much surrounding Kyoto is in frame, and
 it's set to 8 km to keep the view on the river.
 
-The **style switch** is a single property, `mode`, with three values:
-`SATELLITE` (photorealistic 3D, no labels/names/road text at all — the default),
-`HYBRID` (the same imagery with roads and place names), and `ROADMAP` (the flat
-cartoonish basemap, where water renders a clear blue and the Kamogawa is
-unmistakable). ROADMAP is why the API is pinned to the `alpha` channel — it is
-pre-GA and exists nowhere else. There is no label-free ROADMAP; that would need
-a Cloud-styled Map ID, which can't be swapped at runtime without rebuilding the
-map element and paying for another map load.
+The **style controls** are two orthogonal choices: imagery (*realistic* photo
+vs *graphical*, the flat cartoonish basemap) crossed with labels on/off.
+Google has native modes for only three of the four combinations — `SATELLITE`
+(realistic, no labels — the default), `HYBRID` (realistic + labels) and
+`ROADMAP` (graphical + labels). There is no label-free ROADMAP, so that fourth
+case sets a Cloud-styled `mapId` whose style hides every label layer; `mapId`
+is runtime-settable, so this costs no map rebuild and no extra billable load.
+Without `VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID` configured the control disables
+itself rather than silently doing nothing. ROADMAP is why the API is pinned to
+the `alpha` channel — it is pre-GA and exists nowhere else.
 
-There is **one exclamation marker per fixed PLACE** (not per main), so the map
-stays uncluttered no matter how many mains a place accrues during a gathering.
-Markers are unclustered so each is individually tappable. Tapping a place plays
+Since the round-3 migration (`20260801120000`) **a place IS a duck spot**, so
+there is exactly **one marker set**: 10 duck markers, one per spot, each in its
+duck's color with the "!" worked into the mark. Before that the map carried 16
+exclamation markers *plus* 10 duck markers — 26 icons over a narrow strip of
+river, which read as clutter and made taps ambiguous. The previous places are
+deactivated rather than deleted, so their activities stay browsable in the
+archive. Markers are unclustered so each is individually tappable. Tapping a place plays
 a short cinematic — a pulsing framing highlight, a close fly-in, and a slow
 orbit — then shows a popup with the place's name, a few of its current photos,
 and a button into `/toukou?place=<id>`. Duck spots render as per-spot **colored
@@ -179,7 +184,11 @@ the map.
 ### Toukou / place board (`src/screens/ToukouMap`)
 
 Always scoped to one place (`?place=<id>`) — a bare `/toukou` visit bounces
-back to the map. The board shows **every (non-archived) main at that place**,
+back to the map. Since round-3 this is the **combined board**: the place's duck
+sits at the centre (its color, its name, whether you've earned its stamp) with
+that spot's shared duck photos hanging off it, and the main activities orbit
+the duck. One screen answers both "what happens here" and "which duck is this".
+It shows **every (non-archived) main at that place**,
 each in its activity-type color, with its subs orbiting in a lighter shade; the
 mains repel into separate clusters. Activities persist across days — they're
 not scoped to the current gathering event, so a place's web stays populated;
@@ -227,7 +236,7 @@ edit an applied migration, add a new file). Summary:
 |---|---|
 | `profiles` | One row per anonymous user; nationality/age/gender from onboarding |
 | `activity_types` | Seeded palette (writing, reading, walking, music, yoga…) |
-| `places` | 16 active fixed riverbank locations tracing the river's shape; each is one map marker. Ships seeded in its migration (clients can't insert) |
+| `places` | Riverbank locations; each active one is one map marker. Since `20260801120000` each links 1:1 to a `duck_spot` via `duck_spot_id`, so the 10 active places *are* the 10 ducks. Earlier place sets are deactivated, not deleted, so their activities stay in the archive |
 | `events` | Daily gathering windows; today's is upserted on read by `ensure_todays_event()` |
 | `activities` | Both mains and subs (`kind`); mains carry `place_id` + `event_id`; also `parent_id`, `activity_type`, `photo_url`, `phrase`, `lat/lng`, `likes`/`dislikes`, `archived`, `hidden` |
 | `votes` | One row per `(user_id, activity_id)`; switching updates it in place |

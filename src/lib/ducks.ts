@@ -26,22 +26,66 @@ export function duckColor(index: number): string {
   return DUCK_PALETTE[index % DUCK_PALETTE.length];
 }
 
-/**
- * The placeholder duck mark recolored to `color` -- the base `duck.svg`
- * shape with its body/head/outline swapped to the duck's color -- returned as
- * an inline SVG data URI usable as both a 3D map marker image and a React
- * `<img src>`. Replace this with the real per-duck art when it's ready.
- */
-export function duckIconDataUri(color: string): string {
-  const beak = '#2E3A59';
-  const surface = '#E9E4D8';
-  const svg =
-    `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">` +
-    `<circle cx="32" cy="32" r="29" fill="${surface}" stroke="${color}" stroke-width="2.5"/>` +
+const BEAK = '#2E3A59';
+const SURFACE = '#E9E4D8';
+
+/** The duck body/head/beak/eye, shared by every variant. */
+function duckBody(color: string): string {
+  return (
     `<path d="M17 39c-0.6-9 7.6-16 17.4-15 8 0.8 13.4 6.4 12.4 12.6-1 6.3-9 9.6-17.6 8.7-6-0.6-11.8-2-12.2-6.3z" fill="${color}"/>` +
     `<circle cx="39.5" cy="23.5" r="7.6" fill="${color}"/>` +
-    `<path d="M46.5 23 L54.5 20.5 L54 26.5 Z" fill="${beak}"/>` +
-    `<circle cx="41.5" cy="21.5" r="1.5" fill="${surface}"/>` +
+    `<path d="M46.5 23 L54.5 20.5 L54 26.5 Z" fill="${BEAK}"/>` +
+    `<circle cx="41.5" cy="21.5" r="1.5" fill="${SURFACE}"/>`
+  );
+}
+
+/**
+ * `width`/`height` here are load-bearing, not decoration. Google rasterizes
+ * marker SVGs and explicitly ignores CSS applied to the `<img>` ("CSS classes
+ * added to images won't be applied"), so the *intrinsic* size is the only
+ * thing that controls how big a marker draws. A viewBox-only SVG has no
+ * intrinsic size and browsers fall back to ~300px — which is exactly how these
+ * ended up swallowing the map.
+ */
+function svgDataUri(inner: string, sizePx: number): string {
+  const svg =
+    `<svg viewBox="0 0 64 64" width="${sizePx}" height="${sizePx}" xmlns="http://www.w3.org/2000/svg">` +
+    inner +
     `</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/**
+ * The plain duck mark recolored to `color` — used wherever the duck is being
+ * shown as itself (stamp card slots, the duck graph), with no claim about
+ * activity happening there.
+ */
+export function duckIconDataUri(color: string, sizePx = 64): string {
+  return svgDataUri(
+    `<circle cx="32" cy="32" r="29" fill="${SURFACE}" stroke="${color}" stroke-width="2.5"/>` +
+      duckBody(color),
+    sizePx,
+  );
+}
+
+/**
+ * The map marker: the same duck with the exclamation mark worked into it.
+ *
+ * There used to be two marker sets on the map — exclamation marks for activity
+ * places and ducks for stamp spots — which put 26 icons over a narrow strip of
+ * river and made taps ambiguous. Now a place IS a duck spot, so one mark has to
+ * say both "something is happening here" and "this is duck N". The "!" sits in
+ * a small indigo badge clipped to the rim, which stays legible at marker size
+ * without fighting the duck for the middle of the circle.
+ */
+export function duckPlaceIconDataUri(color: string, sizePx = 64): string {
+  return svgDataUri(
+    `<circle cx="32" cy="32" r="29" fill="${SURFACE}" stroke="${color}" stroke-width="2.5"/>` +
+      duckBody(color) +
+      // Badge: indigo disc on the upper-left rim, carrying a stone "!".
+      `<circle cx="15" cy="15" r="12.5" fill="${BEAK}" stroke="${SURFACE}" stroke-width="2.5"/>` +
+      `<path d="M15 7.5c1.15 0 2.05 0.85 1.95 2.1l-0.85 7.4c-0.1 0.9-2.1 0.9-2.2 0l-0.85-7.4C12.95 8.35 13.85 7.5 15 7.5z" fill="${SURFACE}"/>` +
+      `<circle cx="15" cy="20.6" r="1.85" fill="${SURFACE}"/>`,
+    sizePx,
+  );
 }

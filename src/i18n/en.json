@@ -102,9 +102,11 @@
     "error": "Couldn't post. Try again."
   },
   "mapStyle": {
-    "satellite": "No labels",
-    "hybrid": "Labels",
-    "roadmap": "Map"
+    "realistic": "Photo",
+    "graphical": "Map",
+    "labelsOff": "No labels",
+    "labelsOn": "Labels",
+    "labelsOffUnavailable": "Label-free map view isn't configured"
   },
   "duck": {
     "title": "Ducks of the Kamogawa",
@@ -120,7 +122,9 @@
     "stampProgress": "{{earned}} / 10 spots",
     "certificateLocked": "Collect all 10 stamps to unlock your certificate.",
     "certificateUnlocked": "Certificate unlocked!",
-    "viewCertificate": "View certificate"
+    "viewCertificate": "View certificate",
+    "stamped": "Stamp collected",
+    "notStamped": "Scan the QR here for a stamp"
   },
   "scan": {
     "locating": "Finding your location…",
@@ -158,12 +162,12 @@
         "body": "This map shows what's happening on the riverbank right now, live."
       },
       {
-        "title": "Exclamation marks",
-        "body": "Tap a ! marker to see the activity happening there and who's part of it."
+        "title": "Duck markers",
+        "body": "Every duck on the map is a real spot on the river. Tap one to see what's happening there."
       },
       {
-        "title": "Duck marks",
-        "body": "Tap a duck to browse duck photos and find nearby stamp spots."
+        "title": "The spot's web",
+        "body": "That spot's duck sits in the middle, with the activities happening around it."
       },
       {
         "title": "Join in",

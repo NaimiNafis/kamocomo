@@ -13,7 +13,7 @@ import {
   locateAndMarkVisitor,
   orbitPlace,
   setHomeView,
-  setMapStyle as applyMapStyle,
+  applyMapView,
   type Map3D,
   type Maps3D,
   type MapStyle,
@@ -67,9 +67,10 @@ export function MainMap() {
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
-  // Label-free by default: SATELLITE shows no place names, road names or text
-  // at all, which is the view the app is designed around.
-  const [mapStyle, setMapStyleState] = useState<MapStyle>('satellite');
+  // Label-free realistic by default: no place names, road names or text at
+  // all, which is the view the app is designed around.
+  const [mapStyle, setMapStyleState] = useState<MapStyle>('realistic');
+  const [showLabels, setShowLabels] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [tutorialOverride, setTutorialOverride] = useState<boolean | null>(null);
   const [mapHintDismissed, setMapHintDismissed] = useState(
@@ -314,7 +315,12 @@ export function MainMap() {
 
   function handleMapStyleChange(style: MapStyle) {
     setMapStyleState(style);
-    if (mapRef.current) applyMapStyle(mapRef.current, style);
+    if (mapRef.current) applyMapView(mapRef.current, style, showLabels);
+  }
+
+  function handleLabelsChange(next: boolean) {
+    setShowLabels(next);
+    if (mapRef.current) applyMapView(mapRef.current, mapStyle, next);
   }
 
   const showChrome = introPhase === 'done';
@@ -365,7 +371,12 @@ export function MainMap() {
           </div>
 
           <div className="absolute bottom-4 right-4 z-10">
-            <MapStyleSwitch value={mapStyle} onChange={handleMapStyleChange} />
+            <MapStyleSwitch
+              style={mapStyle}
+              showLabels={showLabels}
+              onStyleChange={handleMapStyleChange}
+              onLabelsChange={handleLabelsChange}
+            />
           </div>
 
           {qrSpot && (
