@@ -299,12 +299,20 @@ export function ToukouMap() {
                     className="h-14 w-14"
                     draggable={false}
                   />
-                  <span className="line-clamp-1 text-center font-display text-sm">
+                  {/* Wraps rather than truncating -- "Kamogawa Delta" reading
+                      as "Kamogawa …" told you less than the space allowed. */}
+                  <span className="text-balance text-center font-display text-sm leading-tight">
                     {isJa ? duck.nameJa : duck.nameEn}
                   </span>
-                  <span className="font-ui text-[10px] opacity-80">
-                    {duck.earned ? `✓ ${t('duck.stamped')}` : t('duck.notStamped')}
-                  </span>
+                  {/* Earned shows a mark, not a sentence; the instruction line
+                      that used to sit here was the same on every unstamped duck
+                      and pushed the name around. The label keeps it readable to
+                      a screen reader. */}
+                  {duck.earned && (
+                    <span className="font-ui text-[11px] opacity-80" title={t('duck.stamped')}>
+                      ✓
+                    </span>
+                  )}
                 </div>,
                 'cursor-grab active:cursor-grabbing',
               );

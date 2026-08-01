@@ -111,8 +111,7 @@
     "certificateLocked": "10個すべて集めると証明書が手に入ります。",
     "certificateUnlocked": "証明書を獲得しました!",
     "viewCertificate": "証明書を見る",
-    "stamped": "スタンプ取得済み",
-    "notStamped": "ここでQRを読み取るとスタンプ"
+    "stamped": "スタンプ取得済み"
   },
   "scan": {
     "locating": "現在地を確認中…",

@@ -160,7 +160,10 @@ export function NodeCard({ node, onLike, onDislike, onViewArchived }: NodeCardPr
 
       <div className="px-2 py-1.5 pb-2">
         {node.phrase && (
-          <p className="line-clamp-2 font-ui leading-snug" style={{ fontSize: isMain ? 11 : 10 }}>
+          // Clamped to two lines on purpose: the collision radii in
+          // useForceGraph are sized to a fixed card height, so an unbounded
+          // phrase would overlap its neighbours.
+          <p className="line-clamp-2 text-center font-ui leading-snug" style={{ fontSize: isMain ? 11 : 10 }}>
             {node.phrase}
           </p>
         )}
@@ -194,7 +197,7 @@ export function NodeCard({ node, onLike, onDislike, onViewArchived }: NodeCardPr
               e.stopPropagation();
               onViewArchived();
             }}
-            className="mt-1 block w-full text-left font-ui underline"
+            className="mt-1 block w-full text-center font-ui underline"
             style={{ fontSize: 9 }}
           >
             {t('toukou.viewArchived')}

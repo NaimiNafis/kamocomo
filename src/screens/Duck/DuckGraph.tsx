@@ -164,7 +164,7 @@ function DuckMainCard({ node, name }: { node: DuckNode; name: string }) {
       style={{ backgroundColor: node.color, color: textColor }}
     >
       <img src={duckIconDataUri(node.color)} alt="" className="h-12 w-12" draggable={false} />
-      <span className="line-clamp-1 text-center font-display text-sm">{name}</span>
+      <span className="text-balance text-center font-display text-sm leading-tight">{name}</span>
       {node.earned && <span className="font-ui text-[10px] opacity-80">✓</span>}
     </div>
   );

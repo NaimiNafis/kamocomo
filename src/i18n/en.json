@@ -113,8 +113,7 @@
     "certificateLocked": "Collect all 10 stamps to unlock your certificate.",
     "certificateUnlocked": "Certificate unlocked!",
     "viewCertificate": "View certificate",
-    "stamped": "Stamp collected",
-    "notStamped": "Scan the QR here for a stamp"
+    "stamped": "Stamp collected"
   },
   "scan": {
     "locating": "Finding your location…",
