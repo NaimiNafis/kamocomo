@@ -10,8 +10,21 @@ const FIT_PADDING = 90; // room for card size around the extreme nodes
  * lose the graph off-screen and be unable to find it again. */
 const PAN_SLACK = 0.5;
 
-/** How far the opening animation closes in from the fit-everything view. */
-const INTRO_ZOOM_IN = 1.6;
+/** How far the opening animation closes in from the fit-everything view. Kept
+ * modest: the further in it lands, the less graph is on screen and the more of
+ * it a single swipe crosses, which reads as the board being twitchy. */
+const INTRO_ZOOM_IN = 1.25;
+
+/**
+ * Screen pixels of content movement per pixel of finger movement.
+ *
+ * 1 is exact tracking, which is what a map does and what direct manipulation
+ * normally wants. Slightly under that trades a little of the "stuck to my
+ * finger" feel for control on a dense board, where 1:1 at close zoom sends
+ * cards off-screen faster than you can follow. Put it back to 1 for exact
+ * tracking.
+ */
+const PAN_SENSITIVITY = 0.8;
 /** How long the whole board stays in frame before that move begins. */
 const INTRO_HOLD_MS = 900;
 /** Duration of the ease-in, mirrored by the CSS transition the caller applies. */
@@ -105,17 +118,21 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
   // The opening move: hold the whole board in frame for a beat so you can see
   // how much is here, then ease in to the middle.
   //
-  // Three phases rather than a boolean, because the transition has to be
-  // mounted *across* the transform change -- a flag that flips at the moment
-  // the transform moves would let it snap, and one that's true beforehand and
-  // false after leaves the easing switched on for every later drag.
-  const [introPhase, setIntroPhase] = useState<'hold' | 'gliding' | 'done'>('hold');
+  // Four phases, and 'arming' is the one that isn't obvious. A CSS transition
+  // only animates a property that changes while the transition is ALREADY
+  // declared on the element; mount the transition and the new transform in the
+  // same render and the browser simply paints the end state. So 'arming' puts
+  // the transition on for one frame with the transform untouched, and only then
+  // does 'gliding' move it. 'done' takes the easing back off, so nothing the
+  // user does afterwards is animated.
+  const [introPhase, setIntroPhase] = useState<'hold' | 'arming' | 'gliding' | 'done'>('hold');
   const fitted = fitView(positions, size);
+  // Zoomed only from 'gliding' onward -- 'arming' must still render the fitted
+  // transform, or there's nothing left to animate from.
+  const zoomedIn = introPhase === 'gliding' || introPhase === 'done';
   const view =
     userView ??
-    (introPhase === 'hold'
-      ? fitted
-      : { ...fitted, scale: Math.min(fitted.scale * INTRO_ZOOM_IN, MAX_SCALE) });
+    (zoomedIn ? { ...fitted, scale: Math.min(fitted.scale * INTRO_ZOOM_IN, MAX_SCALE) } : fitted);
   const gesture = useRef<Gesture | null>(null);
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
 
@@ -124,12 +141,26 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
   const ready = size.w > 0 && positions.size > 0;
   useEffect(() => {
     if (!ready || introPhase !== 'hold') return;
-    const timer = setTimeout(() => setIntroPhase('gliding'), INTRO_HOLD_MS);
+    const timer = setTimeout(() => setIntroPhase('arming'), INTRO_HOLD_MS);
     return () => clearTimeout(timer);
   }, [ready, introPhase]);
 
-  // Retire the transition once the glide has played, so nothing the user does
-  // afterwards is eased. This is the whole reason for the third phase.
+  // Let the browser paint one frame with the transition declared and the
+  // transform unchanged, then move it. Two rAFs rather than one: a single frame
+  // isn't reliably enough for the style to have been committed.
+  useEffect(() => {
+    if (introPhase !== 'arming') return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setIntroPhase('gliding'));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [introPhase]);
+
+  // Retire the easing once the glide has played.
   useEffect(() => {
     if (introPhase !== 'gliding') return;
     const timer = setTimeout(() => setIntroPhase('done'), INTRO_GLIDE_MS);
@@ -224,8 +255,8 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
         clampPan(
           {
             scale: v?.scale ?? view.scale,
-            tx: g.startTx + (e.clientX - g.startX),
-            ty: g.startTy + (e.clientY - g.startY),
+            tx: g.startTx + (e.clientX - g.startX) * PAN_SENSITIVITY,
+            ty: g.startTy + (e.clientY - g.startY) * PAN_SENSITIVITY,
           },
           positions,
           size,
@@ -277,7 +308,7 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
     view,
     /** True only for the duration of the opening glide, so the caller eases the
      * transform for exactly that long and never during interaction. */
-    introGliding: introPhase === 'gliding',
+    introGliding: introPhase === 'arming' || introPhase === 'gliding',
     introGlideMs: INTRO_GLIDE_MS,
     resetView,
     containerHandlers: {
