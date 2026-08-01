@@ -269,7 +269,7 @@ export function MainMap() {
       map?.remove();
       mapRef.current = null;
     };
-    // Runs once: the intro plays out (or is skipped) exactly once per mount.
+    // Runs once: the intro plays out exactly once per mount.
     // navigate()/t() are stable references, safe to omit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
