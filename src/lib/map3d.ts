@@ -282,14 +282,16 @@ export function applyKamogawaConstraints(map: Map3D): () => void {
 // =========================================================================
 
 /**
- * §5.3 map view. Both remaining views are photorealistic 3D; the only choice is
- * whether Google draws its labels over them.
- *
- * There used to be a second axis — a flat cartoonish "Map" style — but that was
- * `MapMode.ROADMAP`, which is pre-GA and alpha-channel only. Production is on
- * the stable channel, so it isn't available. The label-free half of that pair
- * needed a Cloud-styled Map ID (`VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`); with
- * ROADMAP gone, SATELLITE is natively label-free and no Map ID is involved.
+ * Which of the two map surfaces is showing. `'3d'` is `Map3DElement`'s
+ * photorealistic imagery; `'2d'` is the classic flat Google map (see
+ * `lib/map2d.ts` for why that's a separate API rather than `MapMode.ROADMAP`).
+ */
+export type MapStyle = '3d' | '2d';
+
+/**
+ * §5.3 labels over the 3D imagery. `SATELLITE` is natively label-free and
+ * `HYBRID` adds road and place names, so this needs no Cloud-styled Map ID —
+ * the 2D map handles its own labels with inline styles.
  */
 export function applyMapView(map: Map3D, showLabels: boolean): void {
   map.mapId = null;

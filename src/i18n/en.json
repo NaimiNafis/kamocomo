@@ -95,7 +95,9 @@
   },
   "mapStyle": {
     "labelsOff": "No labels",
-    "labelsOn": "Labels"
+    "labelsOn": "Labels",
+    "threeD": "3D",
+    "twoD": "2D"
   },
   "duck": {
     "testMode": "Test mode: scan any QR without being there",

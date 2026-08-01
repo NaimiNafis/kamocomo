@@ -16,9 +16,11 @@ import {
   applyMapView,
   type Map3D,
   type Maps3D,
+  type MapStyle,
   type MarkerPoint,
   type UserLocationMarker,
 } from '../../lib/map3d';
+import { createMap2D, type Map2DHandle } from '../../lib/map2d';
 import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
 import { logQrEntry } from '../../lib/duck';
 import { HAS_SEEN_INTRO_KEY, OPEN_DUCK_AFTER_INTRO_KEY } from '../../lib/entryFlags';
@@ -65,12 +67,18 @@ export function MainMap() {
   const constraintsCleanupRef = useRef<(() => void) | null>(null);
   const closeCinematicRef = useRef<() => void>(() => {});
   const userLocationRef = useRef<UserLocationMarker | null>(null);
+  // The flat map is built the first time someone actually asks for it. A 2D map
+  // load bills to its own SKU, so a visitor who never leaves 3D never spends one.
+  const map2dRef = useRef<Map2DHandle | null>(null);
+  const map2dContainerRef = useRef<HTMLDivElement>(null);
+  const placePointsRef = useRef<MarkerPoint[]>([]);
   const headingAskedRef = useRef(false);
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
-  // Label-free by default: no place names, road names or text at all, which is
-  // the view the app is designed around.
+  // Label-free 3D by default: no place names, road names or text at all, which
+  // is the view the app is designed around.
+  const [mapStyle, setMapStyleState] = useState<MapStyle>('3d');
   const [showLabels, setShowLabels] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [tutorialOverride, setTutorialOverride] = useState<boolean | null>(null);
@@ -194,7 +202,11 @@ export function MainMap() {
       void fetchPlaceMarkers().then((points) => {
         if (!mounted) return;
         placePoints = points;
+        // The flat map draws the same set, and it may be built long after this
+        // resolves, so the points have to outlive this closure.
+        placePointsRef.current = points;
         markerLayer.setMarkers(placePoints);
+        map2dRef.current?.setMarkers(points);
       });
 
       function finishIntro() {
@@ -263,6 +275,8 @@ export function MainMap() {
       constraintsCleanupRef.current?.();
       constraintsCleanupRef.current = null;
       disposers.forEach((dispose) => dispose());
+      map2dRef.current?.dispose();
+      map2dRef.current = null;
       userLocationRef.current = null;
       map?.remove();
       mapRef.current = null;
@@ -328,6 +342,52 @@ export function MainMap() {
   function handleLabelsChange(next: boolean) {
     setShowLabels(next);
     if (mapRef.current) applyMapView(mapRef.current, next);
+    map2dRef.current?.setLabels(next);
+  }
+
+  /**
+   * Switch surfaces, handing the camera across so you keep looking at the same
+   * stretch of river rather than being dropped somewhere else.
+   */
+  async function handleMapStyleChange(next: MapStyle) {
+    if (next === mapStyle) return;
+    const height = containerRef.current?.clientHeight ?? 800;
+    setMapStyleState(next);
+
+    if (next === '2d') {
+      const map3d = mapRef.current;
+      const centre = map3d?.center;
+      const container = map2dContainerRef.current;
+      if (!container) return;
+
+      if (!map2dRef.current) {
+        try {
+          map2dRef.current = await createMap2D(container, openPlaceFrom2D);
+          map2dRef.current.setLabels(showLabels);
+          map2dRef.current.setMarkers(placePointsRef.current);
+        } catch {
+          setMapStyleState('3d'); // couldn't build it; stay where we were
+          return;
+        }
+      }
+      if (centre && typeof centre.lat === 'number' && typeof centre.lng === 'number') {
+        map2dRef.current.moveTo(centre.lat, centre.lng, map3d?.range ?? 4500, height);
+      }
+    } else {
+      // Coming back: point the 3D camera where the flat map was looking.
+      const view = map2dRef.current?.readView(height);
+      const map3d = mapRef.current;
+      if (view && map3d) {
+        map3d.center = { lat: view.lat, lng: view.lng, altitude: 0 };
+        map3d.range = view.range;
+      }
+    }
+  }
+
+  /** A duck tapped on the flat map goes straight to its board -- the fly-in and
+   * sweep are a 3D camera move and have no meaning here. */
+  function openPlaceFrom2D(placeId: string) {
+    navigate(`/toukou?place=${placeId}`);
   }
 
   const showChrome = introPhase === 'done';
@@ -337,8 +397,17 @@ export function MainMap() {
       <div
         ref={containerRef}
         className="h-full w-full"
+        style={{ visibility: mapStyle === '3d' ? 'visible' : 'hidden' }}
         data-testid="map-3d"
         onPointerDown={handleMapPointerDown}
+      />
+      {/* Kept mounted rather than unmounted so switching back doesn't rebuild
+          the map -- a rebuild would be another billable map load. */}
+      <div
+        ref={map2dContainerRef}
+        className="absolute inset-0 h-full w-full"
+        style={{ visibility: mapStyle === '2d' ? 'visible' : 'hidden' }}
+        data-testid="map-2d"
       />
 
       {mapFailed && (
@@ -378,7 +447,12 @@ export function MainMap() {
           </div>
 
           <div className="absolute bottom-4 right-4 z-10">
-            <MapStyleSwitch showLabels={showLabels} onLabelsChange={handleLabelsChange} />
+            <MapStyleSwitch
+              style={mapStyle}
+              showLabels={showLabels}
+              onStyleChange={(s) => void handleMapStyleChange(s)}
+              onLabelsChange={handleLabelsChange}
+            />
           </div>
 
           {qrSpot && (

@@ -86,10 +86,10 @@ Local development spends the same quota — every hot reload that remounts
 `MainMap` is another load. Keep the dev server closed when you aren't using it.
 
 The map is pinned to the Maps JS **`weekly`** (stable) channel in
-[`src/lib/map3d.ts`](src/lib/map3d.ts). Do not move it to `v=alpha`: that
-channel is documented as development-only and can change without notice on a
-deployed site. The cost is that `MapMode.ROADMAP`, a flat cartoonish basemap,
-is unavailable — it's pre-GA and exists on no other channel.
+[`src/lib/map3d.ts`](src/lib/map3d.ts). **Do not set `v: 'alpha'`** — it renders
+a dismissible "For development purposes only" banner above the map that every
+visitor sees, and the channel can change without notice. The 3D/2D switch does
+not need it: 2D is the classic `google.maps.Map`, which is GA.
 
 ### One-time Supabase configuration
 

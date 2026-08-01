@@ -193,18 +193,35 @@ is visible — at altitude with a tilted camera you see well past it. `maxAltitu
 is therefore the lever that controls how much surrounding Kyoto is in frame, and
 it's set to 8 km to keep the view on the river.
 
-The **map view** has one control: whether Google draws its labels over the
-photorealistic imagery. `SATELLITE` is label-free (the default) and `HYBRID`
-adds road and place names.
+The **map controls** are two orthogonal choices: which surface (**3D** photoreal
+vs **2D** flat) and whether labels are drawn over it.
 
-It was briefly two axes, crossed with a flat cartoonish basemap labelled "2D".
-That basemap is `MapMode.ROADMAP`, which is **pre-GA and exists only on the
-`v=alpha` channel** — a channel Google documents as development-only and may
-change without notice. Carrying that on a deployed public site wasn't worth one
-extra view, so the API is pinned to `weekly` and ROADMAP is gone. The
-label-free half of that pair also needed a Cloud-styled `mapId`
-(`VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`); with ROADMAP gone, SATELLITE is
-natively label-free and no Map ID is involved.
+They are **two different Google APIs**, which is the part worth knowing.
+`Map3DElement` gives 3D — `SATELLITE` is natively label-free (the default),
+`HYBRID` adds road and place names. The flat map is the *classic*
+`google.maps.Map` (`lib/map2d.ts`), **not** `Map3DElement`'s `MapMode.ROADMAP`:
+that mode is pre-GA and exists only on the `v=alpha` channel, which renders a
+"For development purposes only" banner above the map **for every visitor**. The
+classic 2D API has been GA for years and looks the same, so the banner buys
+nothing. The loader stays on `weekly`.
+
+Consequences worth remembering:
+
+- The 2D map carries **no `mapId`**, which is what lets it toggle labels with
+  inline `styles` and needs no Cloud console work. That's also why its markers
+  are the classic `Marker` rather than `AdvancedMarkerElement`, which requires a
+  `mapId` and would take the inline styling away.
+- It's **built lazily**, on the first switch to 2D. A 2D map load bills to
+  Dynamic Maps, a different SKU from the 3D map's Immersive Maps, each with its
+  own free allowance — so the two don't compete and a visitor who stays in 3D
+  never spends one. Once built it stays mounted, hidden, so switching back
+  doesn't pay for another.
+- Switching **hands the camera across** in both directions, converting between
+  the 3D camera's `range` and a 2D `zoom`, so you keep looking at the same
+  stretch of river. Its `restriction` and min/max zoom mirror the 3D corridor
+  clamp, so §8.1 holds on both surfaces.
+- Tapping a duck on the flat map goes **straight to that place's board**: the
+  fly-in and sweep are a 3D camera move with no meaning in 2D.
 
 Since the round-3 migration (`20260801120000`) **a place IS a duck spot**, so
 there is exactly **one marker set**: 10 duck markers, one per spot, each in its
