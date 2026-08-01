@@ -73,6 +73,7 @@ export function MainMap() {
   const map2dRef = useRef<Map2DHandle | null>(null);
   const map2dContainerRef = useRef<HTMLDivElement>(null);
   const placePointsRef = useRef<MarkerPoint[]>([]);
+  const pendingCameraRef = useRef<{ lat: number; lng: number; range: number } | null>(null);
   const headingAskedRef = useRef(false);
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
@@ -355,31 +356,22 @@ export function MainMap() {
   /**
    * Switch surfaces, handing the camera across so you keep looking at the same
    * stretch of river rather than being dropped somewhere else.
+   *
+   * Only records where to go; the flat map is built and moved in the effect
+   * below. Building it here would run before React re-rendered, while its
+   * container is still `visibility: hidden` — and Google Maps sizes itself from
+   * its container at construction, so it would come up blank.
    */
-  async function handleMapStyleChange(next: MapStyle) {
+  function handleMapStyleChange(next: MapStyle) {
     if (next === mapStyle) return;
     const height = containerRef.current?.clientHeight ?? 800;
-    setMapStyleState(next);
 
     if (next === '2d') {
-      const map3d = mapRef.current;
-      const centre = map3d?.center;
-      const container = map2dContainerRef.current;
-      if (!container) return;
-
-      if (!map2dRef.current) {
-        try {
-          map2dRef.current = await createMap2D(container, openPlaceFrom2D);
-          map2dRef.current.setLabels(showLabels);
-          map2dRef.current.setMarkers(placePointsRef.current);
-        } catch {
-          setMapStyleState('3d'); // couldn't build it; stay where we were
-          return;
-        }
-      }
-      if (centre && typeof centre.lat === 'number' && typeof centre.lng === 'number') {
-        map2dRef.current.moveTo(centre.lat, centre.lng, map3d?.range ?? 4500, height);
-      }
+      const centre = mapRef.current?.center;
+      pendingCameraRef.current =
+        centre && typeof centre.lat === 'number' && typeof centre.lng === 'number'
+          ? { lat: centre.lat, lng: centre.lng, range: mapRef.current?.range ?? 4500 }
+          : null;
     } else {
       // Coming back: point the 3D camera where the flat map was looking.
       const view = map2dRef.current?.readView(height);
@@ -389,7 +381,49 @@ export function MainMap() {
         map3d.range = view.range;
       }
     }
+    setMapStyleState(next);
   }
+
+  // Builds the flat map the first time it's shown, and points it wherever the
+  // 3D camera was. Runs after the render that makes its container visible.
+  useEffect(() => {
+    if (mapStyle !== '2d') return;
+    const container = map2dContainerRef.current;
+    if (!container) return;
+    let cancelled = false;
+
+    void (async () => {
+      if (!map2dRef.current) {
+        try {
+          const handle = await createMap2D(container, openPlaceFrom2D);
+          if (cancelled) return;
+          map2dRef.current = handle;
+          handle.setLabels(showLabels);
+          handle.setMarkers(placePointsRef.current);
+        } catch {
+          if (!cancelled) setMapStyleState('3d'); // couldn't build it; stay put
+          return;
+        }
+      }
+      const target = pendingCameraRef.current;
+      pendingCameraRef.current = null;
+      if (target) {
+        map2dRef.current.moveTo(
+          target.lat,
+          target.lng,
+          target.range,
+          containerRef.current?.clientHeight ?? 800,
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // showLabels is applied by handleLabelsChange; re-running on it would
+    // rebuild nothing and re-move the camera under the user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapStyle]);
 
   /** A duck tapped on the flat map goes straight to its board -- the fly-in and
    * sweep are a 3D camera move and have no meaning here. */
@@ -457,7 +491,7 @@ export function MainMap() {
             <MapStyleSwitch
               style={mapStyle}
               showLabels={showLabels}
-              onStyleChange={(s) => void handleMapStyleChange(s)}
+              onStyleChange={handleMapStyleChange}
               onLabelsChange={handleLabelsChange}
             />
           </div>
