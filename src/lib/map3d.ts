@@ -64,20 +64,20 @@ let optionsSet = false;
  * Loads the `maps3d` library. The Maps JS API is fetched from Google's CDN on
  * first call and cached by the loader, so repeat calls are cheap.
  *
- * ⚠ Pinned to `alpha`, not the stable `weekly` channel, and that is a
- * deliberate trade. `MapMode.ROADMAP` — the flat, cartoonish basemap with blue
- * water that the style switch offers as "Map" — is documented as Experimental
- * (pre-GA) and exists ONLY on `v=alpha`. Taking it puts the whole 3D map,
- * intro flight included, on a channel Google may change without notice.
+ * Pinned to `weekly`, the stable channel. This briefly ran on `alpha` to get
+ * `MapMode.ROADMAP` — the flat cartoonish basemap the style switch offered as
+ * "Map" — which is documented as Experimental (pre-GA) and exists on no other
+ * channel. That put a live public site on a channel Google explicitly says is
+ * for development and may change without notice, which isn't a trade worth
+ * making for one extra view.
  *
- * If the map ever breaks unannounced in production, this line is the first
- * suspect: switch back to `weekly` and drop 'roadmap' from MapStyle, and
- * everything else keeps working.
+ * ROADMAP is therefore unavailable, and `MapStyle` no longer offers it. If it
+ * ever reaches GA, switching back is this line plus restoring the mode.
  */
 export function loadMaps3d(): Promise<Maps3D> {
   if (!optionsSet) {
     const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    setOptions({ key, v: 'alpha' });
+    setOptions({ key, v: 'weekly' });
     optionsSet = true;
   }
   return importLibrary('maps3d');
@@ -282,50 +282,18 @@ export function applyKamogawaConstraints(map: Map3D): () => void {
 // =========================================================================
 
 /**
- * Two independent choices, four combinations:
- *   realistic — photorealistic 3D imagery. Shown to users as "3D".
- *   graphical — the flat cartoonish basemap (blue water, green parks), so the
- *               Kamogawa is unmistakable. Shown as "2D". Pre-GA, alpha only.
- * crossed with labels on/off.
+ * §5.3 map view. Both remaining views are photorealistic 3D; the only choice is
+ * whether Google draws its labels over them.
  *
- * The internal names describe the rendering; the labels describe how it reads
- * to a visitor. They're kept apart on purpose — ROADMAP is still drawn on a
- * tilted 3D globe, so calling it `twoD` in code would be a lie, even though
- * "2D" is the right word on the button.
- *
- * Google only has native modes for three of the four. SATELLITE is realistic
- * without labels, HYBRID is realistic with them, ROADMAP is graphical with
- * them — but there is no label-free ROADMAP. That combination is done with a
- * Cloud-styled Map ID whose style hides every label layer, applied only for
- * that one case and cleared otherwise. `mapId` is runtime-settable, so this
- * costs no map rebuild and no extra billable load.
- *
- * Without VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID configured, graphical + labels-off
- * degrades to graphical *with* labels rather than breaking; `labelFreeGraphical
- * Available()` lets the UI show that honestly instead of offering a dead toggle.
+ * There used to be a second axis — a flat cartoonish "Map" style — but that was
+ * `MapMode.ROADMAP`, which is pre-GA and alpha-channel only. Production is on
+ * the stable channel, so it isn't available. The label-free half of that pair
+ * needed a Cloud-styled Map ID (`VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`); with
+ * ROADMAP gone, SATELLITE is natively label-free and no Map ID is involved.
  */
-export type MapStyle = 'realistic' | 'graphical';
-
-function labelFreeMapId(): string | undefined {
-  return import.meta.env.VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID || undefined;
-}
-
-/** Whether the graphical + no-labels combination can actually be honored. */
-export function labelFreeGraphicalAvailable(): boolean {
-  return labelFreeMapId() !== undefined;
-}
-
-export function applyMapView(map: Map3D, style: MapStyle, showLabels: boolean): void {
-  if (style === 'realistic') {
-    map.mapId = null;
-    map.mode = showLabels ? 'HYBRID' : 'SATELLITE';
-    return;
-  }
-
-  const styledId = labelFreeMapId();
-  // ROADMAP always draws labels; the Map ID is what removes them.
-  map.mapId = !showLabels && styledId ? styledId : null;
-  map.mode = 'ROADMAP';
+export function applyMapView(map: Map3D, showLabels: boolean): void {
+  map.mapId = null;
+  map.mode = showLabels ? 'HYBRID' : 'SATELLITE';
 }
 
 /** Reads a color straight from the §4.1 CSS tokens, so map graphics never

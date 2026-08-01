@@ -16,7 +16,6 @@ import {
   applyMapView,
   type Map3D,
   type Maps3D,
-  type MapStyle,
   type MarkerPoint,
   type UserLocationMarker,
 } from '../../lib/map3d';
@@ -70,9 +69,8 @@ export function MainMap() {
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
-  // Label-free realistic by default: no place names, road names or text at
-  // all, which is the view the app is designed around.
-  const [mapStyle, setMapStyleState] = useState<MapStyle>('realistic');
+  // Label-free by default: no place names, road names or text at all, which is
+  // the view the app is designed around.
   const [showLabels, setShowLabels] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [tutorialOverride, setTutorialOverride] = useState<boolean | null>(null);
@@ -327,14 +325,9 @@ export function MainMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [introPhase, mapHintDismissed]);
 
-  function handleMapStyleChange(style: MapStyle) {
-    setMapStyleState(style);
-    if (mapRef.current) applyMapView(mapRef.current, style, showLabels);
-  }
-
   function handleLabelsChange(next: boolean) {
     setShowLabels(next);
-    if (mapRef.current) applyMapView(mapRef.current, mapStyle, next);
+    if (mapRef.current) applyMapView(mapRef.current, next);
   }
 
   const showChrome = introPhase === 'done';
@@ -385,12 +378,7 @@ export function MainMap() {
           </div>
 
           <div className="absolute bottom-4 right-4 z-10">
-            <MapStyleSwitch
-              style={mapStyle}
-              showLabels={showLabels}
-              onStyleChange={handleMapStyleChange}
-              onLabelsChange={handleLabelsChange}
-            />
+            <MapStyleSwitch showLabels={showLabels} onLabelsChange={handleLabelsChange} />
           </div>
 
           {qrSpot && (

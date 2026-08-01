@@ -85,53 +85,11 @@ roughly **1,200–1,600 visitor sessions per month**, not 5,000.
 Local development spends the same quota — every hot reload that remounts
 `MainMap` is another load. Keep the dev server closed when you aren't using it.
 
-### Optional: the label-free graphical map
-
-Three of the four style combinations are native Google modes. Graphical
-*without* labels has no native mode, so it needs a Cloud-styled Map ID.
-
-The console's style editor no longer exposes per-feature label checkboxes, so
-do it through the JSON tab:
-
-1. [Map Styles](https://console.cloud.google.com/google/maps-apis/studio/styles)
-   → **Create style** → **JSON** tab → paste:
-   ```json
-   [
-     {
-      "variant": "dark",
-       "elementType": "labels",
-       "stylers": [{ "visibility": "off" }]
-     }
-   ]
-   ```
-   `elementType: "labels"` covers both text and icons across every feature and
-   leaves geometry alone, so water stays blue and parks stay green. Do *not*
-   use `{"featureType": "poi", "stylers": [{"visibility": "off"}]}` without an
-   `elementType` — that hides POI geometry too and the parks go grey.
-2. Set the map type to the **hybrid** option and **Light mode**. 3D cloud
-   styling requires this, and **dark mode is not supported for 3D at all** —
-   pick it and the style silently won't apply. Save the style.
-3. [Map Management](https://console.cloud.google.com/google/maps-apis/studio/maps)
-   → **Create Map ID** → type **JavaScript**, tick **Vector**. Under its
-   **Map styles** section, associate the style from step 1.
-4. Put the id in `.env.local` as `VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`, and
-   **restart the dev server** — Vite reads env vars at start.
-
-**The console preview doesn't work for 3D cloud styles** (Google doesn't
-support preview for them), so the editor will look wrong. Ignore it and verify
-in the app: switch to **Map**, then **No labels**. Propagation takes a few
-minutes.
-
-Skip all of this and the app still works — the labels-off control simply
-disables itself while the graphical map is selected, instead of silently doing
-nothing.
-
-The map is pinned to the Maps JS **`alpha`** channel in
-[`src/lib/map3d.ts`](src/lib/map3d.ts), because `MapMode.ROADMAP` — the flat
-cartoonish "Map" style in the switch — is pre-GA and exists only there. This is
-a deliberate trade: Google can change the alpha channel without notice. If the
-map ever breaks with no code change on our side, switch `loadMaps3d()` back to
-`v: 'weekly'` and drop `'roadmap'` from `MapStyle`.
+The map is pinned to the Maps JS **`weekly`** (stable) channel in
+[`src/lib/map3d.ts`](src/lib/map3d.ts). Do not move it to `v=alpha`: that
+channel is documented as development-only and can change without notice on a
+deployed site. The cost is that `MapMode.ROADMAP`, a flat cartoonish basemap,
+is unavailable — it's pre-GA and exists on no other channel.
 
 ### One-time Supabase configuration
 
