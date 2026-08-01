@@ -46,7 +46,6 @@
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
     "dragHint": "Drag to look around",
     "moreActivities": "More activities",
-    "youAreHere": "You Are Here!",
     "mapError": "Couldn't load the map.",
     "placeActivityCount_one": "{{count}} activity happening now",
     "placeActivityCount_other": "{{count}} activities happening now",
@@ -102,8 +101,8 @@
     "error": "Couldn't post. Try again."
   },
   "mapStyle": {
-    "realistic": "Photo",
-    "graphical": "Map",
+    "realistic": "3D",
+    "graphical": "2D",
     "labelsOff": "No labels",
     "labelsOn": "Labels",
     "labelsOffUnavailable": "Label-free map view isn't configured"

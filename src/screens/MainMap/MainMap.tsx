@@ -5,12 +5,12 @@ import {
   addPlaceFraming,
   applyKamogawaConstraints,
   createMarkerLayer,
+  createUserLocationMarker,
   flyIntroSequence,
   flyToHomeView,
   flyToPlace,
   initialCamera,
   loadMaps3d,
-  locateAndMarkVisitor,
   orbitPlace,
   setHomeView,
   applyMapView,
@@ -18,6 +18,7 @@ import {
   type Maps3D,
   type MapStyle,
   type MarkerPoint,
+  type UserLocationMarker,
 } from '../../lib/map3d';
 import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
 import { logQrEntry } from '../../lib/duck';
@@ -62,6 +63,8 @@ export function MainMap() {
   const constraintsCleanupRef = useRef<(() => void) | null>(null);
   const skipRef = useRef<() => void>(() => {});
   const closeCinematicRef = useRef<() => void>(() => {});
+  const userLocationRef = useRef<UserLocationMarker | null>(null);
+  const headingAskedRef = useRef(false);
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
@@ -118,7 +121,9 @@ export function MainMap() {
       container.appendChild(map);
       mapRef.current = map;
 
-      locateAndMarkVisitor(maps3d, map, t('mainMap.youAreHere'), () => mounted);
+      const userMarker = createUserLocationMarker(maps3d, map);
+      userLocationRef.current = userMarker;
+      disposers.push(userMarker.dispose);
 
       // Tapping a place marker plays a cinematic (framing highlight -> fly-in ->
       // slow orbit) around it, then shows its popup -- one place at a time. The
@@ -251,6 +256,7 @@ export function MainMap() {
       constraintsCleanupRef.current?.();
       constraintsCleanupRef.current = null;
       disposers.forEach((dispose) => dispose());
+      userLocationRef.current = null;
       map?.remove();
       mapRef.current = null;
     };
@@ -287,6 +293,15 @@ export function MainMap() {
     setTutorialOverride(false);
   }
 
+  /** iOS 13+ only grants compass access from a user gesture, so the first touch
+   * on the map is where we ask. Everywhere else this is a no-op. */
+  function handleMapPointerDown() {
+    dismissMapHint();
+    if (headingAskedRef.current) return;
+    headingAskedRef.current = true;
+    void userLocationRef.current?.requestHeadingPermission();
+  }
+
   function dismissMapHint() {
     if (mapHintDismissed) return;
     localStorage.setItem(HAS_SEEN_MAP_HINT_KEY, 'true');
@@ -321,7 +336,7 @@ export function MainMap() {
         ref={containerRef}
         className="h-full w-full"
         data-testid="map-3d"
-        onPointerDown={dismissMapHint}
+        onPointerDown={handleMapPointerDown}
       />
 
       {mapFailed && (

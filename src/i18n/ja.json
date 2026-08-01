@@ -46,7 +46,6 @@
     "qrWelcome": "鴨川への隠れた入口を見つけました",
     "dragHint": "ドラッグして周りを見渡そう",
     "moreActivities": "活動を見る",
-    "youAreHere": "ここにいます!",
     "mapError": "地図を読み込めませんでした。",
     "placeActivityCount_other": "現在 {{count}} 件の活動",
     "duckCollection": "鴨コレクション"
@@ -100,8 +99,8 @@
     "error": "投稿できませんでした。もう一度お試しください。"
   },
   "mapStyle": {
-    "realistic": "写真",
-    "graphical": "地図",
+    "realistic": "3D",
+    "graphical": "2D",
     "labelsOff": "文字なし",
     "labelsOn": "文字あり",
     "labelsOffUnavailable": "文字なしの地図は未設定です"

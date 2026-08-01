@@ -97,7 +97,7 @@ INTRO (once/session)
      v (first visit only) ONBOARDING: nationality / age / gender
      |
 MAIN MAP (Google Maps 3D, Kamogawa-corridor-locked)
-  "you are here" marker · tutorial · language toggle · map style switch
+  location dot (heading cone) · tutorial · language toggle · map style switch
   "duck collection" button -> /duck
   markers (one per PLACE, plus colored duck markers):
     duck -> tap plays a cinematic (frame, fly in, orbit), then a popup with
@@ -150,13 +150,28 @@ which sprawls north into the Sakyo-ku mountains and west past Arashiyama and
 would be looser than this. A one-time "drag to look around" hint appears for
 first-time mobile visitors.
 
+The visitor's own position is a Google-Maps-style **location dot** — a
+white-ringed disc with a translucent wedge showing which way the device faces —
+that follows them via `watchPosition` and swings as they turn. It replaced a
+static "You Are Here!" label. `Marker3DElement` has no rotation property and
+rasterizes its art on append, so turning the cone means rebuilding the marker;
+that's throttled to 6° of heading and 2 m of movement so sensor jitter doesn't
+thrash it. iOS 13+ gates the compass behind a permission prompt that only works
+from a user gesture, so the first pointerdown on the map is where it's asked;
+without permission the dot simply loses its cone. The dot falls back to the
+Kamogawa Delta when geolocation is denied, so there is always one.
+
+It's drawn in `--kamo-river`, not Google's `#4285F4` — the design rules allow
+only the kamo tokens and bar saturated "tech" colors.
+
 Note that `bounds` constrains where the camera's *centre* may sit, not what
 is visible — at altitude with a tilted camera you see well past it. `maxAltitude`
 is therefore the lever that controls how much surrounding Kyoto is in frame, and
 it's set to 8 km to keep the view on the river.
 
-The **style controls** are two orthogonal choices: imagery (*realistic* photo
-vs *graphical*, the flat cartoonish basemap) crossed with labels on/off.
+The **style controls** are two orthogonal choices: imagery (*realistic* photo vs
+*graphical*, the flat cartoonish basemap — labelled **3D** and **2D** in the UI,
+since that's how the difference reads to a visitor) crossed with labels on/off.
 Google has native modes for only three of the four combinations — `SATELLITE`
 (realistic, no labels — the default), `HYBRID` (realistic + labels) and
 `ROADMAP` (graphical + labels). There is no label-free ROADMAP, so that fourth
