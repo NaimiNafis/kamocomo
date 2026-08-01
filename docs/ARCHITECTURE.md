@@ -190,8 +190,8 @@ outright in `20260801170000`. Markers are unclustered so each is individually
 tappable, and there is only ever one marker under a tap — the duck-spot layer
 that used to sit on top of them at identical coordinates is gone, which is what
 made taps land on the duck page or the board at random. Tapping a place plays
-a short cinematic — a pulsing framing highlight, a close fly-in, and a slow
-orbit — then shows a popup with the place's name, a few of its current photos,
+a short cinematic — a pulsing framing highlight, a close fly-in, and a 45°
+camera sweep — then shows a popup with the place's name, a few of its current photos,
 and a button into `/toukou?place=<id>`. Duck spots render as per-spot **colored
 duck markers** (a shared 10-color palette, placeholder art until the real duck
 illustrations land); tapping one goes to `/duck`. A "duck collection" button

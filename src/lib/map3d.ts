@@ -208,28 +208,39 @@ export function flyToPlace(map: Map3D, lat: number, lng: number, durationMillis 
   );
 }
 
+/** How far the camera swings around a tapped place — a hint of parallax to
+ * show how the spot sits in its surroundings, not a tour of it. */
+const PLACE_SWEEP_DEGREES = 45;
+
 /**
- * Slowly orbits the camera around the spot so the visitor sees where it sits
- * relative to its surroundings. One clockwise round, then it stops.
- * Returns a promise (resolves when the orbit ends or is cancelled) and a
+ * Swings the camera partway around the spot so the visitor sees where it sits
+ * relative to its surroundings, then stops.
+ *
+ * Deliberately NOT `flyCameraAround`: its `repeatCount` counts *whole*
+ * revolutions, so the smallest thing it can do is a full 360° spin — which is
+ * both longer than this wants and disorienting on a phone. Nudging `heading`
+ * with `flyCameraTo` gives an arbitrary arc and, because Google eases that
+ * move in and out, a noticeably smoother start than a constant-rate orbit.
+ *
+ * Returns a promise (resolves when the sweep ends or is cancelled) and a
  * cancel function.
  */
 export function orbitPlace(
   map: Map3D,
   lat: number,
   lng: number,
-  durationMillis = 2000,
+  durationMillis = 1300,
 ): { promise: Promise<void>; cancel: () => void } {
   const signal = { cancelled: false };
 
-  map.flyCameraAround({
-    camera: {
+  map.flyCameraTo({
+    endCamera: {
       center: { lat, lng, altitude: 0 },
       range: PLACE_VIEW_RANGE_M,
       tilt: PLACE_VIEW_TILT,
+      heading: (map.heading ?? 0) + PLACE_SWEEP_DEGREES,
     },
     durationMillis,
-    repeatCount: 1,
   });
 
   return {
