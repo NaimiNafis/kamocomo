@@ -98,7 +98,7 @@ INTRO (once/session)
      |
 MAIN MAP (Google Maps 3D, Kamogawa-corridor-locked)
   location dot (heading cone) · tutorial · language toggle · map style switch
-  "duck collection" button -> /duck
+  "duck collection" button -> /duck (図鑑)
   markers (one per PLACE, plus colored duck markers):
     duck -> tap plays a cinematic (frame, fly in, orbit), then a popup with
        the place's name/photos and a button into ->
@@ -296,15 +296,35 @@ shows its full sub history — live and archived — in chronological order, the
 long-term record of how a spot has been used. Reached from the toukou page's
 "see earlier posts" stub or the archive button on the map.
 
-### Duck page (`src/screens/Duck`)
+### Duck collection — 図鑑 (`src/screens/Duck`)
 
-A toukou-style **graph of the 10 ducks** (each duck spot IS a duck, drawn with
-its own colored icon) where people post photos onto a duck — its "+" node opens
-a photo picker and the photo becomes one of that duck's subs. The **10-slot
-stamp card** stays on top (each earned slot shows its duck's color), plus a
-persistent test-mode toggle. Stamps are earned only by scanning a QR at one of
-the 10 physical duck spots — see [Duck-stamp anti-cheat](#duck-stamp-anti-cheat);
-collecting all 10 unlocks a screenshot-worthy certificate.
+A **field guide**, not a stamp card. The duck objects along the river each carry
+their own detail, so working out which is which is the point:
+
+- an entry you **haven't found** shows only a **silhouette** — enough to know
+  what shape to look for, not what the object actually is;
+- an entry you **have found** shows **your own photo** of it, with its 保存日 and
+  a 採取済み mark.
+
+What's collected is a record of what you saw, which a row of identical icons
+could never be. Entries are numbered No.01–No.10 by the canonical
+lat-descending ordering, so duck N is the same duck here, on the map and on a
+place's board. Search, three filters (all / found / not found) and a date sort
+sit above a two-column grid; the test-mode toggle and the 10-entry certificate
+stay.
+
+Collecting is **photographing the object where it stands** rather than scanning
+a QR — see [anti-cheat](#duck-stamp-anti-cheat). This replaced a 10-slot stamp
+card and a separate duck photo graph. The communal "everyone's photos orbiting a
+duck" view lives on each place's toukou board, so dropping the graph lost
+nothing — and because the board's photo "+" posts through the same RPC,
+photographing a duck from there also collects it when you're in range.
+
+The ten ducks are generated variants of one body (crest, ribbon, hat, speckles,
+scarf, spotted bill, sitting, raised wing, ducklings, plain) in `lib/ducks.ts`.
+Colour form and silhouette come from the same geometry, which is what makes a
+silhouette an honest clue rather than an unrelated shape. Placeholder quality;
+real artwork swaps in at `duckVariantDataUri` / `duckSilhouetteDataUri`.
 
 ## Data model
 
