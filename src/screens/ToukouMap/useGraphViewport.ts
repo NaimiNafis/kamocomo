@@ -103,22 +103,38 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userView, setUserView] = useState<ViewTransform | null>(null);
   // The opening move: hold the whole board in frame for a beat so you can see
-  // how much is here, then ease in to the middle. Without it you land mid-zoom
-  // with no sense of what's off-screen.
-  const [introDone, setIntroDone] = useState(false);
+  // how much is here, then ease in to the middle.
+  //
+  // Three phases rather than a boolean, because the transition has to be
+  // mounted *across* the transform change -- a flag that flips at the moment
+  // the transform moves would let it snap, and one that's true beforehand and
+  // false after leaves the easing switched on for every later drag.
+  const [introPhase, setIntroPhase] = useState<'hold' | 'gliding' | 'done'>('hold');
   const fitted = fitView(positions, size);
-  const view = userView ?? (introDone ? { ...fitted, scale: Math.min(fitted.scale * INTRO_ZOOM_IN, MAX_SCALE) } : fitted);
+  const view =
+    userView ??
+    (introPhase === 'hold'
+      ? fitted
+      : { ...fitted, scale: Math.min(fitted.scale * INTRO_ZOOM_IN, MAX_SCALE) });
   const gesture = useRef<Gesture | null>(null);
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
 
-  // Fires once the graph has laid out and been measured -- not on mount, or it
+  // Starts once the graph has laid out and been measured -- not on mount, or it
   // would animate away from an empty board before any card had a position.
   const ready = size.w > 0 && positions.size > 0;
   useEffect(() => {
-    if (!ready || introDone) return;
-    const timer = setTimeout(() => setIntroDone(true), INTRO_HOLD_MS);
+    if (!ready || introPhase !== 'hold') return;
+    const timer = setTimeout(() => setIntroPhase('gliding'), INTRO_HOLD_MS);
     return () => clearTimeout(timer);
-  }, [ready, introDone]);
+  }, [ready, introPhase]);
+
+  // Retire the transition once the glide has played, so nothing the user does
+  // afterwards is eased. This is the whole reason for the third phase.
+  useEffect(() => {
+    if (introPhase !== 'gliding') return;
+    const timer = setTimeout(() => setIntroPhase('done'), INTRO_GLIDE_MS);
+    return () => clearTimeout(timer);
+  }, [introPhase]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -156,6 +172,9 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
 
   function onPointerDown(e: React.PointerEvent) {
     const target = e.target as HTMLElement;
+    // Touching the board hands control over immediately: no easing should be
+    // left on the transform while a finger is moving it.
+    setIntroPhase('done');
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointers.current.size === 2) {
@@ -247,7 +266,7 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
    * it take over again. */
   function resetView() {
     setUserView(null);
-    setIntroDone(true); // recentre means "show me everything", not "replay the intro"
+    setIntroPhase('done'); // recentre means "show me everything", not "replay the intro"
   }
 
   return {
@@ -256,9 +275,9 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
     cx,
     cy,
     view,
-    /** True while the opening move is still running, so the caller can put a
-     * CSS transition on the transform for exactly that long. */
-    introGliding: ready && !introDone,
+    /** True only for the duration of the opening glide, so the caller eases the
+     * transform for exactly that long and never during interaction. */
+    introGliding: introPhase === 'gliding',
     introGlideMs: INTRO_GLIDE_MS,
     resetView,
     containerHandlers: {

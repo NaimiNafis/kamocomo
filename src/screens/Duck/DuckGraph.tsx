@@ -92,7 +92,8 @@ export function DuckGraph({ graph, uploading, onUpload }: DuckGraphProps) {
         className="absolute left-0 top-0 origin-top-left"
         style={{
           transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})`,
-          transition: introGliding ? undefined : `transform ${introGlideMs}ms ease-in-out`,
+          // Only the opening glide is eased; interaction must be immediate.
+          transition: introGliding ? `transform ${introGlideMs}ms ease-in-out` : undefined,
         }}
       >
         <svg

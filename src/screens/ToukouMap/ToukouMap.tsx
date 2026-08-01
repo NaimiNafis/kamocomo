@@ -239,9 +239,9 @@ export function ToukouMap() {
           className="absolute left-0 top-0 origin-top-left"
           style={{
             transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})`,
-            // Only the opening move is animated; dragging and pinching must
-            // track the finger exactly, with no easing lag.
-            transition: introGliding ? undefined : `transform ${introGlideMs}ms ease-in-out`,
+            // Only the opening glide is eased. Dragging and pinching must track
+            // the finger exactly -- easing here is felt as lag, not smoothness.
+            transition: introGliding ? `transform ${introGlideMs}ms ease-in-out` : undefined,
           }}
         >
           <svg
