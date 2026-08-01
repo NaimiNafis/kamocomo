@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type { MarkerPoint } from './map3d';
-import { duckColor, duckIconDataUri } from './ducks';
+import { duckColor, duckVariantDataUri } from './ducks';
 
 /**
  * Canonical duck ordering: lat descending, north-to-south. Everything that
@@ -40,7 +40,7 @@ export async function fetchPlaceMarkers(): Promise<MarkerPoint[]> {
         id: place.id,
         lat: place.lat,
         lng: place.lng,
-        iconUrl: duckIconDataUri(duckColor(index)),
+        iconUrl: duckVariantDataUri(index, duckColor(index)),
       },
     ];
   });

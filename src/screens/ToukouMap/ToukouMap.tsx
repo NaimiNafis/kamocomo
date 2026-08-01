@@ -16,8 +16,8 @@ import {
   type PlaceBoard,
   type ToukouNode,
 } from '../../lib/toukou';
-import { createDuckPost } from '../../lib/duck';
-import { duckIconDataUri } from '../../lib/ducks';
+import { collectDuckByPhoto } from '../../lib/duck';
+import { duckVariantDataUri } from '../../lib/ducks';
 import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
@@ -207,14 +207,15 @@ export function ToukouMap() {
     }
   }
 
-  /** Post a photo onto this place's duck — the same thing the duck page's "+"
-   * did, now that the duck lives at the centre of this board. */
+  /** Post a photo onto this place's duck. Same call the collection uses: the
+   * photo always joins the shared feed here, and if you happen to be standing
+   * within range it also fills your own 図鑑 entry for that duck. */
   async function handlePhotoChosen(file: File | undefined) {
     if (photoInputRef.current) photoInputRef.current.value = '';
     if (!file || !userId || !duck) return;
     setUploadingPhoto(true);
     try {
-      await createDuckPost(userId, file, duck.id);
+      await collectDuckByPhoto(userId, file, duck.id);
       await refetchBoard();
     } catch {
       /* swallow; the board just won't gain the photo */
@@ -294,7 +295,7 @@ export function ToukouMap() {
                   style={{ backgroundColor: duck.color, color: readableOn(duck.color) }}
                 >
                   <img
-                    src={duckIconDataUri(duck.color)}
+                    src={duckVariantDataUri(duck.number - 1, duck.color)}
                     alt=""
                     className="h-14 w-14"
                     draggable={false}

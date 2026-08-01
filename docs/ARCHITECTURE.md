@@ -87,7 +87,7 @@ URLs, so paths must not be renamed:
 | `/?from=qr&spot=<slug>` | Same, but entered via a hidden photogenic-spot QR |
 | `/toukou?place=<id>` | One place's board of activities (always entered from a place marker) |
 | `/archive` , `/archive?main=<id>` | Cookpad-style history grid, or one main's full history |
-| `/duck` | Duck graph (10 ducks + photos) + 10-slot stamp card |
+| `/duck` | The 図鑑 — collection grid of the 10 ducks |
 | `/duck/scan?spot=<qr_token>` | Geofenced stamp scan; routes through the intro to `/duck` |
 
 ```
@@ -319,9 +319,9 @@ edit an applied migration, add a new file). Summary:
 | `events` | Daily gathering windows; today's is upserted on read by `ensure_todays_event()` |
 | `activities` | Both mains and subs (`kind`); mains carry `place_id` + `event_id`; also `parent_id`, `activity_type`, `photo_url`, `phrase`, `lat/lng`, `likes`/`dislikes`, `archived`, `hidden` |
 | `votes` | One row per `(user_id, activity_id)`; switching updates it in place |
-| `duck_posts` | Photos posted onto a duck (`duck_spot_id`) — the duck graph's subs |
+| `duck_posts` | Photos posted onto a duck (`duck_spot_id`). Communal on a place's board; your own most recent one also fills your 図鑑 entry. Written only via `collect_duck_by_photo` |
 | `duck_spots` | The 10 physical stamp locations / ducks, each with an opaque `qr_token` |
-| `stamps` | One row per `(user_id, duck_spot_id)` a user has earned |
+| `stamps` | One row per `(user_id, duck_spot_id)` collected. `earned_at` is the 保存日 shown on a collection entry |
 | `certificates` | Issued once a user has 10 distinct stamps |
 | `reports` | Legacy. In-app reporting was replaced by dislike-driven auto-hide; the table stays so it can return without a schema change |
 | `qr_entries` | Analytics: which photogenic-spot QR drove an app entry |
@@ -379,9 +379,22 @@ rollover. Subs are never gated.
 
 A stamp means "I was really at this spot," layered three ways:
 
-1. **Geofence** — the scan must report a location within ~120 m of the spot,
-   re-checked server-side (`scan_duck_spot` RPC) against whatever the client
-   submits, so a bypassed client still fails.
+1. **Geofence** — the reported location must be within ~120 m of the spot,
+   re-checked server-side against whatever the client submits, so a bypassed
+   client still fails. Two RPCs enforce it: `collect_duck_by_photo` (the
+   intended route — photograph the object) and `scan_duck_spot` (the older QR
+   route, still working).
+
+   `collect_duck_by_photo` **always posts the photo** to that duck's shared feed
+   and grants the stamp **only** within range, so sharing a duck photo from
+   anywhere keeps working while only presence fills your own collection. It
+   **fails closed** with no location fix: no coordinates, no stamp. The client
+   used to substitute the Kamogawa Delta's coordinates when geolocation failed,
+   which was harmless while a photo proved nothing and would have handed every
+   entry to anyone with location switched off the moment it did.
+
+   A photo is weaker evidence than a QR — it can be a photo of a photo — but the
+   presence requirement is unchanged.
 2. **Opaque `qr_token`** — the QR encodes a random string, not a guessable id.
 3. **`UNIQUE(user_id, duck_spot_id)`** — a re-scan is a silent no-op ("already
    collected"), not a duplicate stamp.

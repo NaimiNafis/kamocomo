@@ -88,6 +88,9 @@ export function subShade(hex: string): string {
  * migration a place IS a duck spot, so every board has exactly one. */
 export interface BoardDuck {
   id: string; // duck_spot_id
+  /** 1-based catalogue number in the canonical lat-desc ordering, so the board
+   * draws the same variant the collection and the map do. */
+  number: number;
   nameEn: string;
   nameJa: string;
   color: string;
@@ -251,6 +254,7 @@ async function fetchBoardDuck(
 
   return {
     id: duckSpotId,
+    number: index + 1,
     nameEn: spots[index].name_en,
     nameJa: spots[index].name_ja,
     color: duckColor(index),

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { uploadPhoto, subShade, type ToukouEdge } from './toukou';
-import { KAMOGAWA_DELTA, getPosition } from './geo';
+import { getPosition, type GeoPoint } from './geo';
 import { duckColor } from './ducks';
 
 // =========================================================================
@@ -78,24 +78,81 @@ export async function fetchDuckGraph(userId: string): Promise<DuckGraph> {
   return { nodes: [...mainNodes, ...subNodes], edges };
 }
 
-/** Uploads a photo and posts it onto a specific duck. Location is best-effort
- * (falls back to the Kamogawa default) -- unlike a stamp scan, a photo post
- * isn't geofenced. */
-export async function createDuckPost(userId: string, photoFile: File, duckSpotId: string): Promise<void> {
+export type CollectResult =
+  | { status: 'unauthenticated' | 'not_found' }
+  | {
+      status: 'posted';
+      /** Whether this also filled the collection entry. False when the photo
+       * posted but you weren't close enough, or had no location at all. */
+      collected: boolean;
+      already: boolean;
+      distance: number | null;
+      spotNameEn: string;
+      spotNameJa: string;
+      stampCount: number;
+      certificateEarned: boolean;
+    };
+
+/**
+ * Posts a photo onto a duck and, if it was taken within ~120 m of that duck,
+ * collects the entry.
+ *
+ * The photo always posts -- it's a contribution to that duck's shared feed
+ * either way. Only presence fills your own collection.
+ *
+ * Location is best-effort but **fails closed**: when there's no fix we send
+ * null rather than substituting the spot's own coordinates. Doing the latter
+ * (which this used to, back when a photo proved nothing) would hand every entry
+ * to anyone with location switched off, now that the photo IS the proof.
+ */
+export async function collectDuckByPhoto(
+  userId: string,
+  photoFile: File,
+  duckSpotId: string,
+  /** Test mode submits the spot's own coordinates so the flow is demonstrable
+   * away from the river -- no easier to abuse than spoofing GPS. */
+  overrideCoords?: GeoPoint,
+): Promise<CollectResult> {
   const photoUrl = await uploadPhoto(userId, photoFile);
-  let lat = KAMOGAWA_DELTA.latitude;
-  let lng = KAMOGAWA_DELTA.longitude;
-  try {
-    const pos = await getPosition();
-    lat = pos.lat;
-    lng = pos.lng;
-  } catch {
-    /* keep the default */
+
+  let point: GeoPoint | null = overrideCoords ?? null;
+  if (!point) {
+    try {
+      point = await getPosition();
+    } catch {
+      point = null; // no fix -> the photo posts, nothing is collected
+    }
   }
-  const { error } = await supabase
-    .from('duck_posts')
-    .insert({ author_id: userId, photo_url: photoUrl, duck_spot_id: duckSpotId, lat, lng });
+
+  const { data, error } = await supabase.rpc('collect_duck_by_photo', {
+    p_duck_spot_id: duckSpotId,
+    p_photo_url: photoUrl,
+    p_lat: point?.lat ?? null,
+    p_lng: point?.lng ?? null,
+  });
   if (error) throw error;
+
+  const r = data as {
+    status: string;
+    collected?: boolean;
+    already?: boolean;
+    distance?: number;
+    spot_name_en?: string;
+    spot_name_ja?: string;
+    stamp_count?: number;
+    certificate_earned?: boolean;
+  };
+  if (r.status !== 'posted') return { status: r.status === 'not_found' ? 'not_found' : 'unauthenticated' };
+  return {
+    status: 'posted',
+    collected: r.collected ?? false,
+    already: r.already ?? false,
+    distance: r.distance ?? null,
+    spotNameEn: r.spot_name_en ?? '',
+    spotNameJa: r.spot_name_ja ?? '',
+    stampCount: r.stamp_count ?? 0,
+    certificateEarned: r.certificate_earned ?? false,
+  };
 }
 
 /** Realtime: new duck photos appear in the graph without a reload. */
@@ -117,6 +174,64 @@ export interface DuckSpot {
   id: string;
   nameEn: string;
   nameJa: string;
+}
+
+/** One row of the 図鑑. Numbered by the canonical lat-descending ordering, so
+ * No.01 is the same duck everywhere in the app. */
+export interface CollectionEntry {
+  id: string;
+  number: number; // 1-based catalogue number
+  nameEn: string;
+  nameJa: string;
+  color: string;
+  /** Your own photo of this duck, once you've found it. The collection shows
+   * what YOU saw, which is the point -- a shared icon wouldn't be a collection. */
+  photoUrl: string | null;
+  /** stamps.earned_at, shown as 保存日. Null while uncollected. */
+  collectedAt: string | null;
+}
+
+/**
+ * The whole collection for one user: every active duck, in catalogue order,
+ * annotated with whether they've collected it and which of their own photos
+ * fills the entry.
+ *
+ * Their most recent photo of each duck wins, so retaking a bad shot replaces it.
+ */
+export async function fetchCollection(userId: string): Promise<CollectionEntry[]> {
+  const [{ data: spots, error: se }, { data: stamps, error: ste }, { data: photos, error: pe }] =
+    await Promise.all([
+      supabase
+        .from('duck_spots')
+        .select('id, name_en, name_ja')
+        .eq('active', true)
+        .order('lat', { ascending: false }),
+      supabase.from('stamps').select('duck_spot_id, earned_at').eq('user_id', userId),
+      supabase
+        .from('duck_posts')
+        .select('duck_spot_id, photo_url, created_at')
+        .eq('author_id', userId)
+        .eq('hidden', false)
+        .not('duck_spot_id', 'is', null)
+        .order('created_at', { ascending: false }),
+    ]);
+  if (se) throw se;
+  if (ste) throw ste;
+  if (pe) throw pe;
+
+  const earnedAt = new Map(stamps.map((s) => [s.duck_spot_id, s.earned_at]));
+  const myPhoto = new Map<string, string>();
+  for (const p of photos) if (!myPhoto.has(p.duck_spot_id)) myPhoto.set(p.duck_spot_id, p.photo_url);
+
+  return spots.map((s, i) => ({
+    id: s.id,
+    number: i + 1,
+    nameEn: s.name_en,
+    nameJa: s.name_ja,
+    color: duckColor(i),
+    photoUrl: myPhoto.get(s.id) ?? null,
+    collectedAt: earnedAt.get(s.id) ?? null,
+  }));
 }
 
 export interface StampCardSlot extends DuckSpot {
@@ -156,6 +271,19 @@ export async function fetchDuckSpotCoords(token: string): Promise<{ lat: number;
     .from('duck_spots')
     .select('lat, lng')
     .eq('qr_token', token)
+    .eq('active', true)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { lat: data.lat, lng: data.lng } : null;
+}
+
+/** A duck spot's own coordinates by id -- what test mode submits so the
+ * geofence passes without standing at the river. */
+export async function fetchDuckSpotCoordsById(id: string): Promise<GeoPoint | null> {
+  const { data, error } = await supabase
+    .from('duck_spots')
+    .select('lat, lng')
+    .eq('id', id)
     .eq('active', true)
     .maybeSingle();
   if (error) throw error;

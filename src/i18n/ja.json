@@ -99,19 +99,11 @@
     "labelsOffUnavailable": "文字なしの地図は未設定です"
   },
   "duck": {
-    "title": "鴨川の鴨",
-    "loading": "読み込み中…",
-    "error": "鴨ページを読み込めませんでした。",
-    "addPhoto": "鴨の写真を共有",
-    "stampButton": "スタンプカード",
     "testMode": "テストモード:現地にいなくてもどのQRでも読み取れる",
-    "posting": "共有中…",
-    "stampCardTitle": "鴨スタンプラリー",
-    "stampProgress": "{{earned}} / 10 スポット",
-    "certificateLocked": "10個すべて集めると証明書が手に入ります。",
     "certificateUnlocked": "証明書を獲得しました!",
     "viewCertificate": "証明書を見る",
-    "stamped": "スタンプ取得済み"
+    "addPhoto": "鴨の写真を共有",
+    "stamped": "採取済み"
   },
   "scan": {
     "locating": "現在地を確認中…",
@@ -164,5 +156,26 @@
         "body": "鴨スポットでQRコードを読み取るとスタンプがもらえます。10個集めると証明書が手に入ります。"
       }
     ]
+  },
+  "collection": {
+    "title": "カモ・コレクション",
+    "search": "コレクションを検索",
+    "filter": {
+      "all": "全コレクション",
+      "collected": "採取済み",
+      "missing": "未採取"
+    },
+    "byDate": "日付順",
+    "collected": "採取済み",
+    "savedOn": "保存日",
+    "saving": "保存中…",
+    "loading": "コレクションを読み込み中…",
+    "error": "コレクションを読み込めませんでした。",
+    "noMatches": "該当するものがありません。",
+    "justCollected": "見つけました!コレクションに追加しました。",
+    "alreadyHad": "すでにコレクション済みです。写真を更新しました。",
+    "tooFar": "写真を共有しました。約{{distance}}m離れているため、まだ採取できていません。",
+    "needLocation": "写真を共有しました。位置情報をオンにすると採取できます。",
+    "postFailed": "写真を保存できませんでした。もう一度お試しください。"
   }
 }

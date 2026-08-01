@@ -101,19 +101,11 @@
     "labelsOffUnavailable": "Label-free map view isn't configured"
   },
   "duck": {
-    "title": "Ducks of the Kamogawa",
-    "loading": "Loading…",
-    "error": "Couldn't load the duck page.",
-    "addPhoto": "Share a duck photo",
-    "stampButton": "Stamp card",
     "testMode": "Test mode: scan any QR without being there",
-    "posting": "Sharing…",
-    "stampCardTitle": "Duck stamp rally",
-    "stampProgress": "{{earned}} / 10 spots",
-    "certificateLocked": "Collect all 10 stamps to unlock your certificate.",
     "certificateUnlocked": "Certificate unlocked!",
     "viewCertificate": "View certificate",
-    "stamped": "Stamp collected"
+    "addPhoto": "Share a duck photo",
+    "stamped": "Found"
   },
   "scan": {
     "locating": "Finding your location…",
@@ -166,5 +158,26 @@
         "body": "Scan the QR code at a duck spot to earn its stamp. Collect all ten for a certificate."
       }
     ]
+  },
+  "collection": {
+    "title": "Duck Collection",
+    "search": "Search the collection",
+    "filter": {
+      "all": "All",
+      "collected": "Found",
+      "missing": "Not found"
+    },
+    "byDate": "By date",
+    "collected": "FOUND",
+    "savedOn": "Found",
+    "saving": "Saving…",
+    "loading": "Loading your collection…",
+    "error": "Couldn't load your collection.",
+    "noMatches": "Nothing matches that.",
+    "justCollected": "Found it! Added to your collection.",
+    "alreadyHad": "Already in your collection. Photo updated.",
+    "tooFar": "Photo shared. You're about {{distance}} m away, so it isn't collected yet.",
+    "needLocation": "Photo shared. Turn on location to collect it.",
+    "postFailed": "Couldn't save that photo. Try again."
   }
 }

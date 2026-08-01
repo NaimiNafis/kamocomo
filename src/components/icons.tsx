@@ -40,6 +40,11 @@ export function ChevronRightIcon({ size = 18, className }: IconProps) {
   return chevron(size, className, 'M9 5.5 15.5 12 9 18.5');
 }
 
+/** Back — the same chevron, at the size the screen headers use. */
+export function BackIcon({ size = 20, className }: IconProps) {
+  return chevron(size, className, 'M14.5 5.5 8 12l6.5 6.5');
+}
+
 /** Recenter: a viewfinder closing on a point — "bring everything back into
  * frame", which is exactly what it does to a force graph. */
 export function RecenterIcon({ size = 20, className }: IconProps) {
