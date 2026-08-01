@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { duckColor } from './ducks';
 
 // =========================================================================
 // Types
@@ -79,11 +80,23 @@ export function subShade(hex: string): string {
 // Graph fetch
 // =========================================================================
 
+/** The duck that sits at the centre of a place's board. Since the round-3
+ * migration a place IS a duck spot, so every board has exactly one. */
+export interface BoardDuck {
+  id: string; // duck_spot_id
+  nameEn: string;
+  nameJa: string;
+  color: string;
+  earned: boolean; // has this user collected the stamp here
+  photos: { id: string; photoUrl: string }[]; // duck_posts, drawn as its subs
+}
+
 export interface PlaceBoard extends ToukouGraph {
   placeNameEn: string;
   placeNameJa: string;
   placeLat: number;
   placeLng: number;
+  duck: BoardDuck | null;
 }
 
 /**
@@ -101,7 +114,11 @@ export async function fetchPlaceBoard(
 ): Promise<PlaceBoard | null> {
   const [{ data: place, error: placeError }, { data: types, error: typesError }, { data: mains, error: mainsError }] =
     await Promise.all([
-      supabase.from('places').select('name_en, name_ja, lat, lng').eq('id', placeId).maybeSingle(),
+      supabase
+        .from('places')
+        .select('name_en, name_ja, lat, lng, duck_spot_id')
+        .eq('id', placeId)
+        .maybeSingle(),
       supabase.from('activity_types').select('id, color'),
       supabase
         .from('activities')
@@ -182,6 +199,52 @@ export async function fetchPlaceBoard(
     placeNameJa: place.name_ja,
     placeLat: place.lat,
     placeLng: place.lng,
+    duck: await fetchBoardDuck(userId, place.duck_spot_id),
+  };
+}
+
+/**
+ * The place's duck: its canonical color (lat-desc index, same ordering the
+ * stamp card and map markers use), whether this user has its stamp, and its
+ * shared photos. Null for a place with no duck link — stale data from before
+ * the round-3 migration, which the board renders without a centre.
+ */
+async function fetchBoardDuck(
+  userId: string,
+  duckSpotId: string | null,
+): Promise<BoardDuck | null> {
+  if (!duckSpotId) return null;
+
+  const [{ data: spots, error: spotsError }, { data: photos, error: photosError }, { data: stamp, error: stampError }] =
+    await Promise.all([
+      supabase.from('duck_spots').select('id, name_en, name_ja').eq('active', true).order('lat', { ascending: false }),
+      supabase
+        .from('duck_posts')
+        .select('id, photo_url')
+        .eq('duck_spot_id', duckSpotId)
+        .eq('hidden', false)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('stamps')
+        .select('duck_spot_id')
+        .eq('user_id', userId)
+        .eq('duck_spot_id', duckSpotId)
+        .maybeSingle(),
+    ]);
+  if (spotsError) throw spotsError;
+  if (photosError) throw photosError;
+  if (stampError) throw stampError;
+
+  const index = spots.findIndex((s) => s.id === duckSpotId);
+  if (index === -1) return null;
+
+  return {
+    id: duckSpotId,
+    nameEn: spots[index].name_en,
+    nameJa: spots[index].name_ja,
+    color: duckColor(index),
+    earned: stamp !== null,
+    photos: photos.map((p) => ({ id: p.id, photoUrl: p.photo_url })),
   };
 }
 

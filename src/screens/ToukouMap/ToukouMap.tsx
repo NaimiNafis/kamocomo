@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
@@ -17,6 +17,8 @@ import {
   type PlaceBoard,
   type ToukouNode,
 } from '../../lib/toukou';
+import { createDuckPost } from '../../lib/duck';
+import { duckIconDataUri } from '../../lib/ducks';
 import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
@@ -29,6 +31,11 @@ import { useGraphViewport } from './useGraphViewport';
 
 const EDGE_OFFSET = 4000;
 const ADD_PREFIX = 'add:';
+// The duck and its photos share the graph with the activities, so their ids
+// are namespaced — an activity id and a duck_post id could otherwise collide
+// in the same position map.
+const DUCK_ID = 'duck';
+const DUCK_PHOTO_PREFIX = 'duckphoto:';
 
 type ComposerState = { mode: 'main' } | { mode: 'sub'; parentId: string } | null;
 
@@ -57,19 +64,37 @@ export function ToukouMap() {
   const [submitError, setSubmitError] = useState(false);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [reportTarget, setReportTarget] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
-  // Layout: the board's mains + subs, plus a synthetic "+" (addsub) node per
-  // main. The full card data lives in `nodeById`; the layout only needs id+kind.
+  // Layout: two kinds of cluster, deliberately NOT wired to each other. The
+  // duck sits with its own shared photos, and each main activity sits with its
+  // own subs. Stringing every main to the duck (as this first did) made one
+  // tangled hairball where the duck looked like the parent of activities it has
+  // nothing to do with. The full card data lives in `nodeById`; the layout only
+  // needs id+kind.
   const cards = board?.nodes ?? [];
   const nodeById = new Map(cards.map((n) => [n.id, n]));
   const mains = cards.filter((n) => n.kind === 'main');
+  const duck = board?.duck ?? null;
+  const duckPhotos = duck?.photos ?? [];
+
   const layoutNodes: GraphNode[] = [
+    ...(duck ? [{ id: DUCK_ID, kind: 'main' as const }] : []),
     ...cards.map((n) => ({ id: n.id, kind: n.kind })),
     ...mains.map((m) => ({ id: `${ADD_PREFIX}${m.id}`, kind: 'addsub' as const })),
+    ...duckPhotos.map((p) => ({ id: `${DUCK_PHOTO_PREFIX}${p.id}`, kind: 'sub' as const })),
+    ...(duck ? [{ id: `${ADD_PREFIX}${DUCK_ID}`, kind: 'addsub' as const }] : []),
   ];
   const layoutEdges = [
     ...(board?.edges ?? []),
     ...mains.map((m) => ({ source: `${ADD_PREFIX}${m.id}`, target: m.id })),
+    ...(duck
+      ? [
+          ...duckPhotos.map((p) => ({ source: `${DUCK_PHOTO_PREFIX}${p.id}`, target: DUCK_ID })),
+          { source: `${ADD_PREFIX}${DUCK_ID}`, target: DUCK_ID },
+        ]
+      : []),
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
@@ -195,11 +220,34 @@ export function ToukouMap() {
     }
   }
 
+  /** Post a photo onto this place's duck — the same thing the duck page's "+"
+   * did, now that the duck lives at the centre of this board. */
+  async function handlePhotoChosen(file: File | undefined) {
+    if (photoInputRef.current) photoInputRef.current.value = '';
+    if (!file || !userId || !duck) return;
+    setUploadingPhoto(true);
+    try {
+      await createDuckPost(userId, file, duck.id);
+      await refetchBoard();
+    } catch {
+      /* swallow; the board just won't gain the photo */
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   const positionOf = (id: string) => positions.get(id) ?? { x: 0, y: 0 };
   const placeName = board ? (isJa ? board.placeNameJa : board.placeNameEn) : '';
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-kamo-stone">
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => void handlePhotoChosen(e.target.files?.[0])}
+      />
       <div ref={viewportRef} className="absolute inset-0 touch-none" {...containerHandlers}>
         <div
           className="absolute left-0 top-0 origin-top-left"
@@ -230,22 +278,83 @@ export function ToukouMap() {
 
           {layoutNodes.map((ln) => {
             const pos = positionOf(ln.id);
-            if (ln.kind === 'addsub') {
-              const mainId = ln.id.slice(ADD_PREFIX.length);
-              const main = nodeById.get(mainId);
-              return (
+            const wrap = (children: React.ReactNode, extra?: string) => (
+              <div
+                key={ln.id}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 ${extra ?? ''}`}
+                style={{ left: pos.x, top: pos.y }}
+              >
+                {children}
+              </div>
+            );
+
+            // The duck at the centre.
+            if (ln.id === DUCK_ID && duck) {
+              return wrap(
                 <div
-                  key={ln.id}
-                  className="absolute -translate-x-1/2 -translate-y-1/2"
-                  style={{ left: pos.x, top: pos.y }}
+                  className="flex w-32 flex-col items-center gap-1 rounded-2xl px-2 py-3 shadow-lg"
+                  style={{ backgroundColor: duck.color, color: readableOn(duck.color) }}
                 >
-                  <AddCard
-                    color={main?.color ?? '#2E3A59'}
-                    label={t('toukou.addSub')}
-                    testId="add-sub"
-                    onClick={() => setComposer({ mode: 'sub', parentId: mainId })}
+                  <img
+                    src={duckIconDataUri(duck.color)}
+                    alt=""
+                    className="h-14 w-14"
+                    draggable={false}
                   />
-                </div>
+                  <span className="line-clamp-1 text-center font-display text-sm">
+                    {isJa ? duck.nameJa : duck.nameEn}
+                  </span>
+                  <span className="font-ui text-[10px] opacity-80">
+                    {duck.earned ? `✓ ${t('duck.stamped')}` : t('duck.notStamped')}
+                  </span>
+                </div>,
+              );
+            }
+
+            // One of the duck's shared photos.
+            if (ln.id.startsWith(DUCK_PHOTO_PREFIX)) {
+              const photo = duckPhotos.find(
+                (p) => p.id === ln.id.slice(DUCK_PHOTO_PREFIX.length),
+              );
+              if (!photo) return null;
+              return wrap(
+                <div
+                  className="w-24 overflow-hidden rounded-2xl shadow-lg"
+                  style={{ backgroundColor: duck?.color }}
+                >
+                  <img
+                    src={photo.photoUrl}
+                    alt=""
+                    className="block aspect-square w-full object-cover"
+                    draggable={false}
+                  />
+                </div>,
+                'cursor-grab active:cursor-grabbing',
+              );
+            }
+
+            if (ln.kind === 'addsub') {
+              const targetId = ln.id.slice(ADD_PREFIX.length);
+              // The duck's "+" adds a photo; a main's "+" adds a sub.
+              if (targetId === DUCK_ID) {
+                return wrap(
+                  <AddCard
+                    color={duck?.color ?? '#E0885E'}
+                    label={t('duck.addPhoto')}
+                    testId="duck-add"
+                    disabled={uploadingPhoto}
+                    onClick={() => photoInputRef.current?.click()}
+                  />,
+                );
+              }
+              const main = nodeById.get(targetId);
+              return wrap(
+                <AddCard
+                  color={main?.color ?? '#2E3A59'}
+                  label={t('toukou.addSub')}
+                  testId="add-sub"
+                  onClick={() => setComposer({ mode: 'sub', parentId: targetId })}
+                />,
               );
             }
             const node = nodeById.get(ln.id);
@@ -368,6 +477,16 @@ export function ToukouMap() {
       )}
     </div>
   );
+}
+
+/** Dark or light text depending on the background's luminance, so the duck's
+ * name stays legible on both the pale and the saturated duck colors. */
+function readableOn(hex: string): string {
+  const v = hex.replace('#', '');
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#1C1C1A' : '#E9E4D8';
 }
 
 function applyVote(node: ToukouNode, value: 1 | -1): ToukouNode {

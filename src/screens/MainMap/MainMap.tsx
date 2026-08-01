@@ -1,27 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import * as Cesium from 'cesium';
 import {
-  VIEWER_OPTIONS,
   addPlaceFraming,
-  applyKyotoCameraConstraints,
-  applyMobilePerfSettings,
-  configureCesiumIon,
-  createMarkerLayers,
+  applyKamogawaConstraints,
+  createMarkerLayer,
   flyIntroSequence,
   flyToHomeView,
   flyToPlace,
+  initialCamera,
+  loadMaps3d,
   locateAndMarkVisitor,
   orbitPlace,
   setHomeView,
-  setMapStyle as applyMapStyle,
-  setupMarkerTapHandler,
+  applyMapView,
+  type Map3D,
+  type Maps3D,
   type MapStyle,
   type MarkerPoint,
-} from '../../lib/cesium';
+} from '../../lib/map3d';
 import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
-import { fetchActiveDuckSpotMarkers } from '../../lib/duckSpots';
 import { logQrEntry } from '../../lib/duck';
 import { HAS_SEEN_INTRO_KEY, OPEN_DUCK_AFTER_INTRO_KEY } from '../../lib/entryFlags';
 import { Intro, type IntroPhase } from '../Intro/Intro';
@@ -32,8 +30,6 @@ import { LanguageToggle } from '../../components/LanguageToggle';
 import { MapStyleSwitch } from '../../components/MapStyleSwitch';
 import { needsOnboarding, useIdentityStore } from '../../store/identityStore';
 
-configureCesiumIon();
-
 const HAS_SEEN_TUTORIAL_KEY = 'hasSeenTutorial';
 const HAS_SEEN_MAP_HINT_KEY = 'hasSeenMapHint';
 const TITLE_HOLD_MS = 1800;
@@ -41,18 +37,19 @@ const CATCHPHRASE_HOLD_MS = 1900;
 const MAP_HINT_AUTO_DISMISS_MS = 4000;
 
 /**
- * Full-screen Cesium globe, constrained to Kyoto (§8.1), plus the overlay
- * chrome: top bar (tutorial + language toggle), map-style switch, "you are
- * here" marker, a "duck collection" button, and the tutorial popup.
+ * Full-screen Google Maps 3D globe, constrained to the Kamogawa corridor
+ * (§8.1), plus the overlay chrome: top bar (tutorial + language toggle),
+ * map-style switch, "you are here" marker, a "duck collection" button, and the
+ * tutorial popup. The river itself is drawn as a blue overlay so it's findable
+ * in both map modes.
  *
- * Markers are one per fixed PLACE (not per main activity), so the map stays
- * uncluttered no matter how busy a place gets during a gathering. Tapping a
- * place plays a cinematic and opens its board of activities; tapping a duck
- * goes to the duck page.
+ * One duck marker per place, so the map stays uncluttered no matter how busy a
+ * place gets during a gathering. Tapping one plays a cinematic and opens that
+ * place's board; the duck collection button is the way to the stamp card.
  *
  * The §5.1 intro (title -> catchphrase -> Earth-to-Kamogawa flight) plays
- * once per session before the Kyoto camera lock engages -- the clamp would
- * otherwise fight the flight, which passes through views outside Kyoto.
+ * once per session before the corridor lock engages -- the clamp would
+ * otherwise fight the flight, which passes through views far outside Kyoto.
  */
 export function MainMap() {
   const { t } = useTranslation();
@@ -61,14 +58,18 @@ export function MainMap() {
   const qrSpot = searchParams.get('from') === 'qr' ? searchParams.get('spot') : null;
   const qrLoggedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Cesium.Viewer | null>(null);
+  const mapRef = useRef<Map3D | null>(null);
   const constraintsCleanupRef = useRef<(() => void) | null>(null);
   const skipRef = useRef<() => void>(() => {});
   const closeCinematicRef = useRef<() => void>(() => {});
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
-  const [mapStyle, setMapStyleState] = useState<MapStyle>('photoreal');
+  // Label-free realistic by default: no place names, road names or text at
+  // all, which is the view the app is designed around.
+  const [mapStyle, setMapStyleState] = useState<MapStyle>('realistic');
+  const [showLabels, setShowLabels] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
   const [tutorialOverride, setTutorialOverride] = useState<boolean | null>(null);
   const [mapHintDismissed, setMapHintDismissed] = useState(
     () => localStorage.getItem(HAS_SEEN_MAP_HINT_KEY) === 'true',
@@ -81,156 +82,180 @@ export function MainMap() {
   const completeOnboarding = useIdentityStore((s) => s.completeOnboarding);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    const v = new Cesium.Viewer(containerRef.current, VIEWER_OPTIONS);
-    viewerRef.current = v;
-    applyMobilePerfSettings(v);
-    locateAndMarkVisitor(v, t('mainMap.youAreHere'));
-
-    // One exclamation marker per PLACE + a colored duck marker per duck spot.
-    // Both sets are fixed seed data, so no realtime subscription is needed --
-    // new mains show up inside a place's board, not as new markers.
-    const markerLayers = createMarkerLayers(v);
-
-    let placePoints: MarkerPoint[] = [];
-    void fetchPlaceMarkers().then((points) => {
-      if (v.isDestroyed()) return;
-      placePoints = points;
-      markerLayers.setActivities(placePoints);
-    });
-    void fetchActiveDuckSpotMarkers().then((points) => {
-      if (v.isDestroyed()) return;
-      markerLayers.setDuckSpots(points);
-    });
-
-    // Tapping a place marker plays a cinematic (framing highlight -> fly-in ->
-    // slow orbit) around it, then shows its popup -- one place at a time. The
-    // Kyoto camera clamp is lifted for the duration (the close-up/orbit view is
-    // tighter than the clamp expects) and restored when it ends.
-    let cinematic: { cancelled: boolean; removeFraming: () => void; cancelOrbit: (() => void) | null } | null =
-      null;
-
-    function closeCinematic() {
-      if (cinematic) {
-        cinematic.cancelled = true;
-        cinematic.removeFraming();
-        cinematic.cancelOrbit?.();
-        cinematic = null;
-      }
-      setPlacePopup(null);
-      if (!v.isDestroyed() && !constraintsCleanupRef.current) {
-        constraintsCleanupRef.current = applyKyotoCameraConstraints(v);
-        void flyToHomeView(v);
-      }
-    }
-    closeCinematicRef.current = closeCinematic;
-
-    async function startPlaceCinematic(placeId: string) {
-      if (cinematic || v.isDestroyed()) return;
-      const point = placePoints.find((p) => p.id === placeId);
-      if (!point) return;
-
-      constraintsCleanupRef.current?.();
-      constraintsCleanupRef.current = null;
-
-      const removeFraming = addPlaceFraming(v, point.lat, point.lng);
-      const session = { cancelled: false, removeFraming, cancelOrbit: null as (() => void) | null };
-      cinematic = session;
-
-      const previewPromise = fetchPlacePreview(placeId).catch(() => null);
-
-      await flyToPlace(v, point.lat, point.lng);
-      if (session.cancelled || v.isDestroyed()) return;
-
-      const { promise: orbitPromise, cancel: cancelOrbit } = orbitPlace(v, point.lat, point.lng);
-      session.cancelOrbit = cancelOrbit;
-      await orbitPromise;
-      if (session.cancelled || v.isDestroyed()) return;
-
-      const preview = await previewPromise;
-      if (session.cancelled || v.isDestroyed()) return;
-      if (!preview) {
-        closeCinematic();
-        return;
-      }
-      setPlacePopup({ placeId, preview });
-    }
-
-    const removeTapHandler = setupMarkerTapHandler(v, (kind, refId) => {
-      if (kind === 'duckSpot') {
-        navigate('/duck');
-        return;
-      }
-      void startPlaceCinematic(refId);
-    });
-
-    const signal = { cancelled: false };
+    // The Maps JS API loads from Google's CDN, so everything below happens
+    // after an await -- `mounted` guards every post-await effect against an
+    // unmount that already ran (incl. StrictMode's double mount/cleanup).
+    let mounted = true;
+    let map: Map3D | null = null;
+    const disposers: (() => void)[] = [];
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const signal = { cancelled: false };
     let finished = introPhase === 'done';
 
-    function finishIntro() {
-      if (finished) return;
-      finished = true;
-      // Skip can fire before the title/catchphrase timers below have run;
-      // without cancelling them here they'd still fire later and force
-      // introPhase back out of 'done', re-opening the whole intro.
-      timers.forEach(clearTimeout);
-      setHomeView(v);
-      v.scene.screenSpaceCameraController.enableInputs = true;
-      constraintsCleanupRef.current = applyKyotoCameraConstraints(v);
-      sessionStorage.setItem(HAS_SEEN_INTRO_KEY, 'true');
-      setIntroPhase('done');
-      // A duck-QR scan routes through the intro, then opens the duck page
-      // (item 3): the stamp was already collected before the flight.
-      if (sessionStorage.getItem(OPEN_DUCK_AFTER_INTRO_KEY) === '1') {
-        sessionStorage.removeItem(OPEN_DUCK_AFTER_INTRO_KEY);
-        navigate('/duck');
+    void (async () => {
+      const loaded = await loadMaps3d().catch(() => null);
+      if (!mounted) return;
+      if (!loaded) {
+        setMapFailed(true);
+        return;
       }
-    }
+      // Explicitly non-null const: the hoisted helpers below close over this,
+      // and TS won't carry the narrowing from `loaded` into them.
+      const maps3d: Maps3D = loaded;
 
-    if (finished) {
-      setHomeView(v);
-      constraintsCleanupRef.current = applyKyotoCameraConstraints(v);
-    } else {
-      // Scripted flight only -- no interactive input to fight it, and the
-      // Kyoto clamp doesn't engage until the flight lands (see finishIntro).
-      v.scene.screenSpaceCameraController.enableInputs = false;
+      map = new maps3d.Map3DElement({
+        // `mode` MUST be set or the map doesn't render at all.
+        mode: 'SATELLITE',
+        defaultUIHidden: true,
+        // Start already framed on the globe (intro) or the Delta (no intro),
+        // so the first painted frame is the right one instead of a jump.
+        ...initialCamera(!finished),
+      });
+      map.className = 'h-full w-full';
+      container.appendChild(map);
+      mapRef.current = map;
 
-      skipRef.current = () => {
-        signal.cancelled = true;
-        v.camera.cancelFlight();
-        finishIntro();
-      };
+      locateAndMarkVisitor(maps3d, map, t('mainMap.youAreHere'), () => mounted);
 
-      timers.push(
-        setTimeout(() => {
-          if (finished) return;
-          setIntroPhase('catchphrase');
-          timers.push(
-            setTimeout(() => {
-              if (finished) return;
-              setIntroPhase('reveal');
-              void flyIntroSequence(v, signal).then(() => {
-                if (!signal.cancelled) finishIntro();
-              });
-            }, CATCHPHRASE_HOLD_MS),
-          );
-        }, TITLE_HOLD_MS),
-      );
-    }
+      // Tapping a place marker plays a cinematic (framing highlight -> fly-in ->
+      // slow orbit) around it, then shows its popup -- one place at a time. The
+      // corridor clamp is lifted for the duration (the close-up/orbit view is
+      // tighter than the clamp expects) and restored when it ends.
+      let cinematic: {
+        cancelled: boolean;
+        removeFraming: () => void;
+        cancelOrbit: (() => void) | null;
+      } | null = null;
+
+      function closeCinematic() {
+        if (cinematic) {
+          cinematic.cancelled = true;
+          cinematic.removeFraming();
+          cinematic.cancelOrbit?.();
+          cinematic = null;
+        }
+        setPlacePopup(null);
+        if (mounted && map && !constraintsCleanupRef.current) {
+          constraintsCleanupRef.current = applyKamogawaConstraints(map);
+          void flyToHomeView(map);
+        }
+      }
+      closeCinematicRef.current = closeCinematic;
+
+      // One duck marker per place, and a place IS a duck spot -- fixed seed
+      // data, so no realtime subscription is needed. New mains show up inside
+      // a place's board, not as new markers.
+      let placePoints: MarkerPoint[] = [];
+
+      async function startPlaceCinematic(placeId: string) {
+        if (cinematic || !mounted || !map) return;
+        const point = placePoints.find((p) => p.id === placeId);
+        if (!point) return;
+
+        constraintsCleanupRef.current?.();
+        constraintsCleanupRef.current = null;
+
+        const removeFraming = addPlaceFraming(maps3d, map, point.lat, point.lng);
+        const session = { cancelled: false, removeFraming, cancelOrbit: null as (() => void) | null };
+        cinematic = session;
+
+        const previewPromise = fetchPlacePreview(placeId).catch(() => null);
+
+        await flyToPlace(map, point.lat, point.lng);
+        if (session.cancelled || !mounted) return;
+
+        const { promise: orbitPromise, cancel: cancelOrbit } = orbitPlace(map, point.lat, point.lng);
+        session.cancelOrbit = cancelOrbit;
+        await orbitPromise;
+        if (session.cancelled || !mounted) return;
+
+        const preview = await previewPromise;
+        if (session.cancelled || !mounted) return;
+        if (!preview) {
+          closeCinematic();
+          return;
+        }
+        setPlacePopup({ placeId, preview });
+      }
+
+      const markerLayer = createMarkerLayer(maps3d, map, (placeId) => {
+        void startPlaceCinematic(placeId);
+      });
+      disposers.push(markerLayer.dispose);
+
+      void fetchPlaceMarkers().then((points) => {
+        if (!mounted) return;
+        placePoints = points;
+        markerLayer.setMarkers(placePoints);
+      });
+
+      function finishIntro() {
+        if (finished || !map) return;
+        finished = true;
+        // Skip can fire before the title/catchphrase timers below have run;
+        // without cancelling them here they'd still fire later and force
+        // introPhase back out of 'done', re-opening the whole intro.
+        timers.forEach(clearTimeout);
+        setHomeView(map);
+        map.style.pointerEvents = 'auto';
+        constraintsCleanupRef.current = applyKamogawaConstraints(map);
+        sessionStorage.setItem(HAS_SEEN_INTRO_KEY, 'true');
+        setIntroPhase('done');
+        // A duck-QR scan routes through the intro, then opens the duck page
+        // (item 3): the stamp was already collected before the flight.
+        if (sessionStorage.getItem(OPEN_DUCK_AFTER_INTRO_KEY) === '1') {
+          sessionStorage.removeItem(OPEN_DUCK_AFTER_INTRO_KEY);
+          navigate('/duck');
+        }
+      }
+
+      if (finished) {
+        setHomeView(map);
+        constraintsCleanupRef.current = applyKamogawaConstraints(map);
+      } else {
+        // Scripted flight only -- no interactive input to fight it, and the
+        // corridor clamp doesn't engage until the flight lands (finishIntro).
+        map.style.pointerEvents = 'none';
+
+        skipRef.current = () => {
+          signal.cancelled = true;
+          map?.stopCameraAnimation();
+          finishIntro();
+        };
+
+        timers.push(
+          setTimeout(() => {
+            if (finished) return;
+            setIntroPhase('catchphrase');
+            timers.push(
+              setTimeout(() => {
+                if (finished || !map) return;
+                setIntroPhase('reveal');
+                void flyIntroSequence(map, signal).then(() => {
+                  if (!signal.cancelled) finishIntro();
+                });
+              }, CATCHPHRASE_HOLD_MS),
+            );
+          }, TITLE_HOLD_MS),
+        );
+      }
+    })();
 
     return () => {
+      mounted = false;
+      signal.cancelled = true;
       timers.forEach(clearTimeout);
-      cinematic?.cancelOrbit?.();
       constraintsCleanupRef.current?.();
-      removeTapHandler();
-      markerLayers.dispose();
-      v.destroy();
-      viewerRef.current = null;
+      constraintsCleanupRef.current = null;
+      disposers.forEach((dispose) => dispose());
+      map?.remove();
+      mapRef.current = null;
     };
     // Runs once: the intro plays out (or is skipped) exactly once per mount.
-    // navigate() is a stable reference from react-router, safe to omit.
+    // navigate()/t() are stable references, safe to omit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -280,7 +305,12 @@ export function MainMap() {
 
   function handleMapStyleChange(style: MapStyle) {
     setMapStyleState(style);
-    if (viewerRef.current) applyMapStyle(viewerRef.current, style);
+    if (mapRef.current) applyMapView(mapRef.current, style, showLabels);
+  }
+
+  function handleLabelsChange(next: boolean) {
+    setShowLabels(next);
+    if (mapRef.current) applyMapView(mapRef.current, mapStyle, next);
   }
 
   const showChrome = introPhase === 'done';
@@ -290,9 +320,22 @@ export function MainMap() {
       <div
         ref={containerRef}
         className="h-full w-full"
-        data-testid="cesium-globe"
+        data-testid="map-3d"
         onPointerDown={dismissMapHint}
       />
+
+      {mapFailed && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-kamo-stone px-8 text-center">
+          <p className="font-ui text-sm text-kamo-ink/70">{t('mainMap.mapError')}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-kamo-indigo px-4 py-2 font-ui text-sm text-kamo-stone"
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
 
       {showChrome && (
         <>
@@ -318,7 +361,12 @@ export function MainMap() {
           </div>
 
           <div className="absolute bottom-4 right-4 z-10">
-            <MapStyleSwitch value={mapStyle} onChange={handleMapStyleChange} />
+            <MapStyleSwitch
+              style={mapStyle}
+              showLabels={showLabels}
+              onStyleChange={handleMapStyleChange}
+              onLabelsChange={handleLabelsChange}
+            />
           </div>
 
           {qrSpot && (

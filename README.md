@@ -11,7 +11,7 @@ scavenger hunt. Japanese-first, bilingual (JA/EN), no account required.
 ## Stack
 
 - **React 18 + Vite + TypeScript**, React Router, Zustand
-- **CesiumJS** (`cesium` + `vite-plugin-cesium`) for the 3D globe/map
+- **Google Maps Platform 3D Maps** (`Map3DElement`) for the 3D globe/map
 - **Supabase** (Postgres, anonymous auth, Storage, Realtime) — the only backend
 - **Tailwind CSS v4** with the design tokens documented in `docs/ARCHITECTURE.md`
 - **i18next** — every user-facing string is in `src/i18n/{en,ja}.json`
@@ -26,7 +26,7 @@ for the working rules this repo follows.
 
 - Node.js ≥ 20.19 (developed on 22)
 - A Supabase project (free tier is fine)
-- A Cesium ion access token (free account)
+- A Google Maps Platform API key (see below — a billing account is required)
 
 ## Setup
 
@@ -42,8 +42,96 @@ cp .env.local.example .env.local   # then fill in the three values below
 ```
 VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<your project's anon / publishable key>
-VITE_CESIUM_ION_TOKEN=<your Cesium ion token>
+VITE_GOOGLE_MAPS_API_KEY=<your Google Maps Platform key>
 ```
+
+### One-time Google Maps Platform configuration
+
+This project is run to cost **¥0**. That's achievable, but it depends on two
+settings, so don't skip steps 4 and 5.
+
+1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/)
+   and **enable billing**. A payment method is required to issue a Maps key at
+   all — there is no card-free path.
+2. Enable the **Maps JavaScript API**.
+3. Create an API key and **restrict it** — this matters, because the key ships
+   in client-side JS and can't be hidden:
+   - *Application restrictions* → HTTP referrers → `https://kamokamo.vercel.app/*`
+     and `http://localhost:5173/*`
+   - *API restrictions* → Maps JavaScript API only
+4. **Upgrade to a paid billing account** before the trial credit expires. This
+   sounds backwards, but the recurring monthly free tier is only granted to
+   upgraded accounts — if the trial simply lapses, the API stops and the map
+   breaks. On an upgraded account you are charged ¥0 as long as you stay under
+   the allowance.
+5. **Set a quota cap.** Go to
+   [Maps quotas](https://console.cloud.google.com/google/maps-apis/quotas),
+   pick **Maps JavaScript API**, and set **`3D Map loads per day`** to **160**
+   (it ships as `Unlimited`). ~160/day ≈ 4,960/month, just under the free
+   allowance — this is what actually guarantees no bill. `Map loads per day` is
+   the separate 2D counter and should stay at 0; leave it alone. Add a budget
+   alert as a backstop.
+
+### What the free allowance is
+
+3D map loads bill to the **Immersive Maps** SKU (`4816-83A2-9059`, Pro tier):
+**5,000 free loads per month**, resetting on the 1st, then $7.00 per 1,000.
+
+A "load" is one `Map3DElement` creation, not a pan or zoom. Note that
+`MainMap` mounts fresh every time someone navigates back to `/`, so a visitor
+who tours a place, opens the duck page and returns can spend 3–5 loads. Budget
+roughly **1,200–1,600 visitor sessions per month**, not 5,000.
+
+Local development spends the same quota — every hot reload that remounts
+`MainMap` is another load. Keep the dev server closed when you aren't using it.
+
+### Optional: the label-free graphical map
+
+Three of the four style combinations are native Google modes. Graphical
+*without* labels has no native mode, so it needs a Cloud-styled Map ID.
+
+The console's style editor no longer exposes per-feature label checkboxes, so
+do it through the JSON tab:
+
+1. [Map Styles](https://console.cloud.google.com/google/maps-apis/studio/styles)
+   → **Create style** → **JSON** tab → paste:
+   ```json
+   [
+     {
+      "variant": "dark",
+       "elementType": "labels",
+       "stylers": [{ "visibility": "off" }]
+     }
+   ]
+   ```
+   `elementType: "labels"` covers both text and icons across every feature and
+   leaves geometry alone, so water stays blue and parks stay green. Do *not*
+   use `{"featureType": "poi", "stylers": [{"visibility": "off"}]}` without an
+   `elementType` — that hides POI geometry too and the parks go grey.
+2. Set the map type to the **hybrid** option and **Light mode**. 3D cloud
+   styling requires this, and **dark mode is not supported for 3D at all** —
+   pick it and the style silently won't apply. Save the style.
+3. [Map Management](https://console.cloud.google.com/google/maps-apis/studio/maps)
+   → **Create Map ID** → type **JavaScript**, tick **Vector**. Under its
+   **Map styles** section, associate the style from step 1.
+4. Put the id in `.env.local` as `VITE_GOOGLE_MAPS_LABEL_FREE_MAP_ID`, and
+   **restart the dev server** — Vite reads env vars at start.
+
+**The console preview doesn't work for 3D cloud styles** (Google doesn't
+support preview for them), so the editor will look wrong. Ignore it and verify
+in the app: switch to **Map**, then **No labels**. Propagation takes a few
+minutes.
+
+Skip all of this and the app still works — the labels-off control simply
+disables itself while the graphical map is selected, instead of silently doing
+nothing.
+
+The map is pinned to the Maps JS **`alpha`** channel in
+[`src/lib/map3d.ts`](src/lib/map3d.ts), because `MapMode.ROADMAP` — the flat
+cartoonish "Map" style in the switch — is pre-GA and exists only there. This is
+a deliberate trade: Google can change the alpha channel without notice. If the
+map ever breaks with no code change on our side, switch `loadMaps3d()` back to
+`v: 'weekly'` and drop `'roadmap'` from `MapStyle`.
 
 ### One-time Supabase configuration
 
@@ -66,7 +154,7 @@ VITE_CESIUM_ION_TOKEN=<your Cesium ion token>
    This signs in real anonymous users and posts a few main activities through
    the same flow the app uses.
 
-The `photos` Storage bucket, RLS policies, triggers (20-sub archive cap,
+The `photos` Storage bucket, RLS policies, triggers (10-sub archive cap,
 10-stamp certificate, vote counters), the event-gating policy, and the
 geofenced `scan_duck_spot` RPC are all created by the migrations — no manual
 dashboard setup beyond step 1.
@@ -155,7 +243,7 @@ src/
   app/          routes, error boundary
   screens/      Intro, MainMap, Onboarding, Tutorial, ToukouMap, Archive, Duck
   components/    shared UI (language toggle, map-style switch, stale banner)
-  lib/          supabase, identity, cesium, toukou, archive, duck, geo, cache
+  lib/          supabase, identity, map3d, river, toukou, archive, duck, geo, cache
   i18n/         en.json, ja.json
   store/        zustand (identity)
 supabase/

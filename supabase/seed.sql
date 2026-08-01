@@ -32,20 +32,22 @@ on conflict (id) do update set
   active = excluded.active;
 
 -- Duck spots: 10 points along the Kamogawa, Delta down through the popular
--- Sanjo-Shijo stretch. qr_token only generated on first insert (Appendix
+-- Sanjo-Shijo stretch. Coordinates sit ON THE WATER, not on the bridges or
+-- embankments -- they're both where the marker draws and the centre of the
+-- ~120 m scan geofence, so keep them on the river (see 20260801150000/160000). qr_token only generated on first insert (Appendix
 -- A.2b) -- re-running must not hand out a fresh token for an already-seeded
 -- spot, since real printed QR codes would encode the original token.
 insert into duck_spots (id, name_en, name_ja, lat, lng, qr_token, active) values
-  ('d1000000-0000-0000-0000-000000000001', 'Kamogawa Delta', '鴨川デルタ', 35.0300, 135.7720, encode(gen_random_bytes(8), 'hex'), true),
-  ('d1000000-0000-0000-0000-000000000002', 'Demachiyanagi Bridge', '出町柳橋', 35.0295, 135.7715, encode(gen_random_bytes(8), 'hex'), true),
-  ('d1000000-0000-0000-0000-000000000003', 'Kitayama', '北山', 35.0430, 135.7660, encode(gen_random_bytes(8), 'hex'), true),
-  ('d1000000-0000-0000-0000-000000000004', 'Marutamachi Bridge', '丸太町橋', 35.0180, 135.7700, encode(gen_random_bytes(8), 'hex'), true),
-  ('d1000000-0000-0000-0000-000000000005', 'Nijo Bridge', '二条大橋', 35.0130, 135.7705, encode(gen_random_bytes(8), 'hex'), true),
+  ('d1000000-0000-0000-0000-000000000001', 'Kamogawa Delta', '鴨川デルタ', 35.029694, 135.771750, encode(gen_random_bytes(8), 'hex'), true),
+  ('d1000000-0000-0000-0000-000000000002', 'Demachiyanagi Bridge', '出町柳橋', 35.026361, 135.771556, encode(gen_random_bytes(8), 'hex'), true),
+  ('d1000000-0000-0000-0000-000000000003', 'Kitayama', '北山', 35.043139, 135.763278, encode(gen_random_bytes(8), 'hex'), true),
+  ('d1000000-0000-0000-0000-000000000004', 'Marutamachi Bridge', '丸太町橋', 35.019361, 135.771556, encode(gen_random_bytes(8), 'hex'), true),
+  ('d1000000-0000-0000-0000-000000000005', 'Nijo Bridge', '二条大橋', 35.013444, 135.771639, encode(gen_random_bytes(8), 'hex'), true),
   ('d1000000-0000-0000-0000-000000000006', 'Sanjo Bridge', '三条大橋', 35.0100, 135.7715, encode(gen_random_bytes(8), 'hex'), true),
   ('d1000000-0000-0000-0000-000000000007', 'Shijo Bridge', '四条大橋', 35.0035, 135.7715, encode(gen_random_bytes(8), 'hex'), true),
   ('d1000000-0000-0000-0000-000000000008', 'Gojo Bridge', '五条大橋', 34.9975, 135.7690, encode(gen_random_bytes(8), 'hex'), true),
-  ('d1000000-0000-0000-0000-000000000009', 'Shichijo', '七条', 34.9880, 135.7660, encode(gen_random_bytes(8), 'hex'), true),
-  ('d1000000-0000-0000-0000-000000000010', 'Jujo', '十条', 34.9750, 135.7630, encode(gen_random_bytes(8), 'hex'), true)
+  ('d1000000-0000-0000-0000-000000000009', 'Shichijo', '七条', 34.989750, 135.767222, encode(gen_random_bytes(8), 'hex'), true),
+  ('d1000000-0000-0000-0000-000000000010', 'Jujo', '十条', 34.973611, 135.765194, encode(gen_random_bytes(8), 'hex'), true)
 on conflict (id) do nothing;
 
 -- The ~8 activity "places" (each map marker is a place, not a single main)
