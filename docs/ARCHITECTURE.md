@@ -170,9 +170,11 @@ Since the round-3 migration (`20260801120000`) **a place IS a duck spot**, so
 there is exactly **one marker set**: 10 duck markers, one per spot, each in its
 duck's color with the "!" worked into the mark. Before that the map carried 16
 exclamation markers *plus* 10 duck markers — 26 icons over a narrow strip of
-river, which read as clutter and made taps ambiguous. The previous places are
-deactivated rather than deleted, so their activities stay browsable in the
-archive. Markers are unclustered so each is individually tappable. Tapping a place plays
+river, which read as clutter and made taps ambiguous. The previous place sets were removed
+outright in `20260801170000`. Markers are unclustered so each is individually
+tappable, and there is only ever one marker under a tap — the duck-spot layer
+that used to sit on top of them at identical coordinates is gone, which is what
+made taps land on the duck page or the board at random. Tapping a place plays
 a short cinematic — a pulsing framing highlight, a close fly-in, and a slow
 orbit — then shows a popup with the place's name, a few of its current photos,
 and a button into `/toukou?place=<id>`. Duck spots render as per-spot **colored
@@ -185,9 +187,10 @@ the map.
 
 Always scoped to one place (`?place=<id>`) — a bare `/toukou` visit bounces
 back to the map. Since round-3 this is the **combined board**: the place's duck
-sits at the centre (its color, its name, whether you've earned its stamp) with
-that spot's shared duck photos hanging off it, and the main activities orbit
-the duck. One screen answers both "what happens here" and "which duck is this".
+(its color, its name, whether you've earned its stamp) sits with that spot's
+shared duck photos hanging off it, and each main activity sits with its own
+subs. The duck and the activities are deliberately *separate* clusters — wiring
+every main to the duck made one hairball that implied the duck was their parent.
 It shows **every (non-archived) main at that place**,
 each in its activity-type color, with its subs orbiting in a lighter shade; the
 mains repel into separate clusters. Activities persist across days — they're
@@ -236,7 +239,7 @@ edit an applied migration, add a new file). Summary:
 |---|---|
 | `profiles` | One row per anonymous user; nationality/age/gender from onboarding |
 | `activity_types` | Seeded palette (writing, reading, walking, music, yoga…) |
-| `places` | Riverbank locations; each active one is one map marker. Since `20260801120000` each links 1:1 to a `duck_spot` via `duck_spot_id`, so the 10 active places *are* the 10 ducks. Earlier place sets are deactivated, not deleted, so their activities stay in the archive |
+| `places` | Riverbank locations, one per duck spot. Each links 1:1 to a `duck_spot` via `duck_spot_id` (`20260801120000`), and a place without one is rejected by a CHECK (`20260801170000`) — so the 10 places *are* the 10 ducks. The earlier 8- and 16-place sets, and the activities posted at them, were deleted in `20260801170000` |
 | `events` | Daily gathering windows; today's is upserted on read by `ensure_todays_event()` |
 | `activities` | Both mains and subs (`kind`); mains carry `place_id` + `event_id`; also `parent_id`, `activity_type`, `photo_url`, `phrase`, `lat/lng`, `likes`/`dislikes`, `archived`, `hidden` |
 | `votes` | One row per `(user_id, activity_id)`; switching updates it in place |
