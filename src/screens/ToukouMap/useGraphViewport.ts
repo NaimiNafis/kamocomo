@@ -10,10 +10,12 @@ const FIT_PADDING = 90; // room for card size around the extreme nodes
  * lose the graph off-screen and be unable to find it again. */
 const PAN_SLACK = 0.5;
 
-/** How far the opening animation closes in from the fit-everything view. Kept
- * modest: the further in it lands, the less graph is on screen and the more of
- * it a single swipe crosses, which reads as the board being twitchy. */
-const INTRO_ZOOM_IN = 1.25;
+/** How far the opening animation closes in from the fit-everything view. Now
+ * that it lands on a specific node rather than the graph's centre, the move has
+ * to be decisive enough to read as "here is the duck" -- too small and it just
+ * looks like the board twitched. Raising it further costs pan comfort: less
+ * graph on screen means one swipe crosses more of it. */
+const INTRO_ZOOM_IN = 1.5;
 
 /**
  * Screen pixels of content movement per pixel of finger movement.
@@ -107,32 +109,52 @@ export interface GraphDragHandlers {
  * and on the background pans; a second pointer converts to a pinch about the
  * midpoint and cancels any in-progress node drag.
  *
+ * On open it holds the whole graph in frame, then eases in on `focusId`.
+ *
  * The view auto-fits to frame the whole graph until the user interacts, then
  * `userView` takes over -- derived during render (not via a setState effect)
  * so it doesn't cascade a render on every simulation tick.
  */
-export function useGraphViewport(positions: Map<string, NodePosition>, drag: GraphDragHandlers) {
+export function useGraphViewport(
+  positions: Map<string, NodePosition>,
+  drag: GraphDragHandlers,
+  /** Node the opening glide settles on — the place's duck, so you always arrive
+   * looking at it. Omitted, the glide just closes in on the graph's centre. */
+  focusId?: string,
+) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userView, setUserView] = useState<ViewTransform | null>(null);
-  // The opening move: hold the whole board in frame for a beat so you can see
-  // how much is here, then ease in to the middle.
+  // The opening move: hold the whole board in frame so you can see how much is
+  // here, then ease in on the focus node.
   //
-  // Four phases, and 'arming' is the one that isn't obvious. A CSS transition
-  // only animates a property that changes while the transition is ALREADY
-  // declared on the element; mount the transition and the new transform in the
-  // same render and the browser simply paints the end state. So 'arming' puts
-  // the transition on for one frame with the transform untouched, and only then
-  // does 'gliding' move it. 'done' takes the easing back off, so nothing the
-  // user does afterwards is animated.
-  const [introPhase, setIntroPhase] = useState<'hold' | 'arming' | 'gliding' | 'done'>('hold');
+  // Interpolated in JS rather than handed to a CSS transition. The force
+  // simulation re-renders this component on every tick and rewrites the inline
+  // transform with it, which restarts or swallows a CSS transition -- the
+  // earlier attempts snapped for exactly that reason. Owning the value means
+  // the animation is unaffected by how often the graph re-renders underneath.
+  const [introT, setIntroT] = useState(0); // 0 = whole board, 1 = settled on focus
+  const introCancelled = useRef(false);
+
   const fitted = fitView(positions, size);
-  // Zoomed only from 'gliding' onward -- 'arming' must still render the fitted
-  // transform, or there's nothing left to animate from.
-  const zoomedIn = introPhase === 'gliding' || introPhase === 'done';
+  const focus = focusId ? positions.get(focusId) : undefined;
+
+  // Where the glide lands. Placing a world point at the viewport centre means
+  // tx = -x * scale, since a point renders at (centre + t + world * scale).
+  const targetScale = Math.min(fitted.scale * INTRO_ZOOM_IN, MAX_SCALE);
+  const target: ViewTransform = focus
+    ? { scale: targetScale, tx: -focus.x * targetScale, ty: -focus.y * targetScale }
+    : { ...fitted, scale: targetScale };
+
   const view =
     userView ??
-    (zoomedIn ? { ...fitted, scale: Math.min(fitted.scale * INTRO_ZOOM_IN, MAX_SCALE) } : fitted);
+    (introT === 0
+      ? fitted
+      : {
+          scale: fitted.scale + (target.scale - fitted.scale) * introT,
+          tx: fitted.tx + (target.tx - fitted.tx) * introT,
+          ty: fitted.ty + (target.ty - fitted.ty) * introT,
+        });
   const gesture = useRef<Gesture | null>(null);
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
 
@@ -140,32 +162,25 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
   // would animate away from an empty board before any card had a position.
   const ready = size.w > 0 && positions.size > 0;
   useEffect(() => {
-    if (!ready || introPhase !== 'hold') return;
-    const timer = setTimeout(() => setIntroPhase('arming'), INTRO_HOLD_MS);
-    return () => clearTimeout(timer);
-  }, [ready, introPhase]);
-
-  // Let the browser paint one frame with the transition declared and the
-  // transform unchanged, then move it. Two rAFs rather than one: a single frame
-  // isn't reliably enough for the style to have been committed.
-  useEffect(() => {
-    if (introPhase !== 'arming') return;
-    let inner = 0;
-    const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setIntroPhase('gliding'));
-    });
+    if (!ready || introCancelled.current) return;
+    let raf = 0;
+    let startedAt = 0;
+    const hold = setTimeout(() => {
+      const step = (now: number) => {
+        if (introCancelled.current) return;
+        if (!startedAt) startedAt = now;
+        const t = Math.min((now - startedAt) / INTRO_GLIDE_MS, 1);
+        // easeInOutCubic -- matches the calm motion the rest of the app uses.
+        setIntroT(t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+        if (t < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }, INTRO_HOLD_MS);
     return () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
+      clearTimeout(hold);
+      cancelAnimationFrame(raf);
     };
-  }, [introPhase]);
-
-  // Retire the easing once the glide has played.
-  useEffect(() => {
-    if (introPhase !== 'gliding') return;
-    const timer = setTimeout(() => setIntroPhase('done'), INTRO_GLIDE_MS);
-    return () => clearTimeout(timer);
-  }, [introPhase]);
+  }, [ready]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -203,9 +218,8 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
 
   function onPointerDown(e: React.PointerEvent) {
     const target = e.target as HTMLElement;
-    // Touching the board hands control over immediately: no easing should be
-    // left on the transform while a finger is moving it.
-    setIntroPhase('done');
+    // A finger on the board outranks the opening glide.
+    introCancelled.current = true;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointers.current.size === 2) {
@@ -296,8 +310,11 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
    * already what renders before the first interaction, so this is just letting
    * it take over again. */
   function resetView() {
+    // "Show me everything" is the fitted view, and it must not re-trigger the
+    // opening glide afterwards.
+    introCancelled.current = true;
+    setIntroT(0);
     setUserView(null);
-    setIntroPhase('done'); // recentre means "show me everything", not "replay the intro"
   }
 
   return {
@@ -306,10 +323,6 @@ export function useGraphViewport(positions: Map<string, NodePosition>, drag: Gra
     cx,
     cy,
     view,
-    /** True only for the duration of the opening glide, so the caller eases the
-     * transform for exactly that long and never during interaction. */
-    introGliding: introPhase === 'arming' || introPhase === 'gliding',
-    introGlideMs: INTRO_GLIDE_MS,
     resetView,
     containerHandlers: {
       onPointerDown,

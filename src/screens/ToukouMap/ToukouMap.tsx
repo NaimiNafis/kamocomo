@@ -95,12 +95,13 @@ export function ToukouMap() {
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-  const { viewportRef, cx, cy, view, introGliding, introGlideMs, resetView, containerHandlers } =
-    useGraphViewport(positions, {
-    startDrag,
-    drag,
-    endDrag,
-  });
+  const { viewportRef, cx, cy, view, resetView, containerHandlers } = useGraphViewport(
+    positions,
+    { startDrag, drag, endDrag },
+    // Arrive looking at the place's duck -- it's the anchor of the board, so
+    // it's what should be under your eyes when the opening glide settles.
+    duck ? DUCK_ID : undefined,
+  );
 
   // Every place marker passes ?place=; a bare /toukou visit has nowhere to go.
   useEffect(() => {
@@ -238,10 +239,10 @@ export function ToukouMap() {
         <div
           className="absolute left-0 top-0 origin-top-left"
           style={{
+            // No CSS transition here on purpose: the opening glide is
+            // interpolated in the hook, and easing this would also lag every
+            // drag behind the finger.
             transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})`,
-            // Only the opening glide is eased. Dragging and pinching must track
-            // the finger exactly -- easing here is felt as lag, not smoothness.
-            transition: introGliding ? `transform ${introGlideMs}ms ease-in-out` : undefined,
           }}
         >
           <svg

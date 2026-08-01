@@ -257,9 +257,16 @@ can't pan into empty space and lose the graph, which an unbounded canvas
 otherwise makes easy.
 
 The board **opens zoomed out**, holds the whole graph in frame for a beat, then
-eases in to the middle, so you see how much is here before you're in among it.
-Only that opening move is animated — drags and pinches track the finger with no
-easing lag. Every node is draggable, the duck and its photos included; that
+eases in and settles on the **place's duck**, so you see how much is here before
+arriving at the anchor of it.
+
+That glide is interpolated in JS, not handed to a CSS transition. The force
+simulation re-renders the canvas on every tick and rewrites its inline
+`transform` along with it, which restarts or swallows a transition — earlier
+attempts snapped for exactly that reason. Owning the value makes the animation
+independent of how often the graph re-renders underneath. Nothing else is eased:
+drags and pinches track the finger, since easing there is felt as lag rather
+than smoothness. A pointer-down cancels the glide outright. Every node is draggable, the duck and its photos included; that
 depends on `data-node-id` being present on the wrapper, which is what the
 viewport hook hit-tests for.
 
