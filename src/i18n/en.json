@@ -36,11 +36,13 @@
       "other": "Other",
       "unspecified": "Prefer not to say"
     },
-    "continue": "Continue"
+    "continue": "Continue",
+    "name": "Name (optional)",
+    "namePlaceholder": "What should we call you?"
   },
   "mainMap": {
     "tutorialButton": "Tutorial",
-    "archiveButton": "Archive",
+    "archiveButton": "Library",
     "back": "Back to map",
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
     "dragHint": "Drag to look around",
@@ -74,7 +76,9 @@
     "like": "Like",
     "dislike": "Dislike",
     "recenter": "Show everything",
-    "addSub": "Add to this activity"
+    "addSub": "Add to this activity",
+    "holdHint": "Hold a card to see it in full",
+    "jumpToMain": "Go to this activity"
   },
   "composer": {
     "mainTitle": "Post an activity",
@@ -91,13 +95,15 @@
     "otherType": "Other",
     "otherTypePlaceholder": "Name the activity",
     "otherTypeAdd": "Add",
-    "photoRequired": "A photo is required"
+    "photoRequired": "A photo is required",
+    "removeType": "Remove this activity",
+    "removeNotYours": "That one's shared — only whoever added it can remove it.",
+    "removeFailed": "Couldn't remove that just now. Try again."
   },
   "mapStyle": {
-    "labelsOff": "No labels",
-    "labelsOn": "Labels",
-    "threeD": "3D",
-    "twoD": "2D"
+    "labelsOff": "Hide labels",
+    "labelsOn": "Show labels",
+    "switchTo": "Switch to {{mode}}"
   },
   "duck": {
     "testMode": "Test mode: scan any QR without being there",
@@ -118,15 +124,14 @@
     "locationUnavailable": "Couldn't get your location. Try again near the spot.",
     "notFound": "This spot code wasn't recognized.",
     "missingSpot": "No spot code in this link.",
-    "progress": "{{count}} / 10 stamps",
-    "certificateUnlocked": "You collected all 10! Your certificate is unlocked.",
+    "certificateUnlocked": "You collected them all! Your certificate is unlocked.",
     "goToDuck": "Go to duck page",
     "tryAgain": "Try again"
   },
   "certificate": {
     "heading": "Certificate of Completion",
     "headingJa": "達成証明書",
-    "body": "awarded for collecting all ten duck stamps along the Kamogawa",
+    "body": "awarded for collecting every duck stamp along the Kamogawa",
     "bodyJa": "鴨川のすべての鴨スタンプを集めたことを証します",
     "issued": "Issued {{date}}",
     "close": "Close"
@@ -153,8 +158,8 @@
         "body": "Add to someone's activity, or post your own. A photo is all it takes."
       },
       {
-        "title": "Collect stamps",
-        "body": "Scan the QR code at a duck spot to earn its stamp. Collect all ten for a certificate."
+        "title": "Collect the ducks",
+        "body": "Find a duck object by the river and photograph it. Collect them all for a certificate."
       }
     ]
   },
@@ -178,5 +183,11 @@
     "tooFar": "Photo shared. You're about {{distance}} m away, so it isn't collected yet.",
     "needLocation": "Photo shared. Turn on location to collect it.",
     "postFailed": "Couldn't save that photo. Try again."
+  },
+  "detail": {
+    "postedAt": "Posted",
+    "postedBy": "Posted by",
+    "anonymous": "Someone at the river",
+    "about": "About them"
   }
 }

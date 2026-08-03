@@ -17,6 +17,7 @@ interface OnboardingProps {
  */
 export function Onboarding({ onComplete }: OnboardingProps) {
   const { t } = useTranslation();
+  const [name, setName] = useState('');
   const [nationality, setNationality] = useState<string | null>(null);
   const [ageRange, setAgeRange] = useState<string | null>(null);
   const [gender, setGender] = useState<string | null>(null);
@@ -25,7 +26,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   function handleContinue() {
     if (!nationality || !ageRange || !gender) return;
-    onComplete({ nationality, age_range: ageRange, gender });
+    onComplete({
+      display_name: name.trim() || null,
+      nationality,
+      age_range: ageRange,
+      gender,
+    });
   }
 
   return (
@@ -33,6 +39,26 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       <div className="w-full max-w-sm rounded-2xl bg-kamo-stone p-6 text-kamo-ink shadow-xl">
         <h2 className="font-display text-xl">{t('onboarding.title')}</h2>
         <p className="mt-1 font-ui text-sm text-kamo-ink/70">{t('onboarding.subtitle')}</p>
+
+        {/* Optional, and first: it's the only question whose answer other
+            people see, and it's the one that turns a post from a demographic
+            into a person. Skipping it still gets you in. */}
+        <div className="mt-4">
+          <label
+            htmlFor="kamo-name"
+            className="font-ui text-xs font-medium uppercase tracking-wide text-kamo-ink/60"
+          >
+            {t('onboarding.name')}
+          </label>
+          <input
+            id="kamo-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={24}
+            placeholder={t('onboarding.namePlaceholder')}
+            className="mt-2 w-full rounded-xl border border-kamo-ink/20 bg-transparent px-3 py-2 font-ui text-sm text-kamo-ink placeholder:text-kamo-ink/35"
+          />
+        </div>
 
         <ChipGroup
           label={t('onboarding.nationality')}
