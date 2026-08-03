@@ -1,5 +1,6 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 import { KAMOGAWA_DELTA } from './geo';
+import { MARKER_PIXEL_SIZE, type ProximityLevel } from './ducks';
 
 /**
  * Google Maps Platform 3D Maps (`Map3DElement`) — replaces the previous
@@ -360,7 +361,10 @@ export function kamoColor(cssVariable: string): string {
 // §5.3 the visitor's own location — a Google-Maps-style dot with a heading cone
 // =========================================================================
 
-const USER_MARKER_SIZE = 46;
+// Sized against the ducks rather than in isolation: the dot's core is ~40% of
+// its box, so this lands it in the same visual weight class as a duck. It was
+// previously small enough to lose among them.
+const USER_MARKER_SIZE = 72;
 
 /** Redraw thresholds. `Marker3DElement` rasterizes its art on append and has no
  * rotation property, so "turning" the cone means rebuilding the marker — cheap,
@@ -378,20 +382,40 @@ const POSITION_STEP_METERS = 2;
  * Uses --kamo-river rather than Google's #4285F4: CLAUDE.md's design rules
  * allow only the kamo tokens and explicitly bar saturated "tech" colors.
  */
-function userLocationIcon(heading: number | null): string {
+export function userLocationIcon(heading: number | null): string {
   const blue = kamoColor('--kamo-river') || '#6E8CA0';
   const ring = kamoColor('--kamo-stone') || '#E9E4D8';
   const cone =
     heading === null
       ? ''
       : `<g transform="rotate(${heading.toFixed(0)} 32 32)">` +
-        `<path d="M32 32 L19.3 4.8 A30 30 0 0 1 44.7 4.8 Z" fill="${blue}" opacity="0.35"/>` +
+        `<path d="M32 32 L19.3 4.8 A30 30 0 0 1 44.7 4.8 Z" fill="${blue}" opacity="0.3"/>` +
         `</g>`;
+  // Concentric rings around the dot -- the ripple look, drawn at rest.
+  //
+  // It does NOT pulse, and can't: Marker3DElement rasterizes its art to a
+  // bitmap on append, so there's no live DOM to animate and SMIL inside the SVG
+  // never runs. A real pulse would mean destroying and rebuilding the marker
+  // every frame, which is a lot of churn for decoration. Three rings at falling
+  // opacity read as the same idea held still.
+  // Rings sit further out and the core is bigger than the first attempt, where
+  // the rings ate the budget and left a dot smaller than a duck marker.
+  const ripples = [
+    { r: 17, a: 0.4 },
+    { r: 23, a: 0.2 },
+    { r: 29, a: 0.09 },
+  ]
+    .map(
+      (w) =>
+        `<circle cx="32" cy="32" r="${w.r}" fill="none" stroke="${blue}" stroke-width="2" opacity="${w.a}"/>`,
+    )
+    .join('');
   const svg =
     `<svg viewBox="0 0 64 64" width="${USER_MARKER_SIZE}" height="${USER_MARKER_SIZE}" xmlns="http://www.w3.org/2000/svg">` +
     cone +
-    `<circle cx="32" cy="32" r="9.5" fill="${ring}"/>` +
-    `<circle cx="32" cy="32" r="6.5" fill="${blue}"/>` +
+    ripples +
+    `<circle cx="32" cy="32" r="13" fill="${ring}"/>` +
+    `<circle cx="32" cy="32" r="9.5" fill="${blue}"/>` +
     `</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
@@ -415,6 +439,30 @@ function headingFromEvent(event: DeviceOrientationEvent): number | null {
   return null;
 }
 
+/**
+ * Whether a fix is somewhere this app can show. The camera is clamped to the
+ * Kamogawa corridor, so a dot outside it is off-screen and no duck is
+ * meaningfully "nearest" — which is exactly what a visitor testing from another
+ * city sees.
+ */
+export function isWithinCorridor(lat: number, lng: number): boolean {
+  return (
+    lat >= KAMOGAWA_BOUNDS.south &&
+    lat <= KAMOGAWA_BOUNDS.north &&
+    lng >= KAMOGAWA_BOUNDS.west &&
+    lng <= KAMOGAWA_BOUNDS.east
+  );
+}
+
+export interface UserLocationOptions {
+  /** Called whenever the fix moves, so the caller can react to where the
+   * visitor is -- lighting up the duck they're closest to. */
+  onPositionChange?: (lat: number, lng: number) => void;
+  /** Pin the dot here and ignore the device's real fix. Used by test mode so
+   * the proximity effect is demonstrable away from the river. */
+  fixedPosition?: { lat: number; lng: number };
+}
+
 export interface UserLocationMarker {
   /** iOS 13+ gates compass access behind a permission prompt that only works
    * from a user gesture, so the caller has to invoke this from one. A no-op
@@ -433,11 +481,15 @@ export interface UserLocationMarker {
  * may already be gone (React StrictMode's dev double mount/cleanup, or a real
  * unmount before the browser answers).
  */
-export function createUserLocationMarker(maps3d: Maps3D, map: Map3D): UserLocationMarker {
+export function createUserLocationMarker(
+  maps3d: Maps3D,
+  map: Map3D,
+  options: UserLocationOptions = {},
+): UserLocationMarker {
   let disposed = false;
   let marker: google.maps.maps3d.Marker3DElement | null = null;
-  let lat = KAMOGAWA_DELTA.latitude;
-  let lng = KAMOGAWA_DELTA.longitude;
+  let lat = options.fixedPosition?.lat ?? KAMOGAWA_DELTA.latitude;
+  let lng = options.fixedPosition?.lng ?? KAMOGAWA_DELTA.longitude;
   let heading: number | null = null;
   let drawnHeading: number | null = null;
   let drawnLat: number | null = null;
@@ -475,14 +527,23 @@ export function createUserLocationMarker(maps3d: Maps3D, map: Map3D): UserLocati
 
   draw(); // show the fallback dot immediately; sensors refine it below
 
+  options.onPositionChange?.(lat, lng);
+
   let watchId: number | null = null;
-  if ('geolocation' in navigator) {
+  // A pinned position outranks the device: test mode is explicitly "pretend I'm
+  // at the river", so a real fix would defeat it.
+  if (!options.fixedPosition && 'geolocation' in navigator) {
     watchId = navigator.geolocation.watchPosition(
       (position) => {
         if (disposed) return;
+        // A fix outside the corridor is discarded rather than shown: the camera
+        // can't reach it, so the dot would sit off-screen and the app would
+        // look broken. The fallback keeps it somewhere the map can display.
+        if (!isWithinCorridor(position.coords.latitude, position.coords.longitude)) return;
         lat = position.coords.latitude;
         lng = position.coords.longitude;
         maybeRedraw();
+        options.onPositionChange?.(lat, lng);
       },
       () => {
         /* keep the Kamogawa fallback */
@@ -532,7 +593,7 @@ export function createUserLocationMarker(maps3d: Maps3D, map: Map3D): UserLocati
 // §5.3/§4.4 markers -- exclamation (activity places) and duck (duck spots)
 // =========================================================================
 
-const MARKER_PIXEL_SIZE = 26;
+
 
 export interface MarkerPoint {
   id: string;
@@ -540,21 +601,28 @@ export interface MarkerPoint {
   lng: number;
   /** This place's duck, recolored — every marker carries its own. */
   iconUrl: string;
+  /** Redraws this duck lit to `level`. Kept as a callback rather than a
+   * pre-rendered set so the layer doesn't need to know how ducks are drawn. */
+  litIcon?: (level: ProximityLevel) => string;
 }
 
 export interface MarkerLayer {
   setMarkers(points: MarkerPoint[]): void;
+  /** Light one marker by how close the visitor is. Only the markers whose level
+   * actually changed are rebuilt, never the whole set. */
+  setProximity(placeId: string | null, level: ProximityLevel): void;
   dispose(): void;
 }
 
 /**
  * Custom marker art: an `<img>` wrapped in a `<template>` and appended to the
  * marker's default slot. Google rasterizes it into the 3D scene, so the
- * per-duck `duckIconDataUri()` data URIs carry over unchanged.
+ * per-duck `duckMarkerDataUri()` data URIs carry over unchanged.
  */
 function markerWithIcon(
   maps3d: Maps3D,
   point: MarkerPoint,
+  level: ProximityLevel,
   onTap: (refId: string) => void,
 ): google.maps.maps3d.Marker3DInteractiveElement {
   const marker = new maps3d.Marker3DInteractiveElement({
@@ -568,7 +636,7 @@ function markerWithIcon(
   });
 
   const img = document.createElement('img');
-  img.src = point.iconUrl;
+  img.src = level > 0 && point.litIcon ? point.litIcon(level) : point.iconUrl;
   // Both marks are `viewBox="0 0 64 64"` with no intrinsic width/height, so a
   // rasterizer is free to pick its own size. Pin it in CSS as well as in the
   // attributes, or the SVG comes out far larger than MARKER_PIXEL_SIZE.
@@ -599,17 +667,45 @@ export function createMarkerLayer(
   map: Map3D,
   onTap: (placeId: string) => void,
 ): MarkerLayer {
-  let markers: google.maps.maps3d.Marker3DInteractiveElement[] = [];
+  let markers = new Map<string, google.maps.maps3d.Marker3DInteractiveElement>();
+  let points: MarkerPoint[] = [];
+  let litId: string | null = null;
+  let litLevel: ProximityLevel = 0;
+
+  function build(point: MarkerPoint) {
+    const level = point.id === litId ? litLevel : 0;
+    const marker = markerWithIcon(maps3d, point, level, onTap);
+    map.appendChild(marker);
+    markers.set(point.id, marker);
+  }
+
+  function rebuild(id: string) {
+    const point = points.find((p) => p.id === id);
+    if (!point) return;
+    markers.get(id)?.remove();
+    build(point);
+  }
 
   return {
-    setMarkers: (points) => {
+    setMarkers: (next) => {
       markers.forEach((m) => m.remove());
-      markers = points.map((p) => markerWithIcon(maps3d, p, onTap));
-      markers.forEach((m) => map.appendChild(m));
+      markers = new Map();
+      points = next;
+      points.forEach(build);
+    },
+    setProximity: (placeId, level) => {
+      if (placeId === litId && level === litLevel) return;
+      const affected = new Set([litId, placeId].filter((id): id is string => id !== null));
+      litId = placeId;
+      litLevel = level;
+      // Only the markers whose state changed; a fresh fix shouldn't rebuild all
+      // eight every few seconds.
+      affected.forEach(rebuild);
     },
     dispose: () => {
       markers.forEach((m) => m.remove());
-      markers = [];
+      markers = new Map();
+      points = [];
     },
   };
 }

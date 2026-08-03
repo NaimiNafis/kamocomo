@@ -10,6 +10,17 @@ export interface GeoPoint {
 // import it without pulling in the Google Maps loader.
 export const KAMOGAWA_DELTA = { longitude: 135.772, latitude: 35.03 };
 
+/**
+ * Where the visitor is pretended to be in test mode: about 150 m south of the
+ * Delta duck, on the river.
+ *
+ * Near it rather than on top of it, deliberately. Standing exactly on a duck
+ * makes the proximity glow look binary; from a short walk away you can see the
+ * nearest one lit and watch it change as the camera moves, which is the thing
+ * being demonstrated.
+ */
+export const DEMO_POSITION = { lat: 35.02835, lng: 135.7718 };
+
 export class GeoError extends Error {
   reason: GeoFailure;
   constructor(reason: GeoFailure) {

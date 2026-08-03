@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type { MarkerPoint } from './map3d';
-import { duckColor, duckVariantDataUri } from './ducks';
+import { duckColor, duckMarkerDataUri, type ProximityLevel } from './ducks';
 
 /**
  * Canonical duck ordering: lat descending, north-to-south. Everything that
@@ -40,17 +40,61 @@ export async function fetchPlaceMarkers(): Promise<MarkerPoint[]> {
         id: place.id,
         lat: place.lat,
         lng: place.lng,
-        iconUrl: duckVariantDataUri(index, duckColor(index)),
+        // Same generator for both, so lit and unlit are identical apart from
+        // the halo -- no size to drift between them.
+        iconUrl: duckMarkerDataUri(index, duckColor(index), 0),
+        litIcon: (level) => duckMarkerDataUri(index, duckColor(index), level),
       },
     ];
   });
+}
+
+/**
+ * How far away each band starts, in metres. The tightest one matches the
+ * ~120 m collection geofence, so the brightest state means "you are close
+ * enough to collect this" rather than an arbitrary threshold — the glow is
+ * telling you something actionable, not just decorating.
+ */
+const PROXIMITY_BANDS: { within: number; level: ProximityLevel }[] = [
+  { within: 120, level: 3 },
+  { within: 300, level: 2 },
+  { within: 800, level: 1 },
+];
+
+/**
+ * The duck nearest a point, and how brightly it should be lit. Null beyond the
+ * widest band, so nothing glows for someone browsing from another city, where
+ * "nearest" is a meaningless answer.
+ */
+export function nearestDuck(
+  points: MarkerPoint[],
+  lat: number,
+  lng: number,
+): { id: string; level: ProximityLevel } | null {
+  let bestId: string | null = null;
+  let best = Infinity;
+  for (const p of points) {
+    const dy = (p.lat - lat) * 111_320;
+    const dx = (p.lng - lng) * 111_320 * Math.cos((lat * Math.PI) / 180);
+    const d = Math.hypot(dx, dy);
+    if (d < best) {
+      best = d;
+      bestId = p.id;
+    }
+  }
+  if (bestId === null) return null;
+  const band = PROXIMITY_BANDS.find((b) => best <= b.within);
+  return band ? { id: bestId, level: band.level } : null;
 }
 
 export interface PlacePreview {
   id: string;
   nameEn: string;
   nameJa: string;
-  photoUrls: string[]; // a few of the place's mains' photos, for the popup
+  /** The place's mains' photos, newest-ish first. The popup shows only the
+   * first; the rest are kept because they cost nothing (same query, just a
+   * slice) and a gallery would need them. */
+  photoUrls: string[];
   activityCount: number; // how many live mains are happening here now
 }
 
