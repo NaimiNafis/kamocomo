@@ -20,11 +20,13 @@ const SWIPE_THRESHOLD_PX = 40;
  * so the active card always lands in the same place. Sized so the active card
  * fills most of a phone's width -- these are screenshots of the app's own
  * screens, and shrinking one to a thumbnail makes it a picture of a picture. */
-const SLIDE_WIDTH = 236;
-/** The card itself, a little taller than wide: the six screenshots run from
- * 0.85 to 1.25 in aspect, and a squarish box wastes the least on all of them. */
-const CARD_W = 208;
-const CARD_H = 228;
+const SLIDE_WIDTH = 284;
+/** The card itself. Every slide is cropped to this one box rather than fitted
+ * inside it: the six screenshots run from 0.85 to 1.25 in aspect, and letting
+ * each keep its own shape meant a plate of empty card showing around the
+ * narrow ones. A single shape for all six, filled edge to edge. */
+const CARD_W = 250;
+const CARD_H = 280;
 
 /**
  * Help — what this app is and how to use it.
@@ -107,7 +109,7 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
           onMouseLeave={() => setFanned(false)}
         >
           <div
-            className="relative flex h-[268px] items-center justify-start overflow-visible"
+            className="relative flex h-[330px] items-center justify-start overflow-visible"
             style={{ width: SLIDE_WIDTH }}
           >
             <div
@@ -134,15 +136,15 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
                       onClick={() => goTo(i)}
                       aria-label={t(`tutorial.slides.${i}.title`)}
                       aria-current={isActive}
-                      className="block overflow-hidden rounded-xl bg-white/60 shadow-lg ring-1 ring-kamo-ink/10 transition-opacity duration-500"
+                      className="block overflow-hidden rounded-2xl shadow-lg transition-opacity duration-500"
                       style={{ width: CARD_W, height: CARD_H, opacity: isActive ? 1 : 0.55 }}
                     >
-                      {/* contain, not cover: these are screenshots of the app,
-                          and cropping one is cropping the explanation. */}
+                      {/* The picture is the card -- no plate behind it, and
+                          cropped to fill, so all six are the same object. */}
                       <img
                         src={src}
                         alt=""
-                        className="h-full w-full object-contain p-1.5"
+                        className="h-full w-full object-cover"
                         draggable={false}
                       />
                     </button>

@@ -144,29 +144,29 @@
     "next": "Next",
     "slides": [
       {
-        "title": "Welcome to the Kamogawa",
-        "body": "A map of how people spend their time along the river."
+        "title": "Welcome to the Kamo River",
+        "body": "A map bringing together ways to spend your time along the Kamo River."
       },
       {
-        "title": "Tap a duck",
-        "body": "Take a look at how people are spending time at that spot."
+        "title": "Tap a Duck",
+        "body": "Take a peek at how people spend their time in that spot."
       },
       {
-        "title": "Reading the shapes",
-        "body": "◯ : everyday life on the Kamogawa",
-        "body2": "⬜︎ : joining in with it"
+        "title": "Learn about ways to spend your time",
+        "body": "◯ : Everyday activities along the river",
+        "body2": "⬜︎ : Activities you can join in on"
       },
       {
-        "title": "Tap the +",
-        "body": "Post something and join in with everyday life on the river."
+        "title": "Tap '+'",
+        "body": "Share a post and join in on daily life at the Kamo River."
       },
       {
-        "title": "Kamo Collection",
-        "body": "Go looking for the ducks along the riverbank."
+        "title": "Duck Collection",
+        "body": "Try looking for ducks along the riverbank."
       },
       {
-        "title": "Kamogawa Log",
-        "body": "How the river has been lived in, gathering here over time."
+        "title": "Kamo River Log",
+        "body": "The history and moments along the Kamo River will be saved here."
       }
     ]
   },
