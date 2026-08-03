@@ -143,6 +143,14 @@ interface CameraView {
 }
 
 /** The resting/home view: arrived at the Kamogawa Delta (§5.1's destination). */
+/** The resting view over the Delta, shared with the flat map so both surfaces
+ * agree on where "home" is. */
+export const HOME_LOOK = {
+  lat: KAMOGAWA_DELTA.latitude,
+  lng: KAMOGAWA_DELTA.longitude,
+  range: 4500,
+};
+
 const HERO_VIEW: CameraView = {
   center: { lat: KAMOGAWA_DELTA.latitude, lng: KAMOGAWA_DELTA.longitude, altitude: 0 },
   range: 4500,

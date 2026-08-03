@@ -9,6 +9,7 @@ import {
   flyIntroSequence,
   flyToHomeView,
   flyToPlace,
+  HOME_LOOK,
   initialCamera,
   loadMaps3d,
   onMapsAuthFailure,
@@ -174,6 +175,14 @@ export function MainMap() {
           cinematic = null;
         }
         setPlacePopup(null);
+        // The flat map has no cinematic to unwind, but it did slide over to a
+        // duck -- glide back so closing leaves you where opening found you.
+        // Same scale it was at, since opening never changed it.
+        const flat = map2dRef.current;
+        if (flat) {
+          flat.cancelGlide();
+          void flat.glideTo(HOME_LOOK.lat, HOME_LOOK.lng);
+        }
         if (mounted && map && !constraintsCleanupRef.current) {
           constraintsCleanupRef.current = applyKamogawaConstraints(map);
           void flyToHomeView(map);
@@ -433,7 +442,7 @@ export function MainMap() {
     void (async () => {
       if (!map2dRef.current) {
         try {
-          const handle = await createMap2D(container, openPlaceFrom2D);
+          const handle = await createMap2D(container, (id) => void openPlaceFrom2D(id));
           if (cancelled) return;
           map2dRef.current = handle;
           handle.setLabels(showLabels);
@@ -471,10 +480,32 @@ export function MainMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapStyle]);
 
-  /** A duck tapped on the flat map goes straight to its board -- the fly-in and
-   * sweep are a 3D camera move and have no meaning here. */
-  function openPlaceFrom2D(placeId: string) {
-    navigate(`/toukou?place=${placeId}`);
+  /**
+   * A duck tapped on the flat map slides to the middle, then its popup opens.
+   *
+   * It used to jump straight to the board, on the reasoning that the arrival is
+   * a 3D camera move with no meaning here -- but the part that mattered was
+   * never the camera. Tapping a duck should show you what's happening at that
+   * spot before it takes you anywhere.
+   *
+   * What doesn't carry over is the closing-in: the orbit has no meaning without
+   * a third dimension, and zooming turned out to be no better, since a raster
+   * map can only step through whole levels. Centring the marker says "this one"
+   * on its own.
+   */
+  async function openPlaceFrom2D(placeId: string) {
+    const handle = map2dRef.current;
+    const point = placePointsRef.current.find((p) => p.id === placeId);
+    if (!handle || !point) {
+      navigate(`/toukou?place=${placeId}`);
+      return;
+    }
+    // Fetch alongside the move rather than after it, so the popup is ready the
+    // moment the map settles.
+    const previewPromise = fetchPlacePreview(placeId).catch(() => null);
+    await handle.glideTo(point.lat, point.lng);
+    const preview = await previewPromise;
+    if (preview) setPlacePopup({ placeId, preview });
   }
 
   const showChrome = introPhase === 'done';

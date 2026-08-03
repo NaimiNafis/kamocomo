@@ -24,6 +24,10 @@ import { MARKER_PIXEL_SIZE, type ProximityLevel } from './ducks';
 
 export type Map2D = google.maps.Map;
 
+/** How long the glide across to a marker runs. Google animates the pan itself;
+ * this is just how long to wait before calling it arrived. */
+const GLIDE_MS = 520;
+
 /** Vertical field of view of the 3D camera, used to convert its `range` (metres
  * from the camera to the ground) into an equivalent 2D zoom. */
 const FOV_HEIGHT_FACTOR = 0.63; // 2 * tan(35° / 2)
@@ -80,6 +84,11 @@ export interface Map2DHandle {
   setUserPosition(lat: number, lng: number, heading: number | null): void;
   /** Point the flat map at the same place the 3D camera was looking. */
   moveTo(lat: number, lng: number, range: number, viewportHeightPx: number): void;
+  /** Glides across to a point, resolving when it arrives. The zoom is left
+   * alone -- see the implementation. */
+  glideTo(lat: number, lng: number): Promise<void>;
+  /** Abandons a glide in progress, leaving the map wherever it got to. */
+  cancelGlide(): void;
   /** Where it's looking now, so the 3D camera can pick the view back up. */
   readView(viewportHeightPx: number): { lat: number; lng: number; range: number } | null;
   dispose(): void;
@@ -125,6 +134,13 @@ export async function createMap2D(
       anchor: new google.maps.Point(MARKER_PX / 2, MARKER_PX / 2),
     };
   };
+
+  // Timer for a glide in progress, so a second tap or a close can call it off.
+  let glide: ReturnType<typeof setTimeout>[] = [];
+  function cancelGlide() {
+    for (const t of glide) clearTimeout(t);
+    glide = [];
+  }
 
   return {
     map,
@@ -181,6 +197,25 @@ export async function createMap2D(
       map.setCenter({ lat, lng });
       map.setZoom(rangeToZoom(range, lat, viewportHeightPx));
     },
+    glideTo: (lat, lng) => {
+      cancelGlide();
+      return new Promise<void>((resolve) => {
+        // Pan only. Closing in was the obvious mirror of the 3D fly-in and the
+        // wrong move here: with no mapId this is a raster map, so zoom lands
+        // only on whole levels and any approach is a series of steps rather
+        // than a movement. Sliding the marker to the middle says "this one"
+        // just as well, and leaves the visitor at the scale they chose.
+        map.panTo({ lat, lng });
+        glide.push(
+          setTimeout(() => {
+            map.setCenter({ lat, lng });
+            glide = [];
+            resolve();
+          }, GLIDE_MS),
+        );
+      });
+    },
+    cancelGlide,
     readView: (viewportHeightPx) => {
       const centre = map.getCenter();
       const zoom = map.getZoom();
@@ -189,6 +224,7 @@ export async function createMap2D(
       return { lat, lng: centre.lng(), range: zoomToRange(zoom, lat, viewportHeightPx) };
     },
     dispose: () => {
+      cancelGlide();
       markers.forEach((m) => m.setMap(null));
       markers = new Map();
       userMarker?.setMap(null);
