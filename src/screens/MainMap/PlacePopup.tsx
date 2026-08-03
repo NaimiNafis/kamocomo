@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { PlacePreview } from '../../lib/places';
-import { examplePhoto } from '../../lib/photos';
+import { examplePhoto, thumb } from '../../lib/photos';
 
 interface PlacePopupProps {
   preview: PlacePreview;
@@ -46,7 +46,7 @@ export function PlacePopup({ preview, onClose, onViewActivities }: PlacePopupPro
         </button>
 
         <img
-          src={photo}
+          src={preview.photoUrls[0] ? thumb(photo, 560) : photo}
           alt=""
           className="block w-full object-cover"
           style={{ aspectRatio: '4 / 3' }}

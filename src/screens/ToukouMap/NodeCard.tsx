@@ -1,8 +1,9 @@
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToukouNode } from '../../lib/toukou';
 import { LONG_PRESS_MS } from './useGraphViewport';
 import { MOSS, SUNSET, VoteButton } from './VoteButton';
-import { examplePhoto } from '../../lib/photos';
+import { examplePhoto, thumb } from '../../lib/photos';
 
 const STONE = '#E9E4D8'; // --kamo-stone
 
@@ -77,7 +78,7 @@ interface NodeCardProps {
  * {@link NodeDetail}, which is what lets the words here stay short enough to
  * sit legibly on top of a picture.
  */
-export function NodeCard({ node, pressed, dimmed, onLike, onDislike, onViewArchived }: NodeCardProps) {
+function NodeCardImpl({ node, pressed, dimmed, onLike, onDislike, onViewArchived }: NodeCardProps) {
   const { t } = useTranslation();
   const isMain = node.kind === 'main';
   const size = isMain ? MAIN_SIZE : SUB_SIZE;
@@ -112,9 +113,10 @@ export function NodeCard({ node, pressed, dimmed, onLike, onDislike, onViewArchi
       }}
     >
       <img
-        src={node.photoUrl ?? examplePhoto(node.id)}
+        src={node.photoUrl ? thumb(node.photoUrl, size * 2) : examplePhoto(node.id)}
         alt=""
         className="h-full w-full object-cover"
+        decoding="async"
         draggable={false}
       />
 
@@ -178,3 +180,20 @@ export function NodeCard({ node, pressed, dimmed, onLike, onDislike, onViewArchi
     </div>
   );
 }
+
+/**
+ * Memoized on purpose.
+ *
+ * The simulation ticks while anything is being dragged, and every tick pushes a
+ * fresh position map through React. Without this, each tick re-rendered every
+ * card on the board -- photo, scrim, phrase and two vote buttons apiece -- to
+ * move a handful of them a few pixels. Now a tick re-renders the positioned
+ * wrapper and stops there unless the card's own data actually changed.
+ *
+ * The handlers are re-created per render by the caller, so they're excluded
+ * from the comparison; they always do the same thing for a given node.
+ */
+export const NodeCard = memo(
+  NodeCardImpl,
+  (a, b) => a.node === b.node && a.pressed === b.pressed && a.dimmed === b.dimmed,
+);

@@ -39,3 +39,23 @@ export function examplePhoto(seed: string): string {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return EXAMPLE_PHOTOS[h % EXAMPLE_PHOTOS.length];
 }
+
+/**
+ * A Supabase-hosted photo, resized by the server to the width it's actually
+ * drawn at.
+ *
+ * Every photo in the app is stored at up to 1600px because that's what a phone
+ * camera hands over, and most of them render into a 112px card. A board of
+ * fifty nodes was pulling ~14MB of images to draw about 0.5MB worth of pixels,
+ * which is the whole of "it loads so slowly" -- and on riverbank signal it's
+ * the difference between a board appearing and a board arriving.
+ *
+ * `width` should be roughly twice the CSS size, so it still looks right on a
+ * 2x/3x screen. Anything that isn't a Supabase public object URL -- a bundled
+ * example photo, a blob: preview -- is handed back untouched.
+ */
+export function thumb(url: string, width: number): string {
+  const marker = '/storage/v1/object/public/';
+  if (!url.includes(marker)) return url;
+  return `${url.replace(marker, '/storage/v1/render/image/public/')}?width=${width}&quality=72`;
+}

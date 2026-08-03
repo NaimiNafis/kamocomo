@@ -14,7 +14,12 @@ export default defineConfig({
     // and needs live tiles, so it's never precached -- the feed screens are
     // the ones built to work offline.
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt', not 'autoUpdate': autoUpdate reloads the page the moment a
+      // new service worker installs, which lands mid-gesture if you happen to
+      // be dragging a node when a deploy goes out -- the app appearing to
+      // reload out of nowhere. The new version installs in the background and
+      // takes over on the next load instead.
+      registerType: 'prompt',
       injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],

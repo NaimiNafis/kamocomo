@@ -13,7 +13,7 @@ import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { BackIcon } from '../../components/icons';
 import { StaleBanner } from '../../components/StaleBanner';
-import { examplePhoto } from '../../lib/photos';
+import { examplePhoto, thumb } from '../../lib/photos';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -376,7 +376,7 @@ function PhotoOrPlaceholder({
 }) {
   return (
     <img
-      src={url ?? examplePhoto(id)}
+      src={url ? thumb(url, 400) : examplePhoto(id)}
       alt=""
       className={`object-cover ${className ?? ''}`}
       draggable={false}

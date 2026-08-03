@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { thumb } from '../../lib/photos';
 import { useNavigate } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
 import {
@@ -354,7 +355,7 @@ function StampSlot({
         >
           {entry.photoUrl ? (
             <img
-              src={entry.photoUrl}
+              src={thumb(entry.photoUrl, 300)}
               alt=""
               className="h-full w-full object-cover"
               draggable={false}

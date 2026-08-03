@@ -234,7 +234,7 @@ export function ToukouMap() {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-kamo-stone">
-      <div ref={viewportRef} className="absolute inset-0 touch-none" {...containerHandlers}>
+      <div ref={viewportRef} className="kamo-board absolute inset-0 touch-none" {...containerHandlers}>
         <div
           className="absolute left-0 top-0 origin-top-left"
           style={{

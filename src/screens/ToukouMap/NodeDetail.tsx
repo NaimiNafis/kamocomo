@@ -32,7 +32,7 @@ export interface VoteState {
   dislikes: number;
   myVote: 1 | -1 | null;
 }
-import { examplePhoto } from '../../lib/photos';
+import { examplePhoto, thumb } from '../../lib/photos';
 import { MOSS, SUNSET, VoteButton } from './VoteButton';
 
 interface NodeDetailProps {
@@ -106,7 +106,7 @@ export function NodeDetail({ detail, node, onLike, onDislike, onClose }: NodeDet
         {/* Uncropped, unlike the board's square tiles -- seeing the whole photo
             is half the reason to open this. */}
         <img
-          src={detail.photoUrl ?? examplePhoto(detail.id)}
+          src={detail.photoUrl ? thumb(detail.photoUrl, 900) : examplePhoto(detail.id)}
           alt=""
           className="block max-h-[45vh] w-full object-contain"
           style={{ backgroundColor: detail.color }}

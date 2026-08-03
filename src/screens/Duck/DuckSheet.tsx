@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { thumb } from '../../lib/photos';
 import { duckSilhouetteDataUri } from '../../lib/ducks';
 import type { DuckNode } from '../../lib/duck';
 
@@ -55,7 +56,7 @@ export function DuckSheet({ node, photoCount, busy, onCapture, onClose }: DuckSh
             >
               {node.photoUrl ? (
                 <img
-                  src={node.photoUrl}
+                  src={thumb(node.photoUrl, 360)}
                   alt=""
                   className="h-full w-full object-cover"
                   draggable={false}

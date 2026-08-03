@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { NodePosition } from './useForceGraph';
 import type { ViewTransform } from './useGraphViewport';
-import { examplePhoto } from '../../lib/photos';
+import { examplePhoto, thumb } from '../../lib/photos';
 
 /** All a marker needs. Declared structurally so both boards' node types fit. */
 export interface EdgeMarkerNode {
@@ -92,9 +92,10 @@ export function OffscreenMains({
               style={{ borderColor: node.color, backgroundColor: node.color }}
             >
               <img
-                src={node.photoUrl ?? imageFor?.(node) ?? examplePhoto(node.id)}
+                src={node.photoUrl ? thumb(node.photoUrl, DOT * 2) : (imageFor?.(node) ?? examplePhoto(node.id))}
                 alt=""
                 className="h-full w-full object-cover"
+                decoding="async"
                 draggable={false}
               />
             </span>

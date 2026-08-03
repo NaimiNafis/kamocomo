@@ -20,6 +20,10 @@ html,
 body,
 #root {
   height: 100%;
+  /* No rubber-band, and no pull-to-refresh. Dragging a node upward at the top
+   * of the screen was reloading the whole app, which is the "it started loading
+   * again out of nowhere" nobody could reproduce on a desktop. */
+  overscroll-behavior: none;
 }
 
 body {
@@ -69,7 +73,9 @@ h3 {
 
 .kamo-drift {
   animation: kamoDrift var(--drift-dur) ease-in-out var(--drift-delay) infinite alternate;
-  will-change: transform;
+  /* No will-change: a board is fifty of these, and promoting every one to its
+   * own compositor layer costs more memory on a phone than the promotion saves.
+   * The animation composites fine without it. */
 }
 
 /* Bouncy, in the iOS press-and-hold sense: overshoots slightly and settles. */
@@ -96,4 +102,19 @@ h3 {
     animation-duration: 150ms;
     animation-timing-function: ease-out;
   }
+}
+
+/* A force-graph board is a surface you manipulate, not a document you read.
+ *
+ * Without this, iOS treats a press on a card the way it treats a press on a web
+ * page: the text under your finger gets selected and highlighted blue, and
+ * holding raises the system callout (copy / look up / share) over the top of
+ * the app's own press-and-hold. Both fire before any JavaScript runs, so they
+ * can only be turned off in CSS.
+ */
+.kamo-board {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }

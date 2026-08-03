@@ -44,7 +44,7 @@
     "tutorialButton": "Help",
     "archiveButton": "Kamogawa Log",
     "back": "Back to map",
-    "qrWelcome": "You found a hidden entrance to the Kamogawa",
+    "qrWelcome": "You found a hidden entrance to Kamogawa",
     "dragHint": "Drag to look around",
     "moreActivities": "More activities",
     "mapError": "Couldn't load the map.",
@@ -133,7 +133,7 @@
   "certificate": {
     "heading": "Certificate of Completion",
     "headingJa": "達成証明書",
-    "body": "awarded for collecting every duck stamp along the Kamogawa",
+    "body": "Awarded for collecting every duck stamp along Kamogawa",
     "bodyJa": "鴨川のすべての鴨スタンプを集めたことを証します",
     "issued": "Issued {{date}}",
     "close": "Close"
@@ -143,8 +143,8 @@
     "next": "Next",
     "slides": [
       {
-        "title": "Welcome to the Kamo River",
-        "body": "A map bringing together ways to spend your time along the Kamo River."
+        "title": "Welcome to Kamogawa",
+        "body": "A map bringing together ways to spend your time along Kamogawa."
       },
       {
         "title": "Tap a Duck",
@@ -157,15 +157,15 @@
       },
       {
         "title": "Tap '+'",
-        "body": "Share a post and join in on daily life at the Kamo River."
+        "body": "Share a post and join in on daily life at Kamogawa."
       },
       {
-        "title": "Duck Collection",
-        "body": "Try looking for ducks along the riverbank."
+        "title": "Kamo Collection",
+        "body": "Try looking for kamo (ducks) along the riverbank."
       },
       {
-        "title": "Kamo River Log",
-        "body": "The history and moments along the Kamo River will be saved here."
+        "title": "Kamogawa Log",
+        "body": "The history and moments along Kamogawa will be saved here."
       }
     ]
   },

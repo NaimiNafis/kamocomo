@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { duckIconDataUri, duckSilhouetteDataUri } from '../../lib/ducks';
-import { examplePhoto } from '../../lib/photos';
+import { examplePhoto, thumb } from '../../lib/photos';
 import type { DuckGraph as DuckGraphData, DuckNode } from '../../lib/duck';
 import { useForceGraph, type GraphNode } from '../ToukouMap/useForceGraph';
 import { useGraphViewport } from '../ToukouMap/useGraphViewport';
@@ -88,7 +89,7 @@ export function DuckBoard({ graph, busy, onCapture, onOpen, openId }: DuckBoardP
 
   return (
     <>
-      <div ref={viewportRef} className="absolute inset-0 touch-none" {...containerHandlers}>
+      <div ref={viewportRef} className="kamo-board absolute inset-0 touch-none" {...containerHandlers}>
         <div
           className="absolute left-0 top-0 origin-top-left"
           style={{ transform: `translate(${cx + view.tx}px, ${cy + view.ty}px) scale(${view.scale})` }}
@@ -310,8 +311,15 @@ function readableText(hex: string): string {
 }
 
 /** Someone's photo of a duck. Square like a toukou sub, so the two boards read
- * as the same kind of thing. */
-function PhotoCard({ node, pressed }: { node: DuckNode; pressed: boolean }) {
+ * as the same kind of thing. Memoized for the same reason NodeCard is: the
+ * simulation re-renders the board on every tick of a drag. */
+const PhotoCard = memo(function PhotoCard({
+  node,
+  pressed,
+}: {
+  node: DuckNode;
+  pressed: boolean;
+}) {
   return (
     <div
       className="overflow-hidden rounded-2xl shadow-lg"
@@ -327,11 +335,12 @@ function PhotoCard({ node, pressed }: { node: DuckNode; pressed: boolean }) {
       }}
     >
       <img
-        src={node.photoUrl ?? examplePhoto(node.id)}
+        src={node.photoUrl ? thumb(node.photoUrl, PHOTO_SIZE * 2) : examplePhoto(node.id)}
         alt=""
         className="block h-full w-full object-cover"
+        decoding="async"
         draggable={false}
       />
     </div>
   );
-}
+});

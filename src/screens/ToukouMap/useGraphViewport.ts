@@ -252,6 +252,26 @@ export function useGraphViewport(
   // Leaving the board mid-glide shouldn't leave a frame callback running.
   useEffect(() => cancelFocus, []);
 
+  /**
+   * Stop Safari zooming the *page* when two fingers land on the board.
+   *
+   * iOS fires its own non-standard `gesture*` events for a pinch and acts on
+   * them regardless of `touch-action`, so a two-finger pinch meant to zoom the
+   * graph zoomed the whole app instead -- and a swipe that briefly grazed a
+   * second finger did it mid-drag. They have to be registered non-passively or
+   * preventDefault is ignored.
+   */
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const swallow = (e: Event) => e.preventDefault();
+    const events = ['gesturestart', 'gesturechange', 'gestureend'];
+    for (const name of events) el.addEventListener(name, swallow, { passive: false });
+    return () => {
+      for (const name of events) el.removeEventListener(name, swallow);
+    };
+  }, []);
+
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
