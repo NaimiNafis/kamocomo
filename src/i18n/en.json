@@ -42,7 +42,7 @@
   },
   "mainMap": {
     "tutorialButton": "Tutorial",
-    "archiveButton": "Library",
+    "archiveButton": "Kamogawa Log",
     "back": "Back to map",
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
     "dragHint": "Drag to look around",
@@ -53,18 +53,20 @@
     "duckCollection": "Duck collection"
   },
   "archive": {
-    "title": "Archive",
-    "subtitle": "How the river has been used, over time.",
+    "title": "Kamogawa Log",
+    "subtitle": "How the river has been used, place by place.",
     "loading": "Loading the archive…",
     "error": "Couldn't load the archive.",
     "empty": "Nothing here yet. Activities will collect here over time.",
     "posts_one": "{{count}} post",
     "posts_other": "{{count}} posts",
-    "backToArchive": "Back to archive",
+    "backToArchive": "Back",
     "history": "Full history",
     "noSubs": "No additions yet.",
     "archivedBadge": "Archived",
-    "notFound": "This activity is no longer available."
+    "notFound": "This activity is no longer available.",
+    "seeAll": "See all",
+    "allPosts": "All posts"
   },
   "toukou": {
     "title": "Activity web",
