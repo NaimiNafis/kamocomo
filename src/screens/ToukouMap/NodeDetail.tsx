@@ -1,14 +1,46 @@
 import { useTranslation } from 'react-i18next';
-import type { ActivityDetail, ToukouNode } from '../../lib/toukou';
+/**
+ * What the sheet needs from a post, whatever board it came from.
+ *
+ * Declared structurally rather than importing one screen's type: `ActivityDetail`
+ * (toukou) and `DuckPostDetail` (the duck board) both satisfy it, so one sheet
+ * serves both instead of a near-copy drifting alongside.
+ */
+export interface PostDetail {
+  id: string;
+  kind: 'main' | 'sub';
+  color: string;
+  photoUrl: string | null;
+  labelEn: string;
+  labelJa: string;
+  phrase: string | null;
+  likes: number;
+  dislikes: number;
+  createdAt: string;
+  author: {
+    name: string | null;
+    nationality: string | null;
+    ageRange: string | null;
+    gender: string | null;
+  } | null;
+}
+
+/** The live copy of the post as its board holds it -- counts and your own vote
+ * come from here so a vote shows before any refetch. */
+export interface VoteState {
+  likes: number;
+  dislikes: number;
+  myVote: 1 | -1 | null;
+}
 import { examplePhoto } from '../../lib/photos';
 import { MOSS, SUNSET, VoteButton } from './VoteButton';
 
 interface NodeDetailProps {
-  detail: ActivityDetail;
-  /** The same post as the board holds it. Counts and your own vote come from
-   * here rather than from `detail`, so a vote cast in the sheet shows straight
-   * away instead of waiting for a refetch. Absent if it left the board. */
-  node?: ToukouNode;
+  detail: PostDetail;
+  /** The same post as the board holds it, so a vote cast in the sheet shows
+   * straight away instead of waiting for a refetch. Absent if it left the
+   * board, or on a kind that doesn't take votes. */
+  node?: VoteState;
   onLike: () => void;
   onDislike: () => void;
   onClose: () => void;
@@ -85,7 +117,7 @@ export function NodeDetail({ detail, node, onLike, onDislike, onClose }: NodeDet
           <div className="flex items-center justify-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: detail.color }} />
             <span className="font-ui text-xs font-medium uppercase tracking-wide text-kamo-ink/60">
-              {isJa ? detail.typeNameJa : detail.typeNameEn}
+              {isJa ? detail.labelJa : detail.labelEn}
             </span>
           </div>
 

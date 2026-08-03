@@ -162,25 +162,25 @@
     ]
   },
   "collection": {
-    "title": "カモ・コレクション",
-    "search": "コレクションを検索",
+    "title": "カモ コレクション",
     "filter": {
-      "all": "全コレクション",
-      "collected": "採取済み",
       "missing": "未採取"
     },
-    "byDate": "日付順",
     "collected": "採取済み",
     "savedOn": "保存日",
     "saving": "保存中…",
     "loading": "コレクションを読み込み中…",
     "error": "コレクションを読み込めませんでした。",
-    "noMatches": "該当するものがありません。",
     "justCollected": "見つけました!コレクションに追加しました。",
     "alreadyHad": "すでにコレクション済みです。写真を更新しました。",
     "tooFar": "写真を共有しました。約{{distance}}m離れているため、まだ採取できていません。",
     "needLocation": "写真を共有しました。位置情報をオンにすると採取できます。",
-    "postFailed": "写真を保存できませんでした。もう一度お試しください。"
+    "postFailed": "写真を保存できませんでした。もう一度お試しください。",
+    "everyonesPhotos": "みんなの写真",
+    "addTo": "写真を追加：",
+    "takePhoto": "写真を撮る",
+    "retake": "写真を撮り直す",
+    "photoCount": "写真 {{count}}枚"
   },
   "detail": {
     "postedAt": "投稿日時",

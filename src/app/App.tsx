@@ -13,6 +13,9 @@ const ToukouMap = lazy(() =>
 );
 const Archive = lazy(() => import('../screens/Archive/Archive').then((m) => ({ default: m.Archive })));
 const Duck = lazy(() => import('../screens/Duck/Duck').then((m) => ({ default: m.Duck })));
+const DuckPhotos = lazy(() =>
+  import('../screens/Duck/DuckPhotos').then((m) => ({ default: m.DuckPhotos })),
+);
 const DuckScan = lazy(() => import('../screens/Duck/DuckScan').then((m) => ({ default: m.DuckScan })));
 
 function RouteFallback() {
@@ -44,6 +47,7 @@ export function App() {
             <Route path="/toukou" element={<ToukouMap />} />
             <Route path="/archive" element={<Archive />} />
             <Route path="/duck" element={<Duck />} />
+            <Route path="/duck/photos" element={<DuckPhotos />} />
             <Route path="/duck/scan" element={<DuckScan />} />
           </Routes>
         </Suspense>

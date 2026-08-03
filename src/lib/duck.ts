@@ -17,8 +17,18 @@ export interface DuckNode {
   color: string;
   nameEn: string; // main only (subs get '')
   nameJa: string;
+  /** Main only: its 1-based catalogue number, the same one the collection
+   * sheet shows -- so both surfaces pick the same silhouette for a duck. */
+  number: number;
   earned: boolean; // main only -- whether this user has this duck's stamp
-  photoUrl: string | null; // sub only
+  /** Sub: the shared photo. Main: YOUR photo of this duck, which is what makes
+   * a main the same stamp slot the collection sheet shows. Null either way when
+   * there isn't one. */
+  photoUrl: string | null;
+  // Subs only -- a duck isn't anyone's post, so mains carry no vote.
+  likes: number;
+  dislikes: number;
+  myVote: 1 | -1 | null;
 }
 
 export interface DuckGraph {
@@ -26,27 +36,44 @@ export interface DuckGraph {
   edges: ToukouEdge[];
 }
 
-/** Builds the duck graph: the 10 active duck spots as colored main nodes
- * (ordered lat-desc so colors match the map/stamp card), each flagged with
- * whether the user has earned its stamp, plus every non-hidden duck photo as
- * a sub of its duck. */
+/**
+ * Builds the duck board: every active duck spot as a coloured main node
+ * (ordered lat-desc so colours match the map and the collection sheet), plus
+ * every non-hidden duck photo as a sub of its duck.
+ *
+ * A main carries this user's own state -- whether they've earned the stamp and
+ * which of their photos fills it -- because on the board a main IS their stamp
+ * slot, the same one the sheet shows. Subs carry vote counts and this user's
+ * own vote, so a photo can be judged where it's seen.
+ */
 export async function fetchDuckGraph(userId: string): Promise<DuckGraph> {
-  const [{ data: spots, error: se }, { data: posts, error: pe }, { data: stamps, error: ste }] =
-    await Promise.all([
-      supabase.from('duck_spots').select('id, name_en, name_ja').eq('active', true).order('lat', { ascending: false }),
-      supabase
-        .from('duck_posts')
-        .select('id, photo_url, duck_spot_id')
-        .eq('hidden', false)
-        .not('duck_spot_id', 'is', null)
-        .order('created_at', { ascending: true }),
-      supabase.from('stamps').select('duck_spot_id').eq('user_id', userId),
-    ]);
+  const [
+    { data: spots, error: se },
+    { data: posts, error: pe },
+    { data: stamps, error: ste },
+    { data: myVotes, error: ve },
+  ] = await Promise.all([
+    supabase.from('duck_spots').select('id, name_en, name_ja').eq('active', true).order('lat', { ascending: false }),
+    supabase
+      .from('duck_posts')
+      .select('id, photo_url, duck_spot_id, author_id, likes, dislikes, created_at')
+      .eq('hidden', false)
+      .not('duck_spot_id', 'is', null)
+      .order('created_at', { ascending: true }),
+    supabase.from('stamps').select('duck_spot_id').eq('user_id', userId),
+    supabase.from('duck_post_votes').select('duck_post_id, value').eq('user_id', userId),
+  ]);
   if (se) throw se;
   if (pe) throw pe;
   if (ste) throw ste;
+  if (ve) throw ve;
 
   const earned = new Set(stamps.map((s) => s.duck_spot_id));
+  const voted = new Map(myVotes.map((v) => [v.duck_post_id, v.value as 1 | -1]));
+  // Your own most recent photo of each duck -- posts arrive oldest-first, so
+  // later writes overwrite earlier ones and the newest wins.
+  const myPhoto = new Map<string, string>();
+  for (const p of posts) if (p.author_id === userId) myPhoto.set(p.duck_spot_id, p.photo_url);
   const colorBySpot = new Map(spots.map((s, i) => [s.id, duckColor(i)]));
 
   const mainNodes: DuckNode[] = spots.map((s, i) => ({
@@ -56,8 +83,12 @@ export async function fetchDuckGraph(userId: string): Promise<DuckGraph> {
     color: duckColor(i),
     nameEn: s.name_en,
     nameJa: s.name_ja,
+    number: i + 1,
     earned: earned.has(s.id),
-    photoUrl: null,
+    photoUrl: myPhoto.get(s.id) ?? null,
+    likes: 0,
+    dislikes: 0,
+    myVote: null,
   }));
 
   const spotIds = new Set(spots.map((s) => s.id));
@@ -70,8 +101,12 @@ export async function fetchDuckGraph(userId: string): Promise<DuckGraph> {
       color: subShade(colorBySpot.get(p.duck_spot_id) ?? '#e0885e'),
       nameEn: '',
       nameJa: '',
+      number: 0,
       earned: false,
       photoUrl: p.photo_url,
+      likes: p.likes,
+      dislikes: p.dislikes,
+      myVote: voted.get(p.id) ?? null,
     }));
 
   const edges: ToukouEdge[] = subNodes.map((s) => ({ source: s.id, target: s.parentId as string }));
@@ -156,6 +191,104 @@ export async function collectDuckByPhoto(
 }
 
 /** Realtime: new duck photos appear in the graph without a reload. */
+// =========================================================================
+// Voting on duck photos (one row per user per photo, as with activities)
+// =========================================================================
+
+export async function setDuckVote(
+  userId: string,
+  duckPostId: string,
+  value: 1 | -1,
+): Promise<void> {
+  const { error } = await supabase
+    .from('duck_post_votes')
+    .upsert(
+      { user_id: userId, duck_post_id: duckPostId, value },
+      { onConflict: 'user_id,duck_post_id' },
+    );
+  if (error) throw error;
+}
+
+export async function clearDuckVote(userId: string, duckPostId: string): Promise<void> {
+  const { error } = await supabase
+    .from('duck_post_votes')
+    .delete()
+    .eq('user_id', userId)
+    .eq('duck_post_id', duckPostId);
+  if (error) throw error;
+}
+
+/** Everything a duck photo's detail sheet shows -- deliberately the same shape
+ * the toukou sheet takes, so one component serves both boards. */
+export interface DuckPostDetail {
+  id: string;
+  kind: 'sub';
+  color: string;
+  photoUrl: string | null;
+  /** The duck it was taken at, where a toukou post would name its activity. */
+  labelEn: string;
+  labelJa: string;
+  phrase: null; // duck photos carry no caption
+  likes: number;
+  dislikes: number;
+  createdAt: string;
+  author: {
+    name: string | null;
+    nationality: string | null;
+    ageRange: string | null;
+    gender: string | null;
+  } | null;
+}
+
+/** One duck photo in full: the shot, when it was taken, and who by. Mirrors
+ * `fetchActivityDetail` -- `profiles` is publicly readable, which is what lets
+ * a photo name its author. */
+export async function fetchDuckPostDetail(
+  postId: string,
+  color: string,
+): Promise<DuckPostDetail | null> {
+  const { data, error } = await supabase
+    .from('duck_posts')
+    .select('id, photo_url, likes, dislikes, created_at, author_id, duck_spots(name_en, name_ja)')
+    .eq('id', postId)
+    .eq('hidden', false)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('display_name, nationality, age_range, gender')
+    .eq('id', data.author_id)
+    .maybeSingle();
+
+  // Supabase types an embedded to-one join as a possible array.
+  type SpotJoin = { name_en: string; name_ja: string };
+  const joined = (data as { duck_spots?: SpotJoin | SpotJoin[] | null }).duck_spots;
+  const spot = Array.isArray(joined) ? joined[0] : joined;
+
+  return {
+    id: data.id,
+    kind: 'sub',
+    color,
+    photoUrl: data.photo_url,
+    labelEn: spot?.name_en ?? '',
+    labelJa: spot?.name_ja ?? '',
+    phrase: null,
+    likes: data.likes,
+    dislikes: data.dislikes,
+    createdAt: data.created_at,
+    author: profile
+      ? {
+          name: profile.display_name,
+          nationality: profile.nationality,
+          ageRange: profile.age_range,
+          gender: profile.gender,
+        }
+      : null,
+  };
+}
+
 export function subscribeToDuckPosts(onChange: () => void): () => void {
   const channel = supabase
     .channel('duck-posts-changes')

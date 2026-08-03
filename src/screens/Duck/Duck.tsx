@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
@@ -18,20 +18,23 @@ import { BackIcon } from '../../components/icons';
 import { Certificate } from './Certificate';
 
 type Status = 'loading' | 'ready' | 'error';
-type Filter = 'all' | 'collected' | 'missing';
 
 /**
- * 図鑑 — the duck collection.
+ * Kamo Collection — a stamp sheet of the eight ducks along the river.
  *
- * The rally used to be a 10-slot stamp card of identical icons. The duck
- * objects along the river each carry their own detail, so this is a field guide
- * instead: an entry you haven't found shows only a **silhouette**, enough to
- * know what shape to look for, and one you have found shows **your own photo**
- * of it, dated. What's being collected is a record of what you actually saw.
+ * Eight slots, two across and four down, each an empty ring waiting for a
+ * photo. An unfilled one shows a dotted circle with the duck faint inside it
+ * and a `+`: enough to know what you're looking for and that this is where it
+ * goes. A filled one shows **your own photo** of that duck. What's collected is
+ * a record of what you actually saw, not a row of identical icons.
+ *
+ * There is deliberately no search and no filter. Eight is few enough to take in
+ * at a glance, and machinery for narrowing eight things gets between you and
+ * the sheet.
  *
  * Collecting happens by photographing the object where it stands (see
- * `collectDuckByPhoto`). The photo posts either way; only being within range
- * fills the entry.
+ * `collectDuckByPhoto`). The photo posts to the shared board either way; only
+ * being within range fills your slot.
  */
 export function Duck() {
   const { t, i18n } = useTranslation();
@@ -44,10 +47,6 @@ export function Duck() {
   const [certIssuedAt, setCertIssuedAt] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [showCertificate, setShowCertificate] = useState(false);
-
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
-  const [newestFirst, setNewestFirst] = useState(false);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -147,23 +146,6 @@ export function Duck() {
 
   const collectedCount = entries.filter((e) => e.collectedAt !== null).length;
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = entries.filter((e) => {
-      if (filter === 'collected' && e.collectedAt === null) return false;
-      if (filter === 'missing' && e.collectedAt !== null) return false;
-      if (!q) return true;
-      return `${e.nameEn} ${e.nameJa}`.toLowerCase().includes(q);
-    });
-    if (!newestFirst) return list;
-    // Uncollected entries have no date, so they sink rather than scattering
-    // through a date-ordered list.
-    return [...list].sort((a, b) => {
-      if (!a.collectedAt) return 1;
-      if (!b.collectedAt) return -1;
-      return b.collectedAt.localeCompare(a.collectedAt);
-    });
-  }, [entries, query, filter, newestFirst]);
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(isJa ? 'ja-JP' : 'en-CA', {
@@ -255,47 +237,33 @@ export function Duck() {
 
       {status === 'ready' && (
         <>
-          <div className="space-y-2 px-4 pb-2 pt-3">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t('collection.search')}
-              className="w-full rounded-full border border-kamo-ink/15 bg-white/60 px-4 py-2 font-ui text-sm outline-none focus:border-kamo-river"
-            />
-            <div className="flex flex-wrap gap-1.5">
-              {(['all', 'collected', 'missing'] as Filter[]).map((f) => (
-                <Chip key={f} active={filter === f} onClick={() => setFilter(f)}>
-                  {t(`collection.filter.${f}`)}
-                </Chip>
+          {/* Two across, four down for the eight ducks -- but grid-cols-2 rather
+              than a fixed 2x4, so a ninth spot would simply add a row. */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-32 pt-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+              {entries.map((entry) => (
+                <StampSlot
+                  key={entry.id}
+                  entry={entry}
+                  name={isJa ? entry.nameJa : entry.nameEn}
+                  busy={busyId === entry.id}
+                  dateLabel={entry.collectedAt ? fmtDate(entry.collectedAt) : null}
+                  onPhoto={() => pickPhotoFor(entry.id)}
+                />
               ))}
-              <Chip active={newestFirst} onClick={() => setNewestFirst((v) => !v)}>
-                {t('collection.byDate')}
-              </Chip>
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
-            {visible.length === 0 ? (
-              <p className="pt-8 text-center font-ui text-sm text-kamo-ink/50">
-                {t('collection.noMatches')}
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {visible.map((entry) => (
-                  <EntryCard
-                    key={entry.id}
-                    entry={entry}
-                    name={isJa ? entry.nameJa : entry.nameEn}
-                    busy={busyId === entry.id}
-                    dateLabel={entry.collectedAt ? fmtDate(entry.collectedAt) : null}
-                    onPhoto={() => pickPhotoFor(entry.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-4">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-kamo-stone via-kamo-stone to-transparent p-4 pt-8">
+            {/* The sheet is what /duck is for; everyone else's photos are a
+                place you can go from it, not the other way round. */}
+            <button
+              type="button"
+              onClick={() => navigate('/duck/photos')}
+              className="pointer-events-auto rounded-full border border-kamo-ink/15 bg-kamo-stone px-5 py-2.5 font-ui text-sm font-medium text-kamo-ink shadow-sm transition-transform duration-150 active:scale-[0.97]"
+            >
+              {t('collection.everyonesPhotos')}
+            </button>
             {((collectedCount === entries.length && entries.length > 0) || certIssuedAt) && (
               <button
                 type="button"
@@ -333,36 +301,16 @@ export function Duck() {
   );
 }
 
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`rounded-full border px-3 py-1 font-ui text-xs transition-colors ${
-        active
-          ? 'border-kamo-indigo bg-kamo-indigo text-kamo-stone'
-          : 'border-kamo-ink/15 text-kamo-ink/70'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 /**
- * One catalogue entry. Uncollected shows the silhouette and invites a photo;
- * collected shows the photo you took, its date, and the 採取済み mark.
+ * One slot on the sheet.
+ *
+ * A circle, because a stamp is a circle and because the shape says "something
+ * belongs here" more plainly than a square card does. Empty, it's a dotted ring
+ * with the duck faint inside and a `+` over it -- you can see which duck it's
+ * for before you've found it, which is half of knowing what to look for. Filled,
+ * your photo takes the whole circle and the ring goes solid.
  */
-function EntryCard({
+function StampSlot({
   entry,
   name,
   busy,
@@ -383,50 +331,67 @@ function EntryCard({
       type="button"
       onClick={onPhoto}
       disabled={busy}
-      className="relative overflow-hidden rounded-xl bg-white/70 text-left shadow-sm ring-1 ring-kamo-ink/5 transition-transform duration-150 active:scale-[0.98] disabled:opacity-60"
+      aria-label={collected ? name : `${t('collection.addTo')} ${name}`}
+      className="flex flex-col items-center gap-2 text-center transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
     >
-      <div
-        className="flex aspect-square w-full items-center justify-center"
-        style={{ backgroundColor: entry.photoUrl ? undefined : `${entry.color}1A` }}
-      >
-        {entry.photoUrl ? (
-          <img src={entry.photoUrl} alt="" className="h-full w-full object-cover" draggable={false} />
-        ) : (
-          <img
-            src={duckSilhouetteDataUri(entry.number - 1, 96)}
-            alt=""
-            className="h-3/5 w-3/5"
-            draggable={false}
-          />
-        )}
-      </div>
-
-      {collected && (
+      <span className="relative block aspect-square w-full max-w-[9.5rem]">
         <span
-          className="absolute right-1.5 top-1.5 rotate-[-12deg] rounded border-2 px-1.5 py-0.5 font-ui text-[9px] font-bold"
+          className="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
           style={{
-            color: '#B5705E',
-            borderColor: '#B5705E',
-            backgroundColor: 'rgba(233,228,216,0.85)',
+            border: collected ? `3px solid ${entry.color}` : `3px dotted ${entry.color}80`,
+            backgroundColor: collected ? undefined : `${entry.color}12`,
           }}
         >
-          {t('collection.collected')}
+          {entry.photoUrl ? (
+            <img
+              src={entry.photoUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <>
+              {/* The duck sits behind the +, faint enough that the + reads as
+                  the action and the duck as the subject. */}
+              <img
+                src={duckSilhouetteDataUri(entry.number - 1, 96)}
+                alt=""
+                className="absolute h-1/2 w-1/2 opacity-25"
+                draggable={false}
+              />
+              <span
+                className="relative font-ui text-3xl font-light leading-none"
+                style={{ color: entry.color }}
+              >
+                +
+              </span>
+            </>
+          )}
         </span>
-      )}
 
-      <div className="p-2">
-        <p className="font-ui text-[10px] text-kamo-ink/50">
+        {collected && (
+          <span
+            className="absolute -right-1 top-1 rotate-[-12deg] rounded border-2 px-1.5 py-0.5 font-ui text-[9px] font-bold"
+            style={{
+              color: '#B5705E',
+              borderColor: '#B5705E',
+              backgroundColor: 'rgba(233,228,216,0.9)',
+            }}
+          >
+            {t('collection.collected')}
+          </span>
+        )}
+      </span>
+
+      <span className="block w-full">
+        <span className="block font-ui text-[10px] text-kamo-ink/45">
           No.{String(entry.number).padStart(2, '0')}
-        </p>
-        <p className="line-clamp-1 font-ui text-xs text-kamo-ink">{name}</p>
-        <p className="mt-0.5 font-ui text-[10px] text-kamo-ink/50">
-          {busy
-            ? t('collection.saving')
-            : dateLabel
-              ? `${t('collection.savedOn')} ${dateLabel}`
-              : t('collection.filter.missing')}
-        </p>
-      </div>
+        </span>
+        <span className="block truncate font-ui text-xs text-kamo-ink">{name}</span>
+        <span className="block font-ui text-[10px] text-kamo-ink/50">
+          {busy ? t('collection.saving') : dateLabel ? `${t('collection.savedOn')} ${dateLabel}` : ''}
+        </span>
+      </span>
     </button>
   );
 }

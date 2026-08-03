@@ -426,6 +426,7 @@ edit an applied migration, add a new file). Summary:
 
 | Table | Purpose |
 |---|---|
+| `duck_post_votes` | One row per (user, duck photo). Mirrors `votes`; its trigger recounts `duck_posts.likes`/`dislikes` and hides a photo at 10 dislikes |
 | `profiles` | One row per anonymous user; optional display name plus nationality/age/gender from onboarding. The name is what the toukou detail sheet credits a post to; it's still not an account (no email, no password) |
 | `activity_types` | Ten seeded types (writing, reading, walking, music, yoga, talking, eating, sketching, exercise, resting). Visitors can add more via the `create_activity_type` RPC, which assigns the colour server-side; `created_by` marks those. A user-made type exists only in the language it was typed in |
 | `places` | Riverbank locations, one per duck spot. Each links 1:1 to a `duck_spot` via `duck_spot_id` (`20260801120000`), and a place without one is rejected by a CHECK (`20260801170000`) — so the active places *are* the active ducks. The earlier 8- and 16-place sets, and the activities posted at them, were deleted in `20260801170000` |

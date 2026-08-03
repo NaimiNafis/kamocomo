@@ -281,8 +281,11 @@ export interface ActivityDetail {
   likes: number;
   dislikes: number;
   createdAt: string;
-  typeNameEn: string;
-  typeNameJa: string;
+  /** What the post is labelled with -- its activity type. Named neutrally
+   * because the duck board's photos feed the same detail sheet, labelled with
+   * their duck instead. */
+  labelEn: string;
+  labelJa: string;
   /** Who posted it: the name they gave, plus the coarse onboarding bands.
    * Every field is null where that question was skipped. */
   author: {
@@ -333,8 +336,8 @@ export async function fetchActivityDetail(activityId: string): Promise<ActivityD
     likes: data.likes,
     dislikes: data.dislikes,
     createdAt: data.created_at,
-    typeNameEn: type?.name_en ?? '',
-    typeNameJa: type?.name_ja ?? '',
+    labelEn: type?.name_en ?? '',
+    labelJa: type?.name_ja ?? '',
     author: profile
       ? {
           name: profile.display_name,
