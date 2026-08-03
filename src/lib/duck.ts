@@ -370,11 +370,6 @@ export async function fetchCollection(userId: string): Promise<CollectionEntry[]
   }));
 }
 
-export interface StampCardSlot extends DuckSpot {
-  earned: boolean;
-  color: string; // this duck's color (shared with its map marker + graph node)
-}
-
 export async function fetchDuckSpots(): Promise<DuckSpot[]> {
   const { data, error } = await supabase
     .from('duck_spots')
@@ -385,19 +380,6 @@ export async function fetchDuckSpots(): Promise<DuckSpot[]> {
   return data.map((s) => ({ id: s.id, nameEn: s.name_en, nameJa: s.name_ja }));
 }
 
-/** The 10-slot stamp card: every active spot, flagged with whether this user
- * has earned it. */
-export async function fetchStampCard(userId: string): Promise<StampCardSlot[]> {
-  const [spots, { data: stamps, error }] = await Promise.all([
-    fetchDuckSpots(),
-    supabase.from('stamps').select('duck_spot_id').eq('user_id', userId),
-  ]);
-  if (error) throw error;
-  const earned = new Set(stamps.map((s) => s.duck_spot_id));
-  // Ordered lat-desc by fetchDuckSpots, so index -> duckColor matches the map
-  // markers and the duck graph.
-  return spots.map((s, i) => ({ ...s, earned: earned.has(s.id), color: duckColor(i) }));
-}
 
 /** A duck spot's own coordinates, looked up by its QR token -- used by test
  * mode to submit "I'm standing at this spot" so the server geofence passes for

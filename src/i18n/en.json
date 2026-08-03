@@ -4,7 +4,6 @@
     "catchphrase": "Let's keep protecting everyone's Kamogawa"
   },
   "common": {
-    "loading": "Loading…",
     "retry": "Retry",
     "close": "Close",
     "offlineStale": "You're offline. Showing saved content."
@@ -69,7 +68,6 @@
     "allPosts": "All posts"
   },
   "toukou": {
-    "title": "Activity web",
     "loading": "Loading the web…",
     "error": "Couldn't load activities.",
     "placeEmpty": "No activities here yet. Post the first one.",
@@ -109,26 +107,11 @@
   },
   "duck": {
     "testMode": "Test mode: scan any QR without being there",
-    "certificateUnlocked": "Certificate unlocked!",
-    "viewCertificate": "View certificate",
-    "addPhoto": "Share a duck photo",
-    "stamped": "Found"
+    "viewCertificate": "View certificate"
   },
   "scan": {
     "locating": "Finding your location…",
-    "collected": "Stamp collected!",
-    "alreadyCollected": "Already collected",
-    "alreadyDetail": "You've already earned this spot's stamp.",
-    "tooFar": "Get closer to the duck spot",
-    "tooFarDetail": "You're about {{distance}} m away. You need to be within 120 m to collect this stamp.",
-    "locationNeeded": "Location needed",
-    "locationDenied": "Please allow location access to collect stamps. It proves you were really at the river.",
-    "locationUnavailable": "Couldn't get your location. Try again near the spot.",
-    "notFound": "This spot code wasn't recognized.",
-    "missingSpot": "No spot code in this link.",
-    "certificateUnlocked": "You collected them all! Your certificate is unlocked.",
-    "goToDuck": "Go to duck page",
-    "tryAgain": "Try again"
+    "missingSpot": "No spot code in this link."
   },
   "certificate": {
     "heading": "Certificate of Completion",

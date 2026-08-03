@@ -106,12 +106,16 @@ not need it: 2D is the classic `google.maps.Map`, which is GA.
    `supabase/seed.sql` into the Studio SQL Editor and run it (it's idempotent).
    This adds the 10 activity types, 3 events (one active), and the duck spots
    (8 active, between the Delta and Gojo).
-4. **Seed demo map markers** (optional, makes the map feel alive):
+4. **Seed demo content** (optional, but the app looks empty without it). Both
+   scripts need an RLS-bypassing key in `.env.local` —
+   `SUPABASE_SECRET_KEY=sb_secret_...`, never prefixed with `VITE_`:
    ```bash
-   node scripts/seed-demo-activities.mjs
+   node scripts/seed-demo-community.mjs   # ~100 people, boards, votes
+   node scripts/seed-demo-ducks.mjs       # duck photos + your Delta stamp
    ```
-   This signs in real anonymous users and posts a few main activities through
-   the same flow the app uses.
+   They create the demo accounts once and reuse them, because a vote is one row
+   per (user, post) — a like count is only as real as the number of accounts
+   behind it.
 
 The `photos` Storage bucket, RLS policies, triggers (10-sub archive cap,
 10-stamp certificate, vote counters), the event-gating policy, and the
@@ -215,7 +219,7 @@ src/
 supabase/
   migrations/   versioned SQL schema + policies + triggers + RPC
   seed.sql      demo activity types, events, duck spots
-scripts/        generate-qr.ts, seed-demo-activities.mjs, seed-demo-subs.mjs
+scripts/        generate-qr.ts, seed-demo-community.mjs, seed-demo-ducks.mjs
 img/marks/      custom duck + exclamation SVG marks
 img/kamogawa/   real Kamogawa photos, incl. the shared placeholder image
 ```

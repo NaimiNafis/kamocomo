@@ -70,7 +70,7 @@ supabase/
   migrations/   versioned SQL — schema, RLS, triggers, RPCs (never edit an
                 applied migration; add a new file)
   seed.sql      demo activity types, events, duck spots (places ship in a migration)
-scripts/        generate-qr.ts, seed-demo-places.mjs, seed-demo-ratings.mjs, …
+scripts/        generate-qr.ts, seed-demo-community.mjs, seed-demo-ducks.mjs
 img/
   marks/        custom duck SVG mark, generated into 10 variants (no stock art)
   kamogawa/     real Kamogawa photos, incl. the shared placeholder image
