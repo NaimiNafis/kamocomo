@@ -83,28 +83,26 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-kamo-ink/60 p-3">
       <div
-        className="w-full max-w-md overflow-hidden rounded-2xl bg-kamo-stone shadow-xl"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl bg-kamo-stone shadow-xl"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="flex items-center justify-between border-b border-kamo-ink/10 px-4 py-2">
-          <span className="font-ui text-xs font-medium uppercase tracking-wide text-kamo-ink/60">
-            {t('tutorial.heading')}
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="font-ui text-sm text-kamo-ink/70"
-            aria-label={t('common.close')}
-          >
-            {t('common.close')}
-          </button>
-        </div>
+        {/* A cross in the corner, as everywhere else that opens over the map.
+            The header row it replaces spent its width naming the panel, which
+            the first slide already does. */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t('common.close')}
+          className="absolute left-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-kamo-stone/85 font-ui text-sm text-kamo-ink shadow-sm backdrop-blur transition-transform duration-150 active:scale-[0.92]"
+        >
+          ✕
+        </button>
 
         {/* The viewport is one slot wide and centred; the track inside it is the
             full row, shifted so the active card sits in that slot. */}
         <div
-          className="flex justify-center overflow-hidden pt-5"
+          className="flex justify-center overflow-hidden pt-6"
           onMouseEnter={() => setFanned(true)}
           onMouseLeave={() => setFanned(false)}
         >
