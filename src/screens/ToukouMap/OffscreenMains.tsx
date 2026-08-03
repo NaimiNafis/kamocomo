@@ -1,8 +1,14 @@
 import { useTranslation } from 'react-i18next';
-import type { ToukouNode } from '../../lib/toukou';
 import type { NodePosition } from './useForceGraph';
 import type { ViewTransform } from './useGraphViewport';
 import { examplePhoto } from '../../lib/photos';
+
+/** All a marker needs. Declared structurally so both boards' node types fit. */
+export interface EdgeMarkerNode {
+  id: string;
+  color: string;
+  photoUrl: string | null;
+}
 
 const DOT = 44;
 /** Keeps the markers clear of the top bar and the bottom controls. */
@@ -12,11 +18,14 @@ const INSET = { top: 68, right: 12, bottom: 116, left: 12 };
 const MARGIN = 40;
 
 interface OffscreenMainsProps {
-  mains: ToukouNode[];
+  mains: EdgeMarkerNode[];
   positions: Map<string, NodePosition>;
   view: ViewTransform;
   size: { w: number; h: number };
   onSelect: (id: string) => void;
+  /** What to show when a main has no photo of its own. The duck board passes
+   * its duck mark; the toukou board falls back to a riverbank shot. */
+  imageFor?: (node: EdgeMarkerNode) => string;
 }
 
 /**
@@ -32,7 +41,14 @@ interface OffscreenMainsProps {
  * Mains only. A marker per sub would ring the screen with a dozen dots and
  * mains are what you navigate between.
  */
-export function OffscreenMains({ mains, positions, view, size, onSelect }: OffscreenMainsProps) {
+export function OffscreenMains({
+  mains,
+  positions,
+  view,
+  size,
+  onSelect,
+  imageFor,
+}: OffscreenMainsProps) {
   const { t } = useTranslation();
   if (size.w === 0) return null;
 
@@ -49,7 +65,7 @@ export function OffscreenMains({ mains, positions, view, size, onSelect }: Offsc
         x < -MARGIN || x > size.w + MARGIN || y < -MARGIN || y > size.h + MARGIN;
       return out ? { node, x, y } : null;
     })
-    .filter((v): v is { node: ToukouNode; x: number; y: number } => v !== null);
+    .filter((v): v is { node: EdgeMarkerNode; x: number; y: number } => v !== null);
 
   if (offscreen.length === 0) return null;
 
@@ -76,7 +92,7 @@ export function OffscreenMains({ mains, positions, view, size, onSelect }: Offsc
               style={{ borderColor: node.color, backgroundColor: node.color }}
             >
               <img
-                src={node.photoUrl ?? examplePhoto(node.id)}
+                src={node.photoUrl ?? imageFor?.(node) ?? examplePhoto(node.id)}
                 alt=""
                 className="h-full w-full object-cover"
                 draggable={false}

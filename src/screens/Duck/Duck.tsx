@@ -242,19 +242,24 @@ export function Duck() {
               different on every phone; a card of its own means the sheet is the
               same object wherever you open it, with the screen just giving it
               more or less room around the edges. */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-32 pt-4">
-            <div className="mx-auto w-fit rounded-3xl border border-kamo-ink/10 bg-white/50 px-5 py-6 shadow-sm">
-              <div className="grid grid-cols-2 justify-center gap-x-6 gap-y-6">
-                {entries.map((entry) => (
-                  <StampSlot
-                    key={entry.id}
-                    entry={entry}
-                    name={isJa ? entry.nameJa : entry.nameEn}
-                    busy={busyId === entry.id}
-                    dateLabel={entry.collectedAt ? fmtDate(entry.collectedAt) : null}
-                    onPhoto={() => pickPhotoFor(entry.id)}
-                  />
-                ))}
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-2">
+            {/* min-h-full + centring: the card sits in the middle of whatever
+                room is left, and the wrapper grows past it into a normal scroll
+                when the screen is too short to hold it. */}
+            <div className="flex min-h-full items-center justify-center">
+              <div className="w-fit rounded-3xl border border-kamo-ink/10 bg-white/50 px-5 py-6 shadow-sm">
+                <div className="grid grid-cols-2 justify-center gap-x-6 gap-y-6">
+                  {entries.map((entry) => (
+                    <StampSlot
+                      key={entry.id}
+                      entry={entry}
+                      name={isJa ? entry.nameJa : entry.nameEn}
+                      busy={busyId === entry.id}
+                      dateLabel={entry.collectedAt ? fmtDate(entry.collectedAt) : null}
+                      onPhoto={() => pickPhotoFor(entry.id)}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           </div>

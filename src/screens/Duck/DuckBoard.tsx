@@ -6,6 +6,7 @@ import { useForceGraph, type GraphNode } from '../ToukouMap/useForceGraph';
 import { useGraphViewport } from '../ToukouMap/useGraphViewport';
 import { driftStyle } from '../ToukouMap/drift';
 import { RecenterIcon } from '../../components/icons';
+import { OffscreenMains } from '../ToukouMap/OffscreenMains';
 
 const EDGE_OFFSET = 4000;
 /** Synthetic node: the empty slot where your photo of a duck would go. */
@@ -58,13 +59,30 @@ export function DuckBoard({ graph, busy, onCapture, onOpen, openId }: DuckBoardP
   ];
 
   const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-  const { viewportRef, cx, cy, view, resetView, atFitView, pressedId, containerHandlers } =
-    useGraphViewport(
-      positions,
-      { startDrag, drag, endDrag },
+  const {
+    viewportRef,
+    size,
+    cx,
+    cy,
+    view,
+    resetView,
+    atFitView,
+    focusOn,
+    pressedId,
+    containerHandlers,
+  } = useGraphViewport(
+    positions,
+    { startDrag, drag, endDrag },
+    {
+      // Where the opening glide lands. The ducks run north to south, so the
+      // first is the Delta -- the top of the river and where the rally starts.
+      // Without this the glide closed in on the middle of the layout, which is
+      // empty space between clusters.
+      focusId: mains[0]?.id,
       // An empty slot has no post behind it, so holding one has nothing to show.
-      { onLongPress: (id) => !id.startsWith(MINE_PREFIX) && onOpen(id) },
-    );
+      onLongPress: (id) => !id.startsWith(MINE_PREFIX) && onOpen(id),
+    },
+  );
 
   const positionOf = (id: string) => positions.get(id) ?? { x: 0, y: 0 };
 
@@ -155,6 +173,23 @@ export function DuckBoard({ graph, busy, onCapture, onOpen, openId }: DuckBoardP
         </div>
       </div>
 
+      {/* Ducks off the edge, as tappable markers on the frame. */}
+      {openId === null && (
+        <div className="pointer-events-none absolute inset-0">
+          {/* photoUrl nulled on purpose: a main renders as the duck's mark on
+              the board, so its edge marker should be that mark rather than your
+              photo of it. */}
+          <OffscreenMains
+            mains={mains.map((m) => ({ id: m.id, color: m.color, photoUrl: null }))}
+            positions={positions}
+            view={view}
+            size={size}
+            onSelect={focusOn}
+            imageFor={(node) => duckIconDataUri(node.color)}
+          />
+        </div>
+      )}
+
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-4">
         {/* Press-and-hold has no affordance of its own, so the board says so
             once, quietly -- the same line the toukou board carries. */}
@@ -244,7 +279,9 @@ function EmptySlot({
         width: PHOTO_SIZE,
         height: PHOTO_SIZE,
         border: `3px dotted ${node.color}A0`,
-        backgroundColor: `${node.color}1A`,
+        // Opaque: a translucent fill let the string to its duck show through the
+        // middle of the slot, which read as a crack rather than a gap.
+        backgroundColor: '#EDE9DF',
       }}
     >
       <img
