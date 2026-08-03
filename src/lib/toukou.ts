@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { duckColor } from './ducks';
 
 // =========================================================================
 // Types
@@ -44,6 +43,14 @@ export interface ActivityType {
   name_en: string;
   name_ja: string;
   color: string;
+  /** True for a type this device added, which is the only kind it may remove. */
+  mine?: boolean;
+}
+
+interface TypeJoin {
+  name_en: string;
+  name_ja: string;
+  color: string;
 }
 
 interface ActivityRow {
@@ -84,26 +91,11 @@ export function subShade(hex: string): string {
 // Graph fetch
 // =========================================================================
 
-/** The duck that sits at the centre of a place's board. Since the round-3
- * migration a place IS a duck spot, so every board has exactly one. */
-export interface BoardDuck {
-  id: string; // duck_spot_id
-  /** 1-based catalogue number in the canonical lat-desc ordering, so the board
-   * draws the same variant the collection and the map do. */
-  number: number;
-  nameEn: string;
-  nameJa: string;
-  color: string;
-  earned: boolean; // has this user collected the stamp here
-  photos: { id: string; photoUrl: string }[]; // duck_posts, drawn as its subs
-}
-
 export interface PlaceBoard extends ToukouGraph {
   placeNameEn: string;
   placeNameJa: string;
   placeLat: number;
   placeLng: number;
-  duck: BoardDuck | null;
 }
 
 /**
@@ -123,7 +115,7 @@ export async function fetchPlaceBoard(
     await Promise.all([
       supabase
         .from('places')
-        .select('name_en, name_ja, lat, lng, duck_spot_id')
+        .select('name_en, name_ja, lat, lng')
         .eq('id', placeId)
         .maybeSingle(),
       supabase.from('activity_types').select('id, color'),
@@ -213,64 +205,47 @@ export async function fetchPlaceBoard(
     placeNameJa: place.name_ja,
     placeLat: place.lat,
     placeLng: place.lng,
-    duck: await fetchBoardDuck(userId, place.duck_spot_id),
   };
+}
+
+/** The activity types (§5.5) -- the palette + labels for the main composer.
+ * `mine` marks the ones this user added, so the composer knows which carry a
+ * remove control. */
+export async function fetchActivityTypes(userId?: string): Promise<ActivityType[]> {
+  const { data, error } = await supabase
+    .from('activity_types')
+    .select('id, name_en, name_ja, color, created_by')
+    .eq('retired', false)
+    .order('name_en');
+  if (error) throw error;
+  return data.map((t) => ({
+    id: t.id,
+    name_en: t.name_en,
+    name_ja: t.name_ja,
+    color: t.color,
+    mine: !!userId && t.created_by === userId,
+  }));
 }
 
 /**
- * The place's duck: its canonical color (lat-desc index, same ordering the
- * stamp card and map markers use), whether this user has its stamp, and its
- * shared photos. Null for a place with no duck link — stale data from before
- * the round-3 migration, which the board renders without a centre.
+ * Removes an activity type this device added, and reports what happened: a type
+ * nothing has been posted with is deleted outright, one that has posts is
+ * retired (kept, so those posts keep their name and colour, but no longer
+ * offered). Both are "gone" from the picker. See the 20260804120000 migration
+ * for why an in-use type is kept rather than deleted.
  */
-async function fetchBoardDuck(
-  userId: string,
-  duckSpotId: string | null,
-): Promise<BoardDuck | null> {
-  if (!duckSpotId) return null;
+export type RemoveTypeStatus =
+  | 'deleted'
+  | 'retired'
+  | 'not_yours'
+  | 'not_found'
+  | 'unauthenticated'
+  | 'failed';
 
-  const [{ data: spots, error: spotsError }, { data: photos, error: photosError }, { data: stamp, error: stampError }] =
-    await Promise.all([
-      supabase.from('duck_spots').select('id, name_en, name_ja').eq('active', true).order('lat', { ascending: false }),
-      supabase
-        .from('duck_posts')
-        .select('id, photo_url')
-        .eq('duck_spot_id', duckSpotId)
-        .eq('hidden', false)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('stamps')
-        .select('duck_spot_id')
-        .eq('user_id', userId)
-        .eq('duck_spot_id', duckSpotId)
-        .maybeSingle(),
-    ]);
-  if (spotsError) throw spotsError;
-  if (photosError) throw photosError;
-  if (stampError) throw stampError;
-
-  const index = spots.findIndex((s) => s.id === duckSpotId);
-  if (index === -1) return null;
-
-  return {
-    id: duckSpotId,
-    number: index + 1,
-    nameEn: spots[index].name_en,
-    nameJa: spots[index].name_ja,
-    color: duckColor(index),
-    earned: stamp !== null,
-    photos: photos.map((p) => ({ id: p.id, photoUrl: p.photo_url })),
-  };
-}
-
-/** The seeded activity types (§5.5) -- the palette + labels for the main composer. */
-export async function fetchActivityTypes(): Promise<ActivityType[]> {
-  const { data, error } = await supabase
-    .from('activity_types')
-    .select('id, name_en, name_ja, color')
-    .order('name_en');
+export async function deleteActivityType(id: string): Promise<RemoveTypeStatus> {
+  const { data, error } = await supabase.rpc('delete_activity_type', { p_id: id });
   if (error) throw error;
-  return data;
+  return (data as { status: RemoveTypeStatus }).status;
 }
 
 /**
@@ -292,6 +267,82 @@ export async function createActivityType(name: string): Promise<ActivityType | n
     name_en: r.name_en ?? name,
     name_ja: r.name_ja ?? name,
     color: r.color ?? '#6e8ca0',
+    mine: true,
+  };
+}
+
+/** Everything a post's detail sheet shows. */
+export interface ActivityDetail {
+  id: string;
+  kind: 'main' | 'sub';
+  color: string;
+  photoUrl: string | null;
+  phrase: string | null;
+  likes: number;
+  dislikes: number;
+  createdAt: string;
+  typeNameEn: string;
+  typeNameJa: string;
+  /** Who posted it: the name they gave, plus the coarse onboarding bands.
+   * Every field is null where that question was skipped. */
+  author: {
+    name: string | null;
+    nationality: string | null;
+    ageRange: string | null;
+    gender: string | null;
+  } | null;
+}
+
+/**
+ * One post in full, for the long-press sheet: the whole photo, what was said,
+ * when, and the little the app knows about who.
+ *
+ * "Who" is whatever the poster offered: the name they chose, and the coarse
+ * onboarding bands. `profiles` is publicly readable, which is what makes this
+ * possible.
+ */
+export async function fetchActivityDetail(activityId: string): Promise<ActivityDetail | null> {
+  const { data, error } = await supabase
+    .from('activities')
+    .select(
+      'id, kind, activity_type, photo_url, phrase, likes, dislikes, created_at, author_id, activity_types(name_en, name_ja, color)',
+    )
+    .eq('id', activityId)
+    .eq('hidden', false)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('display_name, nationality, age_range, gender')
+    .eq('id', data.author_id)
+    .maybeSingle();
+
+  // Supabase types an embedded to-one join as a possible array.
+  const joined = (data as { activity_types?: TypeJoin | TypeJoin[] | null }).activity_types;
+  const type = Array.isArray(joined) ? joined[0] : joined;
+  const base = type?.color ?? '#6e8ca0';
+
+  return {
+    id: data.id,
+    kind: data.kind,
+    color: data.kind === 'main' ? base : subShade(base),
+    photoUrl: data.photo_url,
+    phrase: data.phrase,
+    likes: data.likes,
+    dislikes: data.dislikes,
+    createdAt: data.created_at,
+    typeNameEn: type?.name_en ?? '',
+    typeNameJa: type?.name_ja ?? '',
+    author: profile
+      ? {
+          name: profile.display_name,
+          nationality: profile.nationality,
+          ageRange: profile.age_range,
+          gender: profile.gender,
+        }
+      : null,
   };
 }
 

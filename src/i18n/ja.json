@@ -36,11 +36,13 @@
       "other": "その他",
       "unspecified": "回答しない"
     },
-    "continue": "続ける"
+    "continue": "続ける",
+    "name": "お名前（任意）",
+    "namePlaceholder": "なんとお呼びしましょう？"
   },
   "mainMap": {
     "tutorialButton": "チュートリアル",
-    "archiveButton": "アーカイブ",
+    "archiveButton": "ライブラリー",
     "back": "地図に戻る",
     "qrWelcome": "鴨川への隠れた入口を見つけました",
     "dragHint": "ドラッグして周りを見渡そう",
@@ -72,7 +74,9 @@
     "like": "いいね",
     "dislike": "よくないね",
     "recenter": "全体を表示",
-    "addSub": "この活動に加わる"
+    "addSub": "この活動に加わる",
+    "holdHint": "長押しで詳細を表示",
+    "jumpToMain": "この活動へ移動"
   },
   "composer": {
     "mainTitle": "活動を投稿",
@@ -89,13 +93,15 @@
     "otherType": "その他",
     "otherTypePlaceholder": "活動の名前",
     "otherTypeAdd": "追加",
-    "photoRequired": "写真が必要です"
+    "photoRequired": "写真が必要です",
+    "removeType": "この活動を削除",
+    "removeNotYours": "これは共有の種類です。追加した人だけが削除できます。",
+    "removeFailed": "削除できませんでした。もう一度お試しください。"
   },
   "mapStyle": {
-    "labelsOff": "文字なし",
-    "labelsOn": "文字あり",
-    "threeD": "3D",
-    "twoD": "2D"
+    "labelsOff": "文字を非表示",
+    "labelsOn": "文字を表示",
+    "switchTo": "{{mode}}に切り替え"
   },
   "duck": {
     "testMode": "テストモード:現地にいなくてもどのQRでも読み取れる",
@@ -116,15 +122,14 @@
     "locationUnavailable": "現在地を取得できませんでした。スポットの近くでもう一度お試しください。",
     "notFound": "このスポットコードは認識できませんでした。",
     "missingSpot": "このリンクにスポットコードがありません。",
-    "progress": "{{count}} / 10 スタンプ",
-    "certificateUnlocked": "10個すべて集めました!証明書が手に入りました。",
+    "certificateUnlocked": "すべて集めました!証明書が手に入りました。",
     "goToDuck": "鴨ページへ",
     "tryAgain": "もう一度"
   },
   "certificate": {
     "heading": "Certificate of Completion",
     "headingJa": "達成証明書",
-    "body": "awarded for collecting all ten duck stamps along the Kamogawa",
+    "body": "awarded for collecting every duck stamp along the Kamogawa",
     "bodyJa": "鴨川のすべての鴨スタンプを集めたことを証します",
     "issued": "発行日 {{date}}",
     "close": "閉じる"
@@ -151,8 +156,8 @@
         "body": "誰かの活動に加わるか、自分の活動を投稿しましょう。写真が1枚あれば大丈夫です。"
       },
       {
-        "title": "スタンプを集めよう",
-        "body": "鴨スポットでQRコードを読み取るとスタンプがもらえます。10個集めると証明書が手に入ります。"
+        "title": "鴨を集めよう",
+        "body": "川辺で鴨のオブジェを見つけて写真を撮りましょう。すべて集めると証明書が手に入ります。"
       }
     ]
   },
@@ -176,5 +181,11 @@
     "tooFar": "写真を共有しました。約{{distance}}m離れているため、まだ採取できていません。",
     "needLocation": "写真を共有しました。位置情報をオンにすると採取できます。",
     "postFailed": "写真を保存できませんでした。もう一度お試しください。"
+  },
+  "detail": {
+    "postedAt": "投稿日時",
+    "postedBy": "投稿者",
+    "anonymous": "鴨川にいた誰か",
+    "about": "プロフィール"
   }
 }

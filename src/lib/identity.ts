@@ -2,13 +2,19 @@ import { supabase } from './supabase';
 
 export interface Profile {
   id: string;
+  /** What this person would like to be called on their posts. Optional -- the
+   * detail sheet falls back to the onboarding bands without it. */
+  display_name: string | null;
   nationality: string | null;
   age_range: string | null;
   gender: string | null;
   created_at: string;
 }
 
-export type OnboardingFields = Pick<Profile, 'nationality' | 'age_range' | 'gender'>;
+export type OnboardingFields = Pick<
+  Profile,
+  'display_name' | 'nationality' | 'age_range' | 'gender'
+>;
 
 const PROFILE_CACHE_KEY = 'kamo:profile';
 

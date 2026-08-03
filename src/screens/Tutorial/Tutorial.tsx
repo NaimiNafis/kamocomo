@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../components/icons';
-import placeholderPhoto from '../../../img/kamogawa/placeholder-riverbank.jpg?url';
+import { EXAMPLE_PHOTOS } from '../../lib/photos';
 
 /**
  * One image per slide, in slide order.
@@ -12,13 +12,13 @@ import placeholderPhoto from '../../../img/kamogawa/placeholder-riverbank.jpg?ur
  * an image service: §4 bars stock imagery, and remote URLs would put the
  * tutorial behind a network request on a screen that has to work on bad signal.
  */
-const SLIDE_IMAGES = [
-  placeholderPhoto,
-  placeholderPhoto,
-  placeholderPhoto,
-  placeholderPhoto,
-  placeholderPhoto,
-];
+/** One photo per slide, spaced across the pool rather than taken off the front,
+ * so consecutive cards in the cover flow don't look alike. Five stand-ins until
+ * there are five photos actually *about* each step. */
+const SLIDE_IMAGES = Array.from(
+  { length: 5 },
+  (_, i) => EXAMPLE_PHOTOS[Math.floor((i * EXAMPLE_PHOTOS.length) / 5) % EXAMPLE_PHOTOS.length],
+);
 
 const SLIDE_COUNT = SLIDE_IMAGES.length;
 const SWIPE_THRESHOLD_PX = 40;

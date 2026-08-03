@@ -125,14 +125,77 @@ function accentOf(color: string): string {
   return `#${part(0)}${part(2)}${part(4)}`;
 }
 
-/** Duck N as itself: the shared body in its colour, plus its own detail. */
-export function duckVariantDataUri(index: number, color: string, sizePx = 64): string {
-  return svgDataUri(
+/**
+ * How strongly a duck marker is lit, from how close the visitor is. 0 is the
+ * ordinary mark.
+ *
+ * Stepped rather than continuous on purpose. `Marker3DElement` rasterizes its
+ * art when it's appended and has no way to restyle it in place, so every change
+ * costs a marker rebuild — a value that slid smoothly with distance would
+ * rebuild on every GPS tick. Steps mean it only redraws when you cross a band,
+ * which is also the only time the change is worth noticing.
+ */
+export type ProximityLevel = 0 | 1 | 2 | 3;
+
+/**
+ * On-screen size of a duck marker's whole box. The duck itself is about 60% of
+ * it; the rest is the ring the proximity halo grows into.
+ *
+ * It lives here, with the artwork, because on the 3D map the SVG's **intrinsic**
+ * size is the only thing that controls how big a marker draws — Google
+ * rasterizes the image and ignores width/height set on the `<img>`. Owning it
+ * at the layer instead is how the markers stayed 40px after being "doubled":
+ * the 2D map honoured its `scaledSize` and grew, the 3D map kept rendering the
+ * 40 baked into the SVG.
+ */
+export const MARKER_PIXEL_SIZE = 80;
+
+/**
+ * Duck N as a map marker, optionally lit by how close the visitor is.
+ *
+ * Drawn on a **96-unit box rather than 64**, with the duck itself sitting in the
+ * middle at exactly the size it has everywhere else. The extra ring of space is
+ * always reserved, empty at level 0, and the halo grows into it.
+ *
+ * That reservation is the whole point. The first version grew the marker's
+ * pixel size when lit and scaled the artwork down to compensate; the two didn't
+ * cancel, so a lit duck came out a different size from its neighbours — and by
+ * a different amount on each map, because the two render markers differently.
+ * With a fixed box the duck is pixel-identical at every level and only the
+ * rings change, so nothing can drift.
+ */
+export function duckMarkerDataUri(
+  index: number,
+  color: string,
+  level: ProximityLevel = 0,
+  sizePx = MARKER_PIXEL_SIZE,
+): string {
+  const halo = '#E0885E'; // --kamo-sunset
+  // Alpha and reach both climb with the level; the outermost ring stays faint so
+  // even the strongest state reads as a glow rather than a border.
+  const rings = [
+    { r: 34, w: 3, a: [0, 0.2, 0.34, 0.5][level] },
+    { r: 39, w: 4, a: [0, 0.09, 0.18, 0.3][level] },
+    { r: 44, w: 5, a: [0, 0, 0.08, 0.16][level] },
+  ]
+    .filter((ring) => ring.a > 0)
+    .map(
+      (ring) =>
+        `<circle cx="48" cy="48" r="${ring.r}" fill="none" stroke="${halo}" stroke-width="${ring.w}" opacity="${ring.a}"/>`,
+    )
+    .join('');
+
+  // The duck art is authored on a 64 box, so shift it to sit centred in the 96.
+  const svg =
+    `<svg viewBox="0 0 96 96" width="${sizePx}" height="${sizePx}" xmlns="http://www.w3.org/2000/svg">` +
+    rings +
+    `<g transform="translate(16 16)">` +
     `<circle cx="32" cy="32" r="29" fill="${SURFACE}" stroke="${color}" stroke-width="2.5"/>` +
-      duckBody(color) +
-      variantDetail(index, accentOf(color)),
-    sizePx,
-  );
+    duckBody(color) +
+    variantDetail(index, accentOf(color)) +
+    `</g>` +
+    `</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 /**

@@ -1,5 +1,12 @@
 import { importLibrary } from '@googlemaps/js-api-loader';
-import { KAMOGAWA_BOUNDS, MAX_ALTITUDE_M, MIN_ALTITUDE_M, type MarkerPoint } from './map3d';
+import {
+  KAMOGAWA_BOUNDS,
+  MAX_ALTITUDE_M,
+  MIN_ALTITUDE_M,
+  userLocationIcon,
+  type MarkerPoint,
+} from './map3d';
+import { MARKER_PIXEL_SIZE, type ProximityLevel } from './ducks';
 
 /**
  * The flat map — the ordinary Google map, with blue water and green parks.
@@ -16,6 +23,10 @@ import { KAMOGAWA_BOUNDS, MAX_ALTITUDE_M, MIN_ALTITUDE_M, type MarkerPoint } fro
  */
 
 export type Map2D = google.maps.Map;
+
+/** How long the glide across to a marker runs. Google animates the pan itself;
+ * this is just how long to wait before calling it arrived. */
+const GLIDE_MS = 520;
 
 /** Vertical field of view of the 3D camera, used to convert its `range` (metres
  * from the camera to the ground) into an equivalent 2D zoom. */
@@ -65,8 +76,19 @@ export interface Map2DHandle {
   map: Map2D;
   setLabels(showLabels: boolean): void;
   setMarkers(points: MarkerPoint[]): void;
+  /** Same proximity glow the 3D map uses — a duck shouldn't stop being lit just
+   * because you flattened the view. */
+  setProximity(placeId: string | null, level: ProximityLevel): void;
+  /** The visitor's own position. The flat map had no dot at all at first, so
+   * switching to 2D lost track of where you were standing. */
+  setUserPosition(lat: number, lng: number, heading: number | null): void;
   /** Point the flat map at the same place the 3D camera was looking. */
   moveTo(lat: number, lng: number, range: number, viewportHeightPx: number): void;
+  /** Glides across to a point, resolving when it arrives. The zoom is left
+   * alone -- see the implementation. */
+  glideTo(lat: number, lng: number): Promise<void>;
+  /** Abandons a glide in progress, leaving the map wherever it got to. */
+  cancelGlide(): void;
   /** Where it's looking now, so the 3D camera can pick the view back up. */
   readView(viewportHeightPx: number): { lat: number; lng: number; range: number } | null;
   dispose(): void;
@@ -76,10 +98,12 @@ export async function createMap2D(
   container: HTMLElement,
   onTap: (placeId: string) => void,
 ): Promise<Map2DHandle> {
-  const { Map } = await importLibrary('maps');
+  // Aliased: destructuring `Map` here would shadow the global Map constructor,
+  // and the marker lookups below are plain JS Maps.
+  const { Map: GoogleMap } = await importLibrary('maps');
   const { Marker } = await importLibrary('marker');
 
-  const map = new Map(container, {
+  const map = new GoogleMap(container, {
     center: { lat: CENTRE_LAT, lng: (KAMOGAWA_BOUNDS.east + KAMOGAWA_BOUNDS.west) / 2 },
     zoom: Math.min(MAX_ZOOM, MIN_ZOOM + 3),
     minZoom: MIN_ZOOM,
@@ -92,31 +116,106 @@ export async function createMap2D(
     clickableIcons: false, // Google's own POIs shouldn't compete with the ducks
   });
 
-  let markers: google.maps.Marker[] = [];
+  let markers = new Map<string, google.maps.Marker>();
+  let points: MarkerPoint[] = [];
+  let litId: string | null = null;
+  let litLevel: ProximityLevel = 0;
+  let userMarker: google.maps.Marker | null = null;
+
+  // One size for every level, and the SAME constant the 3D map uses -- a second
+  // literal here is how the two drifted apart last time.
+  const MARKER_PX = MARKER_PIXEL_SIZE;
+  const iconFor = (p: MarkerPoint) => {
+    const level = p.id === litId ? litLevel : 0;
+    const url = level > 0 && p.litIcon ? p.litIcon(level) : p.iconUrl;
+    return {
+      url,
+      scaledSize: new google.maps.Size(MARKER_PX, MARKER_PX),
+      anchor: new google.maps.Point(MARKER_PX / 2, MARKER_PX / 2),
+    };
+  };
+
+  // Timer for a glide in progress, so a second tap or a close can call it off.
+  let glide: ReturnType<typeof setTimeout>[] = [];
+  function cancelGlide() {
+    for (const t of glide) clearTimeout(t);
+    glide = [];
+  }
 
   return {
     map,
     setLabels: (showLabels) => map.setOptions({ styles: showLabels ? [] : LABELS_OFF }),
-    setMarkers: (points) => {
+    setProximity: (placeId, level) => {
+      if (placeId === litId && level === litLevel) return;
+      const affected = new Set([litId, placeId].filter((id): id is string => id !== null));
+      litId = placeId;
+      litLevel = level;
+      // Only restyle what changed; setIcon avoids rebuilding the marker at all.
+      affected.forEach((id) => {
+        const point = points.find((p) => p.id === id);
+        if (point) markers.get(id)?.setIcon(iconFor(point));
+      });
+    },
+    setUserPosition: (lat, lng, heading) => {
+      const icon = {
+        url: userLocationIcon(heading),
+        scaledSize: new google.maps.Size(72, 72),
+        anchor: new google.maps.Point(36, 36),
+      };
+      if (userMarker) {
+        userMarker.setPosition({ lat, lng });
+        userMarker.setIcon(icon);
+        return;
+      }
+      userMarker = new Marker({
+        map,
+        position: { lat, lng },
+        icon,
+        clickable: false,
+        zIndex: 1000, // above the ducks; it's where YOU are
+      });
+    },
+    setMarkers: (next) => {
       markers.forEach((m) => m.setMap(null));
       // The classic Marker rather than AdvancedMarkerElement: the advanced one
       // requires a mapId, and a mapId disables the inline `styles` above, which
       // is what gives us the labels toggle without any Cloud console work.
       // Deprecated but supported, and swappable if that ever changes.
-      markers = points.map((p) => {
+      markers = new Map();
+      points = next;
+      for (const p of points) {
         const marker = new Marker({
           map,
           position: { lat: p.lat, lng: p.lng },
-          icon: { url: p.iconUrl, scaledSize: new google.maps.Size(30, 30) },
+          icon: iconFor(p),
         });
         marker.addListener('click', () => onTap(p.id));
-        return marker;
-      });
+        markers.set(p.id, marker);
+      }
     },
     moveTo: (lat, lng, range, viewportHeightPx) => {
       map.setCenter({ lat, lng });
       map.setZoom(rangeToZoom(range, lat, viewportHeightPx));
     },
+    glideTo: (lat, lng) => {
+      cancelGlide();
+      return new Promise<void>((resolve) => {
+        // Pan only. Closing in was the obvious mirror of the 3D fly-in and the
+        // wrong move here: with no mapId this is a raster map, so zoom lands
+        // only on whole levels and any approach is a series of steps rather
+        // than a movement. Sliding the marker to the middle says "this one"
+        // just as well, and leaves the visitor at the scale they chose.
+        map.panTo({ lat, lng });
+        glide.push(
+          setTimeout(() => {
+            map.setCenter({ lat, lng });
+            glide = [];
+            resolve();
+          }, GLIDE_MS),
+        );
+      });
+    },
+    cancelGlide,
     readView: (viewportHeightPx) => {
       const centre = map.getCenter();
       const zoom = map.getZoom();
@@ -125,8 +224,12 @@ export async function createMap2D(
       return { lat, lng: centre.lng(), range: zoomToRange(zoom, lat, viewportHeightPx) };
     },
     dispose: () => {
+      cancelGlide();
       markers.forEach((m) => m.setMap(null));
-      markers = [];
+      markers = new Map();
+      userMarker?.setMap(null);
+      userMarker = null;
+      points = [];
     },
   };
 }

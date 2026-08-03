@@ -104,7 +104,8 @@ not need it: 2D is the classic `google.maps.Map`, which is GA.
    ```
 3. **Seed demo data.** `db push` does not run `seed.sql`; paste the contents of
    `supabase/seed.sql` into the Studio SQL Editor and run it (it's idempotent).
-   This adds the 5 activity types, 3 events (one active), and 10 duck spots.
+   This adds the 10 activity types, 3 events (one active), and the duck spots
+   (8 active, between the Delta and Gojo).
 4. **Seed demo map markers** (optional, makes the map feel alive):
    ```bash
    node scripts/seed-demo-activities.mjs
@@ -129,7 +130,7 @@ npm run typecheck    # tsc --noEmit
 
 ## QR codes for the stamp rally
 
-Each of the 10 duck spots has its own QR image encoding the *same* app URL with
+Each active duck spot has its own QR image encoding the *same* app URL with
 that spot's opaque token: `https://<app>/duck/scan?spot=<qr_token>`. Generate
 them all:
 
@@ -139,7 +140,14 @@ npx tsx scripts/generate-qr.ts
 VITE_APP_URL=https://your-domain npx tsx scripts/generate-qr.ts
 ```
 
-PNGs land in `qr-codes/` (gitignored; reproducible). The stamp scan is
+PNGs land in `qr-codes/` (gitignored; reproducible).
+
+**Renaming or moving a spot does not invalidate its code.** A QR encodes
+`?spot=<qr_token>`, and the token lives on the `duck_spots` row untouched by
+either — only the PNG *filename*, which is derived from the name, goes stale.
+Re-run the generator after a rename and you get correctly-named files containing
+identical codes. Tokens are only ever reissued when `seed.sql` runs against a
+fresh database. The stamp scan is
 **server-authoritative**: the `scan_duck_spot` RPC recomputes the distance
 between the reported location and the spot and only grants the stamp within
 120 m — a client cannot self-grant a stamp (direct inserts to `stamps` are

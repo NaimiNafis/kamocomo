@@ -9,6 +9,7 @@ import {
   flyIntroSequence,
   flyToHomeView,
   flyToPlace,
+  HOME_LOOK,
   initialCamera,
   loadMaps3d,
   onMapsAuthFailure,
@@ -18,11 +19,19 @@ import {
   type Map3D,
   type Maps3D,
   type MapStyle,
+  type MarkerLayer,
   type MarkerPoint,
   type UserLocationMarker,
 } from '../../lib/map3d';
 import { createMap2D, type Map2DHandle } from '../../lib/map2d';
-import { fetchPlaceMarkers, fetchPlacePreview, type PlacePreview } from '../../lib/places';
+import {
+  fetchPlaceMarkers,
+  fetchPlacePreview,
+  nearestDuck,
+  type PlacePreview,
+} from '../../lib/places';
+import { DEMO_POSITION } from '../../lib/geo';
+import { TEST_MODE_KEY } from '../../lib/entryFlags';
 import { logQrEntry } from '../../lib/duck';
 import { HAS_SEEN_INTRO_KEY, OPEN_DUCK_AFTER_INTRO_KEY } from '../../lib/entryFlags';
 import { Intro, type IntroPhase } from '../Intro/Intro';
@@ -30,7 +39,8 @@ import { Onboarding } from '../Onboarding/Onboarding';
 import { Tutorial } from '../Tutorial/Tutorial';
 import { PlacePopup } from './PlacePopup';
 import { LanguageToggle } from '../../components/LanguageToggle';
-import { MapStyleSwitch } from '../../components/MapStyleSwitch';
+import { MapControls } from '../../components/MapControls';
+import { HelpIcon } from '../../components/icons';
 import { needsOnboarding, useIdentityStore } from '../../store/identityStore';
 
 const HAS_SEEN_TUTORIAL_KEY = 'hasSeenTutorial';
@@ -73,6 +83,8 @@ export function MainMap() {
   const map2dRef = useRef<Map2DHandle | null>(null);
   const map2dContainerRef = useRef<HTMLDivElement>(null);
   const placePointsRef = useRef<MarkerPoint[]>([]);
+  const markerLayerRef = useRef<MarkerLayer | null>(null);
+  const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const pendingCameraRef = useRef<{ lat: number; lng: number; range: number } | null>(null);
   const headingAskedRef = useRef(false);
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
@@ -131,7 +143,17 @@ export function MainMap() {
       container.appendChild(map);
       mapRef.current = map;
 
-      const userMarker = createUserLocationMarker(maps3d, map);
+      // Light the duck you're closest to, brighter the nearer you get. That's
+      // the map answering "where am I on the river" itself, instead of leaving
+      // you to read the dot's position against eight identical marks.
+      //
+      // Test mode pins the visitor near the Delta so the effect is visible away
+      // from Kyoto -- the same toggle that lets the 図鑑 collect from anywhere.
+      const pretendAtRiver = localStorage.getItem(TEST_MODE_KEY) === 'true';
+      const userMarker = createUserLocationMarker(maps3d, map, {
+        fixedPosition: pretendAtRiver ? DEMO_POSITION : undefined,
+        onPositionChange: applyPosition,
+      });
       userLocationRef.current = userMarker;
       disposers.push(userMarker.dispose);
 
@@ -153,12 +175,31 @@ export function MainMap() {
           cinematic = null;
         }
         setPlacePopup(null);
+        // The flat map has no cinematic to unwind, but it did slide over to a
+        // duck -- glide back so closing leaves you where opening found you.
+        // Same scale it was at, since opening never changed it.
+        const flat = map2dRef.current;
+        if (flat) {
+          flat.cancelGlide();
+          void flat.glideTo(HOME_LOOK.lat, HOME_LOOK.lng);
+        }
         if (mounted && map && !constraintsCleanupRef.current) {
           constraintsCleanupRef.current = applyKamogawaConstraints(map);
           void flyToHomeView(map);
         }
       }
       closeCinematicRef.current = closeCinematic;
+
+      // Both surfaces are fed from here rather than each subscribing on its own,
+      // so the flat map can't drift out of sync with the 3D one.
+      function applyPosition(lat: number, lng: number) {
+        if (!mounted) return;
+        lastPositionRef.current = { lat, lng };
+        const near = nearestDuck(placePointsRef.current, lat, lng);
+        markerLayerRef.current?.setProximity(near?.id ?? null, near?.level ?? 0);
+        map2dRef.current?.setProximity(near?.id ?? null, near?.level ?? 0);
+        map2dRef.current?.setUserPosition(lat, lng, null);
+      }
 
       // One duck marker per place, and a place IS a duck spot -- fixed seed
       // data, so no realtime subscription is needed. New mains show up inside
@@ -199,6 +240,7 @@ export function MainMap() {
       const markerLayer = createMarkerLayer(maps3d, map, (placeId) => {
         void startPlaceCinematic(placeId);
       });
+      markerLayerRef.current = markerLayer;
       disposers.push(markerLayer.dispose);
 
       void fetchPlaceMarkers().then((points) => {
@@ -209,6 +251,10 @@ export function MainMap() {
         placePointsRef.current = points;
         markerLayer.setMarkers(placePoints);
         map2dRef.current?.setMarkers(points);
+        // The first fix lands before the markers do, so nothing was lit yet.
+        // Re-apply it now there is something to light.
+        const fix = lastPositionRef.current;
+        if (fix) applyPosition(fix.lat, fix.lng);
       });
 
       function finishIntro() {
@@ -279,6 +325,7 @@ export function MainMap() {
       disposers.forEach((dispose) => dispose());
       map2dRef.current?.dispose();
       map2dRef.current = null;
+      markerLayerRef.current = null;
       userLocationRef.current = null;
       map?.remove();
       mapRef.current = null;
@@ -395,11 +442,19 @@ export function MainMap() {
     void (async () => {
       if (!map2dRef.current) {
         try {
-          const handle = await createMap2D(container, openPlaceFrom2D);
+          const handle = await createMap2D(container, (id) => void openPlaceFrom2D(id));
           if (cancelled) return;
           map2dRef.current = handle;
           handle.setLabels(showLabels);
           handle.setMarkers(placePointsRef.current);
+          // Built long after the first fix, so catch it up rather than leaving
+          // it with no dot and no glow until the next position update.
+          const fix = lastPositionRef.current;
+          if (fix) {
+            const near = nearestDuck(placePointsRef.current, fix.lat, fix.lng);
+            handle.setProximity(near?.id ?? null, near?.level ?? 0);
+            handle.setUserPosition(fix.lat, fix.lng, null);
+          }
         } catch {
           if (!cancelled) setMapStyleState('3d'); // couldn't build it; stay put
           return;
@@ -425,10 +480,32 @@ export function MainMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapStyle]);
 
-  /** A duck tapped on the flat map goes straight to its board -- the fly-in and
-   * sweep are a 3D camera move and have no meaning here. */
-  function openPlaceFrom2D(placeId: string) {
-    navigate(`/toukou?place=${placeId}`);
+  /**
+   * A duck tapped on the flat map slides to the middle, then its popup opens.
+   *
+   * It used to jump straight to the board, on the reasoning that the arrival is
+   * a 3D camera move with no meaning here -- but the part that mattered was
+   * never the camera. Tapping a duck should show you what's happening at that
+   * spot before it takes you anywhere.
+   *
+   * What doesn't carry over is the closing-in: the orbit has no meaning without
+   * a third dimension, and zooming turned out to be no better, since a raster
+   * map can only step through whole levels. Centring the marker says "this one"
+   * on its own.
+   */
+  async function openPlaceFrom2D(placeId: string) {
+    const handle = map2dRef.current;
+    const point = placePointsRef.current.find((p) => p.id === placeId);
+    if (!handle || !point) {
+      navigate(`/toukou?place=${placeId}`);
+      return;
+    }
+    // Fetch alongside the move rather than after it, so the popup is ready the
+    // moment the map settles.
+    const previewPromise = fetchPlacePreview(placeId).catch(() => null);
+    await handle.glideTo(point.lat, point.lng);
+    const preview = await previewPromise;
+    if (preview) setPlacePopup({ placeId, preview });
   }
 
   const showChrome = introPhase === 'done';
@@ -466,29 +543,25 @@ export function MainMap() {
 
       {showChrome && (
         <>
-          <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between p-4">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={openTutorial}
-                aria-label={t('mainMap.tutorialButton')}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-kamo-ink/15 bg-kamo-stone/90 font-display text-base text-kamo-ink shadow-sm backdrop-blur"
-              >
-                ?
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/archive')}
-                className="rounded-full border border-kamo-ink/15 bg-kamo-stone/90 px-3 py-1.5 font-ui text-xs text-kamo-ink shadow-sm backdrop-blur"
-              >
-                {t('mainMap.archiveButton')}
-              </button>
-            </div>
+          {/* Only two things sit up top: help on the left, language on the
+              right. Everything else moved into the column below, so the first
+              thing a visitor sees is the river rather than a control panel. */}
+          <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-4">
+            <button
+              type="button"
+              onClick={openTutorial}
+              aria-label={t('mainMap.tutorialButton')}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-kamo-ink/15 bg-kamo-stone/90 text-kamo-ink shadow-md backdrop-blur transition-transform duration-150 active:scale-[0.94]"
+            >
+              <HelpIcon size={22} />
+            </button>
             <LanguageToggle />
           </div>
 
           <div className="absolute bottom-4 right-4 z-10">
-            <MapStyleSwitch
+            <MapControls
+              onOpenCollection={() => navigate('/duck')}
+              onOpenLibrary={() => navigate('/archive')}
               style={mapStyle}
               showLabels={showLabels}
               onStyleChange={handleMapStyleChange}
@@ -505,7 +578,7 @@ export function MainMap() {
           )}
 
           {!mapHintDismissed && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center px-4">
+            <div className="pointer-events-none absolute inset-x-0 bottom-8 z-10 flex justify-center px-4">
               <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-kamo-ink/80 px-4 py-2 font-ui text-xs text-kamo-stone shadow-md backdrop-blur">
                 <span aria-hidden>↔</span>
                 {t('mainMap.dragHint')}
@@ -521,16 +594,6 @@ export function MainMap() {
             </div>
           )}
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-6 z-10 flex justify-center px-4">
-            <button
-              type="button"
-              onClick={() => navigate('/duck')}
-              className="pointer-events-auto flex items-center gap-2 rounded-full bg-kamo-indigo px-5 py-2.5 font-ui text-sm font-medium text-kamo-stone shadow-lg"
-            >
-              <span aria-hidden>🦆</span>
-              {t('mainMap.duckCollection')}
-            </button>
-          </div>
         </>
       )}
 

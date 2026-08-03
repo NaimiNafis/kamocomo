@@ -1,29 +1,44 @@
 import { useTranslation } from 'react-i18next';
 import type { ToukouNode } from '../../lib/toukou';
-import placeholderPhoto from '../../../img/kamogawa/placeholder-riverbank.jpg?url';
+import { LONG_PRESS_MS } from './useGraphViewport';
+import { MOSS, SUNSET, VoteButton } from './VoteButton';
+import { examplePhoto } from '../../lib/photos';
 
-const MOSS = '#7C8C5A'; // --kamo-moss, the approving side
-const SUNSET = '#E0885E'; // --kamo-sunset, the disapproving side
 const STONE = '#E9E4D8'; // --kamo-stone
 
-/** Dark or light text depending on the background's luminance, so phrases stay
- * legible on both saturated mains and pale subs. */
-function readableText(hex: string): string {
-  const v = hex.replace('#', '');
-  const r = parseInt(v.slice(0, 2), 16);
-  const g = parseInt(v.slice(2, 4), 16);
-  const b = parseInt(v.slice(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? '#1C1C1A' : '#E9E4D8';
+/** Card sizes. Mains lead the board, so they're half again the size of a sub
+ * and always a full circle; subs start as squares and round out as they earn
+ * approval. Both are square, because a shape that becomes a circle has to be. */
+export const MAIN_SIZE = 176;
+export const SUB_SIZE = 112;
+
+/** Likes at which a sub is fully round. */
+const FULLY_ROUND_AT = 10;
+
+/**
+ * How square a sub still is, as a border radius in pixels.
+ *
+ * This is the board's main signal now: a post nobody has backed is a plain
+ * square, and every like rounds it off a little until at ten it's a circle.
+ * Shape reads at a glance across a whole graph in a way a number never does,
+ * and it degrades gracefully — you don't need to know the scale to see that a
+ * rounder card is a better-liked one.
+ *
+ * Driven by likes alone rather than the net score, so a post that attracts some
+ * disagreement doesn't visibly lose ground it earned. Dislikes still have
+ * teeth: ten of them hides the post entirely.
+ */
+function cornerRadius(likes: number, size: number): number {
+  const base = 14;
+  const full = size / 2;
+  const progress = Math.min(Math.max(likes, 0) / FULLY_ROUND_AT, 1);
+  return base + (full - base) * progress;
 }
 
 /**
- * A post's standing, drawn as a ring that thickens in steps. Nothing at zero,
- * so the rings that do exist read as signal rather than as decoration.
- *
- * The two kinds of card feed it different numbers on purpose: a sub is rated by
- * people voting on it, a main has no vote buttons and is rated by how many
- * children it drew.
+ * A ring for how much standing a post has, on top of the shape. Nothing at
+ * zero, so the rings that exist read as signal rather than decoration. Mains
+ * feed it their child count, since they have no vote buttons.
  */
 function ratingRingWidth(magnitude: number): number {
   if (magnitude >= 10) return 6;
@@ -32,88 +47,12 @@ function ratingRingWidth(magnitude: number): number {
   return 0;
 }
 
-/** A single thumb; the dislike button flips it upside down. Filled or outlined
- * depending on whether this is the vote you've cast. */
-function ThumbIcon({ down, filled }: { down?: boolean; filled: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="13"
-      height="13"
-      fill={filled ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      strokeWidth={filled ? 0 : 1.8}
-      strokeLinejoin="round"
-      aria-hidden
-      className={`shrink-0 transition-colors duration-300 ${down ? 'rotate-180' : ''}`}
-    >
-      <path d="M7 22H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3v11ZM9 22a1 1 0 0 1-1-1V10.72a1 1 0 0 1 .3-.71l6-6a1 1 0 0 1 1.06-.22c.38.14.64.5.64.9V8h4.5A2.5 2.5 0 0 1 23 10.5a2.47 2.47 0 0 1-.24 1.06l-3 6.42A2.5 2.5 0 0 1 17.5 22H9Z" />
-    </svg>
-  );
-}
-
-/**
- * One vote control. Icon and count only — two of these have to sit inside a
- * 96px sub card, so there is no room for a word alongside them.
- *
- * The motion is the reference button's, done with Tailwind rather than a
- * physics library: it lifts on hover, squashes on press, and the thumb fills
- * and takes the accent colour on hover or once cast. Adding ~50KB of animation
- * runtime for two transforms would be a poor trade on a screen built for flaky
- * outdoor signal.
- */
-function VoteButton({
-  count,
-  down,
-  active,
-  accent,
-  label,
-  onClick,
-}: {
-  count: number;
-  down?: boolean;
-  active: boolean;
-  accent: string;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      aria-label={label}
-      aria-pressed={active}
-      className="group flex h-7 flex-1 items-center justify-center gap-1 rounded-full border font-ui transition-[transform,background-color,border-color] duration-150 hover:scale-[1.03] active:scale-[0.96]"
-      style={{
-        fontSize: 11,
-        color: active ? accent : STONE,
-        backgroundColor: active ? `${accent}2E` : 'rgba(255,255,255,0.14)',
-        borderColor: active ? accent : 'rgba(255,255,255,0.18)',
-      }}
-    >
-      <span
-        className="flex items-center transition-colors duration-300"
-        style={{ color: active ? accent : undefined }}
-      >
-        <span className="group-hover:hidden">
-          <ThumbIcon down={down} filled={active} />
-        </span>
-        {/* Hover swaps in the filled, accented thumb — the colour-morph beat
-            from the reference, without needing JS hover state. */}
-        <span className="hidden group-hover:inline" style={{ color: accent }}>
-          <ThumbIcon down={down} filled />
-        </span>
-      </span>
-      {count}
-    </button>
-  );
-}
-
 interface NodeCardProps {
   node: ToukouNode;
+  /** A finger is down on this card and the hold hasn't fired yet. */
+  pressed?: boolean;
+  /** True while this card's detail sheet is opening or open. */
+  dimmed?: boolean;
   onLike: () => void;
   onDislike: () => void;
   onViewArchived: () => void;
@@ -122,56 +61,88 @@ interface NodeCardProps {
 /**
  * A single post in the toukou web (§5.5).
  *
- * Mains are larger, carry no vote buttons, and show how many people have joined
- * in; when they have overflowed subs they also link to the archive. Subs vote.
- * Both wear a ring once they have standing — and on a sub that ring turns
- * `--kamo-sunset` once the score goes negative, so a post drifting toward the
- * 10-dislike auto-hide warns before it goes rather than vanishing without
- * notice. Photo-less posts fall back to the shared placeholder (§C6).
+ * Both kinds are square photo tiles with their words over a scrim, rather than
+ * a photo above a text body — a card that has to become a circle can't carry a
+ * rectangular block underneath it.
+ *
+ * A **main** is always a circle and half again the size of a sub: it's the
+ * thing a board is about, and roundness reading as "settled" suits a post that
+ * has already gathered people. It carries no vote buttons; its ring tracks how
+ * many children it drew. A **sub** starts square and rounds off as it collects
+ * likes, reaching a circle at ten.
+ *
+ * The card only has to carry what survives at this size: the photo, one line or
+ * two of what was said, and the votes. Everything else -- the uncropped photo,
+ * the whole phrase, who posted it and when -- is a press-and-hold away in
+ * {@link NodeDetail}, which is what lets the words here stay short enough to
+ * sit legibly on top of a picture.
  */
-export function NodeCard({ node, onLike, onDislike, onViewArchived }: NodeCardProps) {
+export function NodeCard({ node, pressed, dimmed, onLike, onDislike, onViewArchived }: NodeCardProps) {
   const { t } = useTranslation();
   const isMain = node.kind === 'main';
-  const textColor = readableText(node.color);
-  const width = isMain ? 128 : 96;
+  const size = isMain ? MAIN_SIZE : SUB_SIZE;
+  // Mains are born round; subs earn it.
+  const radius = isMain ? size / 2 : cornerRadius(node.likes, size);
 
   const score = isMain ? node.subCount : node.likes - node.dislikes;
   const ringWidth = ratingRingWidth(Math.abs(score));
-  // Thickness carries magnitude, colour carries direction.
   const ringColor = score < 0 ? SUNSET : node.color;
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl shadow-lg"
+      className="relative overflow-hidden shadow-lg"
       style={{
-        width,
+        width: size,
+        height: size,
+        // The press itself is the animation. The card sinks away under your
+        // finger for exactly as long as the hold takes, then springs back past
+        // its own size as the sheet opens -- so the wait has a visible shape
+        // and the release has a pop, rather than nothing happening and then
+        // everything happening.
+        transform: pressed ? 'scale(0.93)' : 'scale(1)',
+        transition: pressed
+          ? `transform ${LONG_PRESS_MS}ms cubic-bezier(0.25, 0.8, 0.4, 1), border-radius 500ms ease-out`
+          : 'transform 420ms cubic-bezier(0.34, 1.7, 0.5, 1), border-radius 500ms ease-out',
+        opacity: dimmed ? 0.85 : undefined,
+        borderRadius: radius,
         backgroundColor: node.color,
-        color: textColor,
-        boxShadow: ringWidth ? `0 0 0 ${ringWidth}px ${ringColor}${score < 0 ? 'AA' : '66'}` : undefined,
+        boxShadow: ringWidth
+          ? `0 0 0 ${ringWidth}px ${ringColor}${score < 0 ? 'AA' : '66'}`
+          : undefined,
       }}
     >
       <img
-        src={node.photoUrl ?? placeholderPhoto}
+        src={node.photoUrl ?? examplePhoto(node.id)}
         alt=""
-        className="block w-full object-cover"
-        style={{ height: isMain ? 84 : 60 }}
+        className="h-full w-full object-cover"
         draggable={false}
       />
 
-      <div className="px-2 py-1.5 pb-2">
+      {/* Everything sits over the photo on a scrim, so the tile can take any
+          shape without the layout caring. */}
+      <div
+        className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-1 px-3 pb-3 pt-6 text-center"
+        style={{
+          // A photo can be bright anywhere, so the band under the text is close
+          // to opaque and only fades out well above it. Cheaper than a blur and
+          // it survives a white sky behind the words.
+          background:
+            'linear-gradient(to top, rgba(28,28,26,0.92) 0%, rgba(28,28,26,0.78) 45%, rgba(28,28,26,0) 100%)',
+          color: STONE,
+          textShadow: '0 1px 2px rgba(28,28,26,0.9)',
+        }}
+      >
         {node.phrase && (
-          // Clamped to two lines on purpose: the collision radii in
-          // useForceGraph are sized to a fixed card height, so an unbounded
-          // phrase would overlap its neighbours.
-          <p className="line-clamp-2 text-center font-ui leading-snug" style={{ fontSize: isMain ? 11 : 10 }}>
+          <p
+            className="line-clamp-2 font-ui font-medium leading-snug"
+            style={{ fontSize: isMain ? 13 : 11, maxWidth: isMain ? '82%' : '90%' }}
+          >
             {node.phrase}
           </p>
         )}
 
-        {/* A main carries no vote buttons and no join count -- its standing is
-            the ring, which is already sized by how many children it drew. */}
         {!isMain && (
-          <div className="mt-1.5 flex items-center gap-1">
+          <div className="flex w-full items-center gap-1" style={{ maxWidth: '84%' }}>
             <VoteButton
               count={node.likes}
               active={node.myVote === 1}
@@ -197,8 +168,8 @@ export function NodeCard({ node, onLike, onDislike, onViewArchived }: NodeCardPr
               e.stopPropagation();
               onViewArchived();
             }}
-            className="mt-1 block w-full text-center font-ui underline"
-            style={{ fontSize: 9 }}
+            className="font-ui underline"
+            style={{ fontSize: 10 }}
           >
             {t('toukou.viewArchived')}
           </button>

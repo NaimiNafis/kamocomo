@@ -70,7 +70,7 @@ supabase/
   migrations/   versioned SQL — schema, RLS, triggers, RPCs (never edit an
                 applied migration; add a new file)
   seed.sql      demo activity types, events, duck spots (places ship in a migration)
-scripts/        generate-qr.ts, seed-demo-places.mjs, seed-full-nodes.mjs, …
+scripts/        generate-qr.ts, seed-demo-places.mjs, seed-demo-ratings.mjs, …
 img/
   marks/        custom duck SVG mark, generated into 10 variants (no stock art)
   kamogawa/     real Kamogawa photos, incl. the shared placeholder image
@@ -87,17 +87,18 @@ URLs, so paths must not be renamed:
 | `/?from=qr&spot=<slug>` | Same, but entered via a hidden photogenic-spot QR |
 | `/toukou?place=<id>` | One place's board of activities (always entered from a place marker) |
 | `/archive` , `/archive?main=<id>` | Cookpad-style history grid, or one main's full history |
-| `/duck` | The 図鑑 — collection grid of the 10 ducks |
+| `/duck` | The 図鑑 — collection grid of the 8 ducks |
 | `/duck/scan?spot=<qr_token>` | Geofenced stamp scan; routes through the intro to `/duck` |
 
 ```
 INTRO (once/session)
   title -> catchphrase -> one continuous flight: Earth (far side) -> Delta
      |
-     v (first visit only) ONBOARDING: nationality / age / gender
+     v (first visit only) ONBOARDING: name (optional) / nationality / age / gender
      |
 MAIN MAP (Google Maps 3D, Kamogawa-corridor-locked)
-  location dot (heading cone) · tutorial · language toggle · map style switch
+  top:          help (left) · language (right) -- nothing else
+  bottom-right: collection · library · 3D|2D · labels  (one column of squares)
   duck spots are the same 10 as the 図鑑 -- find the object, photograph it
   "duck collection" button -> /duck (図鑑)
   markers -- ONE duck per place, drawn as that duck's variant:
@@ -106,11 +107,12 @@ MAIN MAP (Google Maps 3D, Kamogawa-corridor-locked)
        |
        v
   /toukou?place=<id>  (that place's board)        /duck  (the 図鑑)
-  MANY mains, each its own color, subs lighter;    10 numbered entries;
-  subs vote, mains rated by child count;           unfound = silhouette,
-  a "+" node adds a sub; "post an activity"        found = your photo + 保存日;
-  adds a main; 10 dislikes auto-hides a post       photograph one to collect it
-  -> /archive?main=<id>                            -> certificate at 10
+  activities only, no duck node;                   8 numbered entries;
+  MANY mains, each its own color, subs lighter;    unfound = silhouette,
+  subs vote, mains rated by child count;           found = your photo + 保存日;
+  a "+" node adds a sub; "post an activity"        photograph one to collect it
+  adds a main; 10 dislikes auto-hides a post       -> certificate at 8
+  -> /archive?main=<id>
 ```
 
 A duck-QR scan doesn't dead-end on a scan screen: it collects the stamp, then
@@ -208,12 +210,45 @@ without permission the dot simply loses its cone. The dot falls back to the
 Kamogawa Delta when geolocation is denied, so there is always one.
 
 It's drawn in `--kamo-river`, not Google's `#4285F4` — the design rules allow
-only the kamo tokens and bar saturated "tech" colors.
+only the kamo tokens and bar saturated "tech" colors. Concentric rings around
+the dot give it the ripple look, **held still**: `Marker3DElement` rasterizes
+its art to a bitmap on append, so there's no live DOM to animate and SMIL inside
+the SVG never runs. A real pulse would mean rebuilding the marker every frame.
+
+**Proximity glow.** Each fix picks the nearest duck and lights it in one of
+three steps, brighter as you close in. The tightest band matches the ~120 m
+collection geofence, so full brightness means "close enough to collect this"
+rather than an arbitrary threshold — the glow is actionable, not decorative.
+Stepped rather than continuous for the same reason the ripple doesn't move:
+every change costs a marker rebuild, so bands mean it only redraws when you
+cross one, and only the markers whose level changed. Beyond the widest band
+nothing glows, since "nearest" is meaningless from another city.
+
+**Test mode** (the toggle on the 図鑑) also pins the visitor ~150 m south of the
+Delta, so the glow can be demonstrated away from Kyoto. Near a duck rather than
+on one: standing exactly on it makes the effect look binary.
 
 Note that `bounds` constrains where the camera's *centre* may sit, not what
 is visible — at altitude with a tilted camera you see well past it. `maxAltitude`
 is therefore the lever that controls how much surrounding Kyoto is in frame, and
 it's set to 8 km to keep the view on the river.
+
+**Chrome placement.** Only two controls sit at the top: help on the left,
+language on the right. Everything else is one bottom-right column of identical
+44px squares — collection, library, 3D/2D, labels. It used to be scattered
+(archive as a text pill top-left, the collection as a wide labelled button
+across the bottom centre, two segmented pills bottom-right), which meant a
+first-time visitor met five separate shapes before looking at the river.
+
+Both destination buttons are icon-only; their strings survive as accessible
+names. The two settings show their **current** value and flip on tap rather than
+exposing both options at once — half the targets, and the state stays legible.
+
+The labels button carries **two** signals for one state: its icon is struck
+through when labels are hidden, and the button fills when they're shown. It
+briefly used a bare letter instead, which said nothing about the current state
+and — being a letter — undermined the whole reason these buttons are icon-only.
+3D/2D keeps a text label because "3D" and "2D" are already language-neutral.
 
 The **map controls** are two orthogonal choices: which surface (**3D** photoreal
 vs **2D** flat) and whether labels are drawn over it.
@@ -246,9 +281,9 @@ Consequences worth remembering:
   fly-in and sweep are a 3D camera move with no meaning in 2D.
 
 Since the round-3 migration (`20260801120000`) **a place IS a duck spot**, so
-there is exactly **one marker set**: 10 duck markers, one per spot, each in its
+there is exactly **one marker set**: 8 duck markers, one per spot, each in its
 duck's color with the "!" worked into the mark. Before that the map carried 16
-exclamation markers *plus* 10 duck markers — 26 icons over a narrow strip of
+exclamation markers *plus* duck markers — 26 icons over a narrow strip of
 river, which read as clutter and made taps ambiguous. The previous place sets were removed
 outright in `20260801170000`. Markers are unclustered so each is individually
 tappable, and there is only ever one marker under a tap — the duck-spot layer
@@ -265,11 +300,16 @@ the map.
 ### Toukou / place board (`src/screens/ToukouMap`)
 
 Always scoped to one place (`?place=<id>`) — a bare `/toukou` visit bounces
-back to the map. Since round-3 this is the **combined board**: the place's duck
-(its color, its name, whether you've earned its stamp) sits with that spot's
-shared duck photos hanging off it, and each main activity sits with its own
-subs. The duck and the activities are deliberately *separate* clusters — wiring
-every main to the duck made one hairball that implied the duck was their parent.
+back to the map. The board is **activities only**: each main sits with its own
+subs and a "+" to add another.
+
+It briefly also carried the place's duck and that duck's shared photos as a
+separate cluster. That's gone — the 図鑑 is where ducks live now, and a duck
+card on the activity board was answering a question nobody was asking there.
+**Consequence worth knowing:** duck photos no longer have any communal display.
+They still exist in `duck_posts`, but only ever appear in the taker's own
+collection entry, so bringing a shared view back is a rendering job rather than
+a data one.
 It shows **every (non-archived) main at that place**,
 each in its activity-type color, with its subs orbiting in a lighter shade; the
 mains repel into separate clusters. Activities persist across days — they're
@@ -279,8 +319,20 @@ with collision radii sized to each card's full bounding circle and a
 synchronous pre-warm before first paint, so even a busy board opens already
 settled instead of visibly untangling.
 
-A node card shows a photo (or the shared placeholder), its phrase, and a **ring
-that thickens as it earns standing** — nothing at zero, so the rings that exist
+A node card is a **square photo tile** with its words over a scrim, not a photo
+above a text body — a card that has to become a circle can't carry a
+rectangular block underneath it.
+
+**Shape is the rating.** A sub starts as a plain square and its corners round
+off with every like, reaching a full circle at ten. That reads across a whole
+graph in a way a number never does, and it degrades gracefully: you don't need
+to know the scale to see that a rounder card is a better-liked one. It's driven
+by likes alone, not the net score, so a post that attracts some disagreement
+doesn't visibly lose ground it earned — dislikes keep their teeth elsewhere, at
+ten they hide the post entirely. A **main** is born round and half again the
+size, since it's what a board is about.
+
+Cards also carry a **ring that thickens as they earn standing** — nothing at zero, so the rings that exist
 read as signal. The two kinds are rated differently on purpose: a **sub** votes
 (one per user, switchable) and its ring follows the net score, while a **main
 has no vote buttons** and its ring follows how many children it drew. On a sub
@@ -348,10 +400,10 @@ their own detail, so working out which is which is the point:
   a 採取済み mark.
 
 What's collected is a record of what you saw, which a row of identical icons
-could never be. Entries are numbered No.01–No.10 by the canonical
+could never be. Entries are numbered No.01–No.08 by the canonical
 lat-descending ordering, so duck N is the same duck here, on the map and on a
 place's board. Search, three filters (all / found / not found) and a date sort
-sit above a two-column grid; the test-mode toggle and the 10-entry certificate
+sit above a two-column grid; the test-mode toggle and the completion certificate
 stay.
 
 Collecting is **photographing the object where it stands** rather than scanning
@@ -361,7 +413,7 @@ duck" view lives on each place's toukou board, so dropping the graph lost
 nothing — and because the board's photo "+" posts through the same RPC,
 photographing a duck from there also collects it when you're in range.
 
-The ten ducks are generated variants of one body (crest, ribbon, hat, speckles,
+The ducks are generated variants of one body (crest, ribbon, hat, speckles,
 scarf, spotted bill, sitting, raised wing, ducklings, plain) in `lib/ducks.ts`.
 Colour form and silhouette come from the same geometry, which is what makes a
 silhouette an honest clue rather than an unrelated shape. Placeholder quality;
@@ -374,16 +426,16 @@ edit an applied migration, add a new file). Summary:
 
 | Table | Purpose |
 |---|---|
-| `profiles` | One row per anonymous user; nationality/age/gender from onboarding |
+| `profiles` | One row per anonymous user; optional display name plus nationality/age/gender from onboarding. The name is what the toukou detail sheet credits a post to; it's still not an account (no email, no password) |
 | `activity_types` | Ten seeded types (writing, reading, walking, music, yoga, talking, eating, sketching, exercise, resting). Visitors can add more via the `create_activity_type` RPC, which assigns the colour server-side; `created_by` marks those. A user-made type exists only in the language it was typed in |
-| `places` | Riverbank locations, one per duck spot. Each links 1:1 to a `duck_spot` via `duck_spot_id` (`20260801120000`), and a place without one is rejected by a CHECK (`20260801170000`) — so the 10 places *are* the 10 ducks. The earlier 8- and 16-place sets, and the activities posted at them, were deleted in `20260801170000` |
+| `places` | Riverbank locations, one per duck spot. Each links 1:1 to a `duck_spot` via `duck_spot_id` (`20260801120000`), and a place without one is rejected by a CHECK (`20260801170000`) — so the active places *are* the active ducks. The earlier 8- and 16-place sets, and the activities posted at them, were deleted in `20260801170000` |
 | `events` | Daily gathering windows; today's is upserted on read by `ensure_todays_event()` |
 | `activities` | Both mains and subs (`kind`); mains carry `place_id` + `event_id`; also `parent_id`, `activity_type`, `photo_url`, `phrase`, `lat/lng`, `likes`/`dislikes`, `archived`, `hidden` |
 | `votes` | One row per `(user_id, activity_id)`; switching updates it in place |
 | `duck_posts` | Photos posted onto a duck (`duck_spot_id`). Communal on a place's board; your own most recent one also fills your 図鑑 entry. Written only via `collect_duck_by_photo` |
-| `duck_spots` | The 10 physical stamp locations / ducks, each with an opaque `qr_token` |
+| `duck_spots` | The physical duck objects, each with an opaque `qr_token`. **8 active**, all between the Delta and Gojo (`20260802120000`); retired ones are deactivated rather than deleted so they keep their tokens |
 | `stamps` | One row per `(user_id, duck_spot_id)` collected. `earned_at` is the 保存日 shown on a collection entry |
-| `certificates` | Issued once a user has 10 distinct stamps |
+| `certificates` | Issued once a user has a stamp for **every active** duck spot. The count is read from `duck_spots` rather than hardcoded, so resizing the rally can't silently make it unreachable |
 | `reports` | Legacy. In-app reporting was replaced by dislike-driven auto-hide; the table stays so it can return without a schema change |
 | `qr_entries` | Analytics: which photogenic-spot QR drove an app entry |
 
