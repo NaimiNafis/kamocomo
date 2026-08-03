@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIdentityStore } from '../../store/identityStore';
@@ -6,35 +6,51 @@ import {
   clearVote,
   createMain,
   createSub,
+  fetchActivityDetail,
   fetchActivityTypes,
   fetchPlaceBoard,
   getActiveEvent,
   setVote,
   subscribeToToukou,
+  type ActivityDetail,
   type ActivityType,
   type KamoEvent,
   type PlaceBoard,
   type ToukouNode,
 } from '../../lib/toukou';
-import { collectDuckByPhoto } from '../../lib/duck';
-import { duckVariantDataUri } from '../../lib/ducks';
 import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
 import { NodeCard } from './NodeCard';
+import { NodeDetail } from './NodeDetail';
+import { OffscreenMains } from './OffscreenMains';
 import { AddCard } from './AddCard';
 import { Composer, type ComposerResult } from './Composer';
-import { RecenterIcon } from '../../components/icons';
+import { BackIcon, RecenterIcon } from '../../components/icons';
 import { useForceGraph, type GraphNode } from './useForceGraph';
 import { useGraphViewport } from './useGraphViewport';
 
 const EDGE_OFFSET = 4000;
 const ADD_PREFIX = 'add:';
-// The duck and its photos share the graph with the activities, so their ids
-// are namespaced — an activity id and a duck_post id could otherwise collide
-// in the same position map.
-const DUCK_ID = 'duck';
-const DUCK_PHOTO_PREFIX = 'duckphoto:';
+
+/**
+ * Per-card idle drift, keyed off the node's own id so a card breathes the same
+ * way every time you open the board rather than re-rolling on each render.
+ * Small numbers on purpose: this is meant to be noticed only as the board not
+ * being a still image.
+ */
+function driftStyle(id: string): React.CSSProperties {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  const angle = (h % 360) * (Math.PI / 180);
+  const distance = 3 + ((h >> 9) % 4); // 3-6px
+  return {
+    '--drift-x': `${(Math.cos(angle) * distance).toFixed(1)}px`,
+    '--drift-y': `${(Math.sin(angle) * distance).toFixed(1)}px`,
+    '--drift-dur': `${5 + ((h >> 3) % 5)}s`,
+    '--drift-delay': `-${(h >> 6) % 5}s`,
+  } as React.CSSProperties;
+}
 
 type ComposerState = { mode: 'main' } | { mode: 'sub'; parentId: string } | null;
 
@@ -61,47 +77,52 @@ export function ToukouMap() {
   const [composer, setComposer] = useState<ComposerState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  // The long-press sheet. `detailId` is set the instant the hold fires so the
+  // held card can dim straight away, and the fetched post arrives after.
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ActivityDetail | null>(null);
 
-  // Layout: two kinds of cluster, deliberately NOT wired to each other. The
-  // duck sits with its own shared photos, and each main activity sits with its
-  // own subs. Stringing every main to the duck (as this first did) made one
-  // tangled hairball where the duck looked like the parent of activities it has
-  // nothing to do with. The full card data lives in `nodeById`; the layout only
-  // needs id+kind.
+  // Layout: one cluster per main activity -- the main, its subs, and a "+" to
+  // add another. The full card data lives in `nodeById`; the layout only needs
+  // id+kind.
   const cards = board?.nodes ?? [];
   const nodeById = new Map(cards.map((n) => [n.id, n]));
   const mains = cards.filter((n) => n.kind === 'main');
-  const duck = board?.duck ?? null;
-  const duckPhotos = duck?.photos ?? [];
-
   const layoutNodes: GraphNode[] = [
-    ...(duck ? [{ id: DUCK_ID, kind: 'main' as const }] : []),
     ...cards.map((n) => ({ id: n.id, kind: n.kind })),
     ...mains.map((m) => ({ id: `${ADD_PREFIX}${m.id}`, kind: 'addsub' as const })),
-    ...duckPhotos.map((p) => ({ id: `${DUCK_PHOTO_PREFIX}${p.id}`, kind: 'sub' as const })),
-    ...(duck ? [{ id: `${ADD_PREFIX}${DUCK_ID}`, kind: 'addsub' as const }] : []),
   ];
   const layoutEdges = [
     ...(board?.edges ?? []),
     ...mains.map((m) => ({ source: `${ADD_PREFIX}${m.id}`, target: m.id })),
-    ...(duck
-      ? [
-          ...duckPhotos.map((p) => ({ source: `${DUCK_PHOTO_PREFIX}${p.id}`, target: DUCK_ID })),
-          { source: `${ADD_PREFIX}${DUCK_ID}`, target: DUCK_ID },
-        ]
-      : []),
   ];
 
-  const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
-  const { viewportRef, cx, cy, view, resetView, containerHandlers } = useGraphViewport(
-    positions,
-    { startDrag, drag, endDrag },
-    // Arrive looking at the place's duck -- it's the anchor of the board, so
-    // it's what should be under your eyes when the opening glide settles.
-    duck ? DUCK_ID : undefined,
+  // Where the opening glide lands: the main that drew the most people. On a
+  // board you've never seen, the busiest cluster is the most useful thing to be
+  // shown first -- and it's stable, so returning to a place lands you in the
+  // same spot rather than somewhere arbitrary.
+  const busiestMain = mains.reduce<ToukouNode | null>(
+    (best, m) => (!best || m.subCount > best.subCount ? m : best),
+    null,
   );
+
+  const { positions, startDrag, drag, endDrag } = useForceGraph(layoutNodes, layoutEdges);
+  const {
+    viewportRef,
+    size,
+    cx,
+    cy,
+    view,
+    resetView,
+    atFitView,
+    focusOn,
+    pressedId,
+    containerHandlers,
+  } = useGraphViewport(
+      positions,
+      { startDrag, drag, endDrag },
+      { focusId: busiestMain?.id, onLongPress: (id) => setDetailId(id) },
+    );
 
   // Every place marker passes ?place=; a bare /toukou visit has nowhere to go.
   useEffect(() => {
@@ -141,7 +162,7 @@ export function ToukouMap() {
         if (!cancelled) setStatus('error');
         return;
       }
-      void fetchActivityTypes().then((v) => !cancelled && setActivityTypes(v)).catch(() => {});
+      void fetchActivityTypes(userId).then((v) => !cancelled && setActivityTypes(v)).catch(() => {});
     })();
     return () => {
       cancelled = true;
@@ -161,6 +182,24 @@ export function ToukouMap() {
       unsubscribe();
     };
   }, [userId, placeId, event, refetchBoard]);
+
+  // Held a card: pull the full post. A failure just closes the sheet again --
+  // it's an extra look at something already on screen, so an error state here
+  // would be more interruption than the feature is worth.
+  useEffect(() => {
+    if (!detailId) return;
+    let cancelled = false;
+    fetchActivityDetail(detailId)
+      .then((d) => {
+        if (cancelled) return;
+        if (d) setDetail(d);
+        else setDetailId(null);
+      })
+      .catch(() => !cancelled && setDetailId(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [detailId]);
 
   async function handleVote(node: ToukouNode, value: 1 | -1) {
     if (!userId) return;
@@ -207,35 +246,11 @@ export function ToukouMap() {
     }
   }
 
-  /** Post a photo onto this place's duck. Same call the collection uses: the
-   * photo always joins the shared feed here, and if you happen to be standing
-   * within range it also fills your own 図鑑 entry for that duck. */
-  async function handlePhotoChosen(file: File | undefined) {
-    if (photoInputRef.current) photoInputRef.current.value = '';
-    if (!file || !userId || !duck) return;
-    setUploadingPhoto(true);
-    try {
-      await collectDuckByPhoto(userId, file, duck.id);
-      await refetchBoard();
-    } catch {
-      /* swallow; the board just won't gain the photo */
-    } finally {
-      setUploadingPhoto(false);
-    }
-  }
-
   const positionOf = (id: string) => positions.get(id) ?? { x: 0, y: 0 };
   const placeName = board ? (isJa ? board.placeNameJa : board.placeNameEn) : '';
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-kamo-stone">
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => void handlePhotoChosen(e.target.files?.[0])}
-      />
       <div ref={viewportRef} className="absolute inset-0 touch-none" {...containerHandlers}>
         <div
           className="absolute left-0 top-0 origin-top-left"
@@ -283,78 +298,12 @@ export function ToukouMap() {
                 className={`absolute -translate-x-1/2 -translate-y-1/2 ${extra ?? ''}`}
                 style={{ left: pos.x, top: pos.y }}
               >
-                {children}
+                <div className="kamo-drift" style={driftStyle(ln.id)}>{children}</div>
               </div>
             );
 
-            // The duck at the centre.
-            if (ln.id === DUCK_ID && duck) {
-              return wrap(
-                <div
-                  className="flex w-32 flex-col items-center gap-1 rounded-2xl px-2 py-3 shadow-lg"
-                  style={{ backgroundColor: duck.color, color: readableOn(duck.color) }}
-                >
-                  <img
-                    src={duckVariantDataUri(duck.number - 1, duck.color)}
-                    alt=""
-                    className="h-14 w-14"
-                    draggable={false}
-                  />
-                  {/* Wraps rather than truncating -- "Kamogawa Delta" reading
-                      as "Kamogawa …" told you less than the space allowed. */}
-                  <span className="text-balance text-center font-display text-sm leading-tight">
-                    {isJa ? duck.nameJa : duck.nameEn}
-                  </span>
-                  {/* Earned shows a mark, not a sentence; the instruction line
-                      that used to sit here was the same on every unstamped duck
-                      and pushed the name around. The label keeps it readable to
-                      a screen reader. */}
-                  {duck.earned && (
-                    <span className="font-ui text-[11px] opacity-80" title={t('duck.stamped')}>
-                      ✓
-                    </span>
-                  )}
-                </div>,
-                'cursor-grab active:cursor-grabbing',
-              );
-            }
-
-            // One of the duck's shared photos.
-            if (ln.id.startsWith(DUCK_PHOTO_PREFIX)) {
-              const photo = duckPhotos.find(
-                (p) => p.id === ln.id.slice(DUCK_PHOTO_PREFIX.length),
-              );
-              if (!photo) return null;
-              return wrap(
-                <div
-                  className="w-24 overflow-hidden rounded-2xl shadow-lg"
-                  style={{ backgroundColor: duck?.color }}
-                >
-                  <img
-                    src={photo.photoUrl}
-                    alt=""
-                    className="block aspect-square w-full object-cover"
-                    draggable={false}
-                  />
-                </div>,
-                'cursor-grab active:cursor-grabbing',
-              );
-            }
-
             if (ln.kind === 'addsub') {
               const targetId = ln.id.slice(ADD_PREFIX.length);
-              // The duck's "+" adds a photo; a main's "+" adds a sub.
-              if (targetId === DUCK_ID) {
-                return wrap(
-                  <AddCard
-                    color={duck?.color ?? '#E0885E'}
-                    label={t('duck.addPhoto')}
-                    testId="duck-add"
-                    disabled={uploadingPhoto}
-                    onClick={() => photoInputRef.current?.click()}
-                  />,
-                );
-              }
               const main = nodeById.get(targetId);
               return wrap(
                 <AddCard
@@ -376,17 +325,34 @@ export function ToukouMap() {
                 className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
                 style={{ left: pos.x, top: pos.y }}
               >
-                <NodeCard
-                  node={node}
-                  onLike={() => void handleVote(node, 1)}
-                  onDislike={() => void handleVote(node, -1)}
-                  onViewArchived={() => navigate(`/archive?main=${node.id}`)}
-                />
+                <div className="kamo-drift" style={driftStyle(ln.id)}>
+                  <NodeCard
+                    node={node}
+                    pressed={pressedId === node.id}
+                    dimmed={detailId === node.id}
+                    onLike={() => void handleVote(node, 1)}
+                    onDislike={() => void handleVote(node, -1)}
+                    onViewArchived={() => navigate(`/archive?main=${node.id}`)}
+                  />
+                </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Off-screen mains, as tappable markers on the edge of the frame. */}
+      {status === 'ready' && !detailId && (
+        <div className="pointer-events-none absolute inset-0">
+          <OffscreenMains
+            mains={mains}
+            positions={positions}
+            view={view}
+            size={size}
+            onSelect={focusOn}
+          />
+        </div>
+      )}
 
       <div className="absolute inset-x-0 top-0 z-20">
         <StaleBanner show={stale} />
@@ -394,12 +360,15 @@ export function ToukouMap() {
 
       {/* Top bar: back + place name + language */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-4">
+        {/* The chevron alone: "back" is the most universally understood control
+            on a phone, and the words were the longest string in the bar. */}
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="pointer-events-auto shrink-0 rounded-full border border-kamo-ink/15 bg-kamo-stone/90 px-3 py-1.5 font-ui text-xs text-kamo-ink shadow-sm backdrop-blur"
+          aria-label={t('mainMap.back')}
+          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-kamo-ink/15 bg-kamo-stone/90 text-kamo-ink shadow-sm backdrop-blur"
         >
-          ‹ {t('mainMap.back')}
+          <BackIcon size={18} />
         </button>
         {placeName && (
           <span className="pointer-events-none truncate rounded-full bg-kamo-stone/90 px-3 py-1.5 font-display text-sm text-kamo-ink shadow-sm backdrop-blur">
@@ -446,19 +415,33 @@ export function ToukouMap() {
         </div>
       )}
 
+      {/* Press-and-hold has no affordance of its own, so the board says so
+          once, quietly, and only while there's something to hold. */}
+      {status === 'ready' && mains.length > 0 && !detailId && (
+        <p className="pointer-events-none absolute inset-x-0 bottom-[4.5rem] text-center font-ui text-[11px] text-kamo-ink/45">
+          {t('toukou.holdHint')}
+        </p>
+      )}
+
       {/* Place-level "post an activity" (the daily gathering is always live) */}
       {status === 'ready' && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 p-4">
-          {/* The pan clamp stops you leaving the graph behind; this puts it all
-              back in frame in one tap when you've wandered. */}
-          <button
-            type="button"
-            onClick={resetView}
-            aria-label={t('toukou.recenter')}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-kamo-ink/15 bg-kamo-stone/90 text-kamo-ink shadow-lg backdrop-blur"
-          >
-            <RecenterIcon />
-          </button>
+          {/* Says what it does, and only turns up once there's something to
+              undo. An icon-only circle sitting there permanently read as
+              decoration -- people didn't know what it was for until they'd
+              already got lost, which is the one moment it can't explain
+              itself. Appearing the instant you move is the explanation. */}
+          {!atFitView && (
+            <button
+              type="button"
+              onClick={resetView}
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-kamo-ink/15 bg-kamo-stone/90 py-2.5 pl-3 pr-4 font-ui text-sm font-medium text-kamo-ink shadow-lg backdrop-blur transition-transform duration-150 active:scale-[0.97]"
+              style={{ animation: 'fadeIn 220ms ease-out' }}
+            >
+              <RecenterIcon size={16} />
+              {t('toukou.recenter')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -472,11 +455,30 @@ export function ToukouMap() {
         </div>
       )}
 
+      {/* Matched on id rather than cleared on close, so a stale post can never
+          flash when the next card is held. */}
+      {detail && detail.id === detailId && (
+        <NodeDetail
+          detail={detail}
+          node={nodeById.get(detail.id)}
+          onLike={() => {
+            const n = nodeById.get(detail.id);
+            if (n) void handleVote(n, 1);
+          }}
+          onDislike={() => {
+            const n = nodeById.get(detail.id);
+            if (n) void handleVote(n, -1);
+          }}
+          onClose={() => setDetailId(null)}
+        />
+      )}
+
       {composer && (
         <Composer
           mode={composer.mode}
           activityTypes={activityTypes}
           onTypeCreated={(type) => setActivityTypes((prev) => [...prev, type])}
+          onTypeRemoved={(id) => setActivityTypes((prev) => prev.filter((x) => x.id !== id))}
           submitting={submitting}
           error={submitError}
           onSubmit={(result) => void handleComposerSubmit(result)}
@@ -486,16 +488,6 @@ export function ToukouMap() {
 
     </div>
   );
-}
-
-/** Dark or light text depending on the background's luminance, so the duck's
- * name stays legible on both the pale and the saturated duck colors. */
-function readableOn(hex: string): string {
-  const v = hex.replace('#', '');
-  const r = parseInt(v.slice(0, 2), 16);
-  const g = parseInt(v.slice(2, 4), 16);
-  const b = parseInt(v.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#1C1C1A' : '#E9E4D8';
 }
 
 function applyVote(node: ToukouNode, value: 1 | -1): ToukouNode {

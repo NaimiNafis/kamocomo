@@ -9,8 +9,9 @@ import {
 } from '../../lib/archive';
 import { cachedFetch } from '../../lib/cache';
 import { LanguageToggle } from '../../components/LanguageToggle';
+import { BackIcon } from '../../components/icons';
 import { StaleBanner } from '../../components/StaleBanner';
-import placeholderPhoto from '../../../img/kamogawa/placeholder-riverbank.jpg?url';
+import { examplePhoto } from '../../lib/photos';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -32,17 +33,19 @@ export function Archive() {
           <button
             type="button"
             onClick={() => setParams({}, { replace: false })}
-            className="font-ui text-xs text-kamo-ink"
+            aria-label={t('archive.backToArchive')}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-kamo-ink"
           >
-            ‹ {t('archive.backToArchive')}
+            <BackIcon size={18} />
           </button>
         ) : (
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="font-ui text-xs text-kamo-ink"
+            aria-label={t('mainMap.back')}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-kamo-ink"
           >
-            ‹ {t('mainMap.back')}
+            <BackIcon size={18} />
           </button>
         )}
         <LanguageToggle />
@@ -97,7 +100,7 @@ function ArchiveGrid({ onOpen }: { onOpen: (id: string) => void }) {
             onClick={() => onOpen(m.id)}
             className="overflow-hidden rounded-xl bg-white/70 text-left shadow-sm"
           >
-            <PhotoOrPlaceholder url={m.photoUrl} className="aspect-square w-full" />
+            <PhotoOrPlaceholder id={m.id} url={m.photoUrl} className="aspect-square w-full" />
             <div className="p-2">
               <p className="line-clamp-2 font-ui text-xs text-kamo-ink">{m.phrase}</p>
               <div className="mt-1.5 flex items-center gap-1.5">
@@ -152,7 +155,7 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
       <StaleBanner show={stale} />
       <div className="p-4">
       <div className="overflow-hidden rounded-2xl bg-white/70 shadow-sm">
-        <PhotoOrPlaceholder url={main.photoUrl} className="h-48 w-full" />
+        <PhotoOrPlaceholder id={main.id} url={main.photoUrl} className="h-48 w-full" />
         <div className="p-4">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: main.color }} />
@@ -180,6 +183,7 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
           {subs.map((s) => (
             <li key={s.id} className="flex gap-3 rounded-xl bg-white/60 p-2 shadow-sm">
               <PhotoOrPlaceholder
+                id={s.id}
                 url={s.photoUrl}
                 className="h-16 w-16 shrink-0 rounded-lg"
               />
@@ -203,13 +207,22 @@ function ArchiveDetail({ mainId }: { mainId: string }) {
   );
 }
 
-/** A post's photo, or the shared riverbank placeholder for photo-less posts
- * (§C6) -- the activity type is already shown alongside, so the placeholder
- * doesn't need to repeat it. */
-function PhotoOrPlaceholder({ url, className }: { url: string | null; className?: string }) {
+/** A post's photo, or one of the example riverbank shots for photo-less posts
+ * (§C6) -- keyed on the post's id, so each falls back to a different picture
+ * and an archive of them doesn't look like one image repeated. The activity
+ * type is shown alongside, so the stand-in doesn't need to repeat it. */
+function PhotoOrPlaceholder({
+  id,
+  url,
+  className,
+}: {
+  id: string;
+  url: string | null;
+  className?: string;
+}) {
   return (
     <img
-      src={url ?? placeholderPhoto}
+      src={url ?? examplePhoto(id)}
       alt=""
       className={`object-cover ${className ?? ''}`}
       draggable={false}

@@ -49,3 +49,51 @@ h3 {
     transform: scale(1);
   }
 }
+
+/* A card's idle drift on the toukou board.
+ *
+ * The layout is anchored, which stopped cards fleeing each other but also left
+ * the board looking like a screenshot. This is the smallest thing that reads as
+ * alive: a few pixels of slow travel, per-card direction and timing so nothing
+ * pulses in unison. It runs on the compositor and never re-renders React, which
+ * is why it isn't part of the simulation.
+ */
+@keyframes kamoDrift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(var(--drift-x), var(--drift-y), 0);
+  }
+}
+
+.kamo-drift {
+  animation: kamoDrift var(--drift-dur) ease-in-out var(--drift-delay) infinite alternate;
+  will-change: transform;
+}
+
+/* Bouncy, in the iOS press-and-hold sense: overshoots slightly and settles. */
+@keyframes kamoPop {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.kamo-pop {
+  animation: kamoPop 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kamo-drift {
+    animation: none;
+  }
+  .kamo-pop {
+    animation-duration: 150ms;
+    animation-timing-function: ease-out;
+  }
+}

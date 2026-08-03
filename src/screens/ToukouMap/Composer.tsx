@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { createActivityType, type ActivityType } from '../../lib/toukou';
+import { createActivityType, deleteActivityType, type ActivityType } from '../../lib/toukou';
 
 export interface ComposerResult {
   activityTypeId: string | null;
@@ -14,6 +14,8 @@ interface ComposerProps {
   /** A type the visitor just invented, so the picker can show it immediately
    * without waiting for a refetch. */
   onTypeCreated: (type: ActivityType) => void;
+  /** One they took back again. */
+  onTypeRemoved: (id: string) => void;
   submitting: boolean;
   error: boolean;
   onSubmit: (result: ComposerResult) => void;
@@ -29,6 +31,7 @@ export function Composer({
   mode,
   activityTypes,
   onTypeCreated,
+  onTypeRemoved,
   submitting,
   error,
   onSubmit,
@@ -65,6 +68,8 @@ export function Composer({
     }
   }
 
+  const [removeNote, setRemoveNote] = useState<string | null>(null);
+
   const photoPreview = useMemo(
     () => (photoFile ? URL.createObjectURL(photoFile) : null),
     [photoFile],
@@ -78,6 +83,26 @@ export function Composer({
     phrase.trim().length > 0 &&
     photoFile !== null &&
     (mode === 'sub' || activityTypeId !== null);
+
+  /**
+   * Take back a type this device added. The server deletes it if nothing has
+   * been posted with it and retires it if something has -- either way it leaves
+   * the picker, so both are treated the same here.
+   *
+   * Anything else says so out loud. This used to swallow every refusal, which
+   * meant the common case -- adding a type while posting, then trying to remove
+   * it once it had that one post attached -- looked exactly like a dead button.
+   */
+  async function removeType(id: string) {
+    setRemoveNote(null);
+    const status = await deleteActivityType(id).catch(() => 'failed' as const);
+    if (status === 'deleted' || status === 'retired') {
+      onTypeRemoved(id);
+      if (activityTypeId === id) setActivityTypeId(null);
+      return;
+    }
+    setRemoveNote(status === 'not_yours' ? t('composer.removeNotYours') : t('composer.removeFailed'));
+  }
 
   function handleSubmit() {
     if (!canSubmit) return;
@@ -97,25 +122,46 @@ export function Composer({
               {t('composer.activityType')}
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {activityTypes.map((type) => (
-                <button
-                  key={type.id}
-                  type="button"
-                  onClick={() => setActivityTypeId(type.id)}
-                  className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-ui text-sm"
-                  style={{
-                    borderColor: activityTypeId === type.id ? type.color : 'rgba(28,28,26,0.2)',
-                    backgroundColor: activityTypeId === type.id ? type.color : 'transparent',
-                    color: activityTypeId === type.id ? '#E9E4D8' : '#1C1C1A',
-                  }}
-                >
+              {activityTypes.map((type) => {
+                const selected = activityTypeId === type.id;
+                return (
                   <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: type.color }}
-                  />
-                  {isJa ? type.name_ja : type.name_en}
-                </button>
-              ))}
+                    key={type.id}
+                    className="flex items-center rounded-full border pr-1 font-ui text-sm"
+                    style={{
+                      borderColor: selected ? type.color : 'rgba(28,28,26,0.2)',
+                      backgroundColor: selected ? type.color : 'transparent',
+                      color: selected ? '#E9E4D8' : '#1C1C1A',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActivityTypeId(type.id)}
+                      className="flex items-center gap-1.5 py-1.5 pl-3 pr-1.5"
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: type.color }}
+                      />
+                      {isJa ? type.name_ja : type.name_en}
+                    </button>
+                    {/* Only on types this device added -- the seeded ones aren't
+                        anyone's to remove. */}
+                    {type.mine && (
+                      <button
+                        type="button"
+                        onClick={() => void removeType(type.id)}
+                        aria-label={t('composer.removeType')}
+                        title={t('composer.removeType')}
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-xs transition-transform duration-150 active:scale-90"
+                        style={{ color: selected ? '#E9E4D8' : 'rgba(28,28,26,0.55)' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
               <button
                 type="button"
                 onClick={() => setCustomOpen((v) => !v)}
@@ -125,6 +171,9 @@ export function Composer({
                 + {t('composer.otherType')}
               </button>
             </div>
+            {removeNote && (
+              <p className="mt-2 font-ui text-xs text-kamo-sunset">{removeNote}</p>
+            )}
 
             {customOpen && (
               <div className="mt-2 flex gap-2">

@@ -51,7 +51,12 @@ duck-spot QR stamp rally. Live at https://kamokamo.vercel.app.
 - Mobile-first; test at 390×844 before desktop.
 - Colors: only the `docs/ARCHITECTURE.md` tokens (`--kamo-indigo`, `--kamo-river`, `--kamo-moss`, `--kamo-stone`, `--kamo-sand`, `--kamo-sunset`, `--kamo-ink`). No saturated "tech" colors, no default Tailwind palette colors in final UI.
 - Type: Shippori Mincho for display, Noto Sans JP for UI.
-- Motion: calm — fades and eased camera flights, nothing bouncy.
+- Motion: calm — fades and eased camera flights, nothing bouncy. **One
+  exception:** press-and-hold on a toukou node. The card sinks under the finger
+  for the length of the hold and springs back past its own size as the detail
+  sheet pops in (`.kamo-pop`, a back-out curve). There the spring *is* the
+  feedback — a hold with no overshoot reads as a hang. Don't spread it to other
+  interactions.
 - The app is Japanese-first; `ja.json` is never allowed to lag behind `en.json`.
 - No stock/AI-generated imagery in the UI. Real photos live in `img/kamogawa/`; custom marks (duck, exclamation) in `img/marks/` as SVG.
 
