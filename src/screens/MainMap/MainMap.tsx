@@ -7,6 +7,7 @@ import {
   createMarkerLayer,
   createUserLocationMarker,
   flyIntroSequence,
+  INTRO_FLIGHT_MS,
   flyToHomeView,
   flyToPlace,
   HOME_LOOK,
@@ -51,6 +52,9 @@ const MAP_HINT_AUTO_DISMISS_MS = 4000;
 /** Title + catchphrase + the 7s flight, plus slack. The upper bound on how
  * long the intro can hold the screen when there's no Skip to escape with. */
 const INTRO_WATCHDOG_MS = TITLE_HOLD_MS + CATCHPHRASE_HOLD_MS + 12_000;
+/** How far before the flight ends the controls start fading up, so they're
+ * in place by the time the camera stops rather than arriving after it. */
+const CHROME_LEAD_MS = 900;
 
 /**
  * Full-screen Google Maps 3D globe, constrained to the Kamogawa corridor
@@ -87,6 +91,21 @@ export function MainMap() {
   const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const pendingCameraRef = useRef<{ lat: number; lng: number; range: number } | null>(null);
   const headingAskedRef = useRef(false);
+  /**
+   * The controls appear as the flight lands, not a beat after it.
+   *
+   * They used to wait on `introPhase === 'done'`, which is set from the map's
+   * `gmp-animationend` -- and that fires an appreciable moment after the camera
+   * has visibly stopped. The river would sit there, still, with nothing to
+   * press, which reads as the app having hung rather than having arrived.
+   *
+   * So they're timed off the flight's own known length instead, appearing just
+   * before it ends and fading up as it settles. Everything that would interrupt
+   * -- onboarding, the tutorial, the map hint -- still waits for 'done', since
+   * none of those should open over a moving camera.
+   */
+  const [chromeReady, setChromeReady] = useState(false);
+
   const [introPhase, setIntroPhase] = useState<IntroPhase | 'done'>(() =>
     sessionStorage.getItem(HAS_SEEN_INTRO_KEY) === 'true' ? 'done' : 'title',
   );
@@ -306,6 +325,12 @@ export function MainMap() {
               setTimeout(() => {
                 if (finished || !map) return;
                 setIntroPhase('reveal');
+                timers.push(
+                  setTimeout(
+                    () => !signal.cancelled && setChromeReady(true),
+                    Math.max(0, INTRO_FLIGHT_MS - CHROME_LEAD_MS),
+                  ),
+                );
                 void flyIntroSequence(map, signal).then(() => {
                   if (!signal.cancelled) finishIntro();
                 });
@@ -508,7 +533,7 @@ export function MainMap() {
     if (preview) setPlacePopup({ placeId, preview });
   }
 
-  const showChrome = introPhase === 'done';
+  const showChrome = introPhase === 'done' || chromeReady;
 
   return (
     <div className="relative h-full w-full">
@@ -546,7 +571,10 @@ export function MainMap() {
           {/* Only two things sit up top: help on the left, language on the
               right. Everything else moved into the column below, so the first
               thing a visitor sees is the river rather than a control panel. */}
-          <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-4">
+          <div
+            className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-4"
+            style={{ animation: 'fadeIn 700ms ease-out both' }}
+          >
             <button
               type="button"
               onClick={openTutorial}
@@ -558,7 +586,10 @@ export function MainMap() {
             <LanguageToggle />
           </div>
 
-          <div className="absolute bottom-4 right-4 z-10">
+          <div
+            className="absolute bottom-4 right-4 z-10"
+            style={{ animation: 'fadeIn 700ms ease-out both' }}
+          >
             <MapControls
               onOpenCollection={() => navigate('/duck')}
               onOpenLibrary={() => navigate('/archive')}

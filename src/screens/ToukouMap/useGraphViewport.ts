@@ -298,6 +298,15 @@ export function useGraphViewport(
     return { dist: Math.hypot(a.x - b.x, a.y - b.y), midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2 };
   }
 
+  /** Wipe every trace of the current gesture. Safe to call at any time; the
+   * board goes back to waiting for a fresh touch. */
+  function resetGesture(pointerId?: number) {
+    gesture.current = null;
+    if (pointerId !== undefined) releaseCapture(pointerId);
+    else for (const id of pointers.current.keys()) releaseCapture(id);
+    pointers.current.clear();
+  }
+
   function releaseCapture(pointerId: number) {
     try {
       viewportRef.current?.releasePointerCapture(pointerId);
@@ -335,6 +344,9 @@ export function useGraphViewport(
       drag.startDrag(nodeId);
       if (onLongPress) {
         setPressedId(nodeId);
+        // Read off the event now rather than inside the timer: the id is all
+        // the callback needs, and it shouldn't hold the event object open.
+        const pointerId = e.pointerId;
         longPress.current = {
           x: e.clientX,
           y: e.clientY,
@@ -347,7 +359,15 @@ export function useGraphViewport(
             // Release the node first, or it stays pinned to the finger behind
             // the detail sheet that's about to open over it.
             drag.endDrag(nodeId);
-            gesture.current = null;
+            // Then forget the gesture entirely, finger included.
+            //
+            // The sheet opens over the board, and the pointerup that ends this
+            // touch is delivered to it rather than here -- so this pointer was
+            // never removed from the map. It sat there, and the next touch
+            // counted as a SECOND finger: every swipe became a pinch, and no
+            // hold could start, because the two-pointer branch returns first.
+            // That's the "after I close a popup nothing works" bug.
+            resetGesture(pointerId);
             onLongPress(nodeId);
           }, LONG_PRESS_MS),
         };
@@ -486,6 +506,13 @@ export function useGraphViewport(
       onPointerMove,
       onPointerUp,
       onPointerCancel: onPointerUp,
+      // iOS can take a captured pointer back mid-gesture. Without this the
+      // pointer stays in the map and poisons every touch after it.
+      onLostPointerCapture: (e: React.PointerEvent) => {
+        cancelLongPress();
+        pointers.current.delete(e.pointerId);
+        if (pointers.current.size === 0) gesture.current = null;
+      },
       onWheel,
     },
   };

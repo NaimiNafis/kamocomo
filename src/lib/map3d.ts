@@ -227,7 +227,10 @@ export function flyToHomeView(map: Map3D, durationMillis = 1200): Promise<void> 
 /** How long the whole Earth-to-Kamogawa flight takes. It's one continuous
  * move, so this is the only timing knob — raise it for a slower, statelier
  * sweep, lower it to get to the map faster. */
-const INTRO_FLIGHT_MS = 7000;
+/** Exported so the main screen can bring its controls up as the flight lands,
+ * rather than waiting on `gmp-animationend`, which fires after the camera has
+ * already visibly stopped. */
+export const INTRO_FLIGHT_MS = 7000;
 
 /**
  * §5.1 intro flight: the far side of Earth straight down to the Kamogawa
