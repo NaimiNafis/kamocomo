@@ -21,10 +21,12 @@ export interface DuckNode {
    * sheet shows -- so both surfaces pick the same silhouette for a duck. */
   number: number;
   earned: boolean; // main only -- whether this user has this duck's stamp
-  /** Sub: the shared photo. Main: YOUR photo of this duck, which is what makes
-   * a main the same stamp slot the collection sheet shows. Null either way when
-   * there isn't one. */
+  /** Sub: the shared photo. Main: your own photo of this duck, kept so the
+   * duck's sheet can show your stamp. Null either way when there isn't one. */
   photoUrl: string | null;
+  /** Sub only: this photo is yours. The board rings it so you can pick your
+   * own out of the orbit at a glance. */
+  mine: boolean;
   // Subs only -- a duck isn't anyone's post, so mains carry no vote.
   likes: number;
   dislikes: number;
@@ -42,9 +44,8 @@ export interface DuckGraph {
  * every non-hidden duck photo as a sub of its duck.
  *
  * A main carries this user's own state -- whether they've earned the stamp and
- * which of their photos fills it -- because on the board a main IS their stamp
- * slot, the same one the sheet shows. Subs carry vote counts and this user's
- * own vote, so a photo can be judged where it's seen.
+ * which of their photos of it exists -- so the duck's sheet can show it. Subs
+ * carry vote counts, this user's own vote, and whether the photo is theirs.
  */
 export async function fetchDuckGraph(userId: string): Promise<DuckGraph> {
   const [
@@ -86,6 +87,7 @@ export async function fetchDuckGraph(userId: string): Promise<DuckGraph> {
     number: i + 1,
     earned: earned.has(s.id),
     photoUrl: myPhoto.get(s.id) ?? null,
+    mine: false,
     likes: 0,
     dislikes: 0,
     myVote: null,
@@ -104,6 +106,7 @@ export async function fetchDuckGraph(userId: string): Promise<DuckGraph> {
       number: 0,
       earned: false,
       photoUrl: p.photo_url,
+      mine: p.author_id === userId,
       likes: p.likes,
       dislikes: p.dislikes,
       myVote: voted.get(p.id) ?? null,

@@ -237,20 +237,25 @@ export function Duck() {
 
       {status === 'ready' && (
         <>
-          {/* Two across, four down for the eight ducks -- but grid-cols-2 rather
-              than a fixed 2x4, so a ninth spot would simply add a row. */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-32 pt-4">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-              {entries.map((entry) => (
-                <StampSlot
-                  key={entry.id}
-                  entry={entry}
-                  name={isJa ? entry.nameJa : entry.nameEn}
-                  busy={busyId === entry.id}
-                  dateLabel={entry.collectedAt ? fmtDate(entry.collectedAt) : null}
-                  onPhoto={() => pickPhotoFor(entry.id)}
-                />
-              ))}
+          {/* One card holding all eight, at a fixed width and centred.
+              A grid that sized itself to the viewport put the slots somewhere
+              different on every phone; a card of its own means the sheet is the
+              same object wherever you open it, with the screen just giving it
+              more or less room around the edges. */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-32 pt-4">
+            <div className="mx-auto w-fit rounded-3xl border border-kamo-ink/10 bg-white/50 px-5 py-6 shadow-sm">
+              <div className="grid grid-cols-2 justify-center gap-x-6 gap-y-6">
+                {entries.map((entry) => (
+                  <StampSlot
+                    key={entry.id}
+                    entry={entry}
+                    name={isJa ? entry.nameJa : entry.nameEn}
+                    busy={busyId === entry.id}
+                    dateLabel={entry.collectedAt ? fmtDate(entry.collectedAt) : null}
+                    onPhoto={() => pickPhotoFor(entry.id)}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
@@ -332,9 +337,9 @@ function StampSlot({
       onClick={onPhoto}
       disabled={busy}
       aria-label={collected ? name : `${t('collection.addTo')} ${name}`}
-      className="flex flex-col items-center gap-2 text-center transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
+      className="flex w-[8.25rem] flex-col items-center gap-2 text-center transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
     >
-      <span className="relative block aspect-square w-full max-w-[9.5rem]">
+      <span className="relative block h-[8.25rem] w-[8.25rem]">
         <span
           className="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
           style={{
