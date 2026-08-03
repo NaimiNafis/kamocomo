@@ -41,7 +41,7 @@
     "namePlaceholder": "What should we call you?"
   },
   "mainMap": {
-    "tutorialButton": "Tutorial",
+    "tutorialButton": "Help",
     "archiveButton": "Kamogawa Log",
     "back": "Back to map",
     "qrWelcome": "You found a hidden entrance to the Kamogawa",
@@ -139,29 +139,34 @@
     "close": "Close"
   },
   "tutorial": {
-    "heading": "How it works",
+    "heading": "Help",
     "previous": "Previous",
     "next": "Next",
     "slides": [
       {
-        "title": "What's happening now",
-        "body": "A live map of what people are doing along the Kamogawa."
+        "title": "Welcome to the Kamogawa",
+        "body": "A map of how people spend their time along the river."
       },
       {
         "title": "Tap a duck",
-        "body": "Each duck is a real spot on the river. Tap one to see what's happening there."
+        "body": "Take a look at how people are spending time at that spot."
       },
       {
-        "title": "See the spot",
-        "body": "The duck sits in the middle. Activities at that spot circle around it."
+        "title": "Reading the shapes",
+        "body": "◯ : everyday life on the Kamogawa",
+        "body2": "⬜︎ : joining in with it"
       },
       {
-        "title": "Join in",
-        "body": "Add to someone's activity, or post your own. A photo is all it takes."
+        "title": "Tap the +",
+        "body": "Post something and join in with everyday life on the river."
       },
       {
-        "title": "Collect the ducks",
-        "body": "Find a duck object by the river and photograph it. Collect them all for a certificate."
+        "title": "Kamo Collection",
+        "body": "Go looking for the ducks along the riverbank."
+      },
+      {
+        "title": "Kamogawa Log",
+        "body": "How the river has been lived in, gathering here over time."
       }
     ]
   },

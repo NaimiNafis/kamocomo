@@ -1,47 +1,43 @@
 import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../components/icons';
-import { EXAMPLE_PHOTOS } from '../../lib/photos';
+import welcome from '../../../img/help/welcome-to-kamogawa.png?url';
+import kamoTap from '../../../img/help/kamo-tap.png?url';
+import mainAndSub from '../../../img/help/main-and-sub-activity.png?url';
+import plusTap from '../../../img/help/plus-tap.png?url';
+import kamoCollection from '../../../img/help/kamo-collection.png?url';
+import kamogawaLog from '../../../img/help/kamogawa-log.png?url';
 
-/**
- * One image per slide, in slide order.
- *
- * ⚠ These are all the same placeholder because `img/kamogawa/` currently holds
- * exactly one photo. Drop five real Kamogawa shots in there, import them, and
- * list them here — nothing else needs to change. Deliberately not sourced from
- * an image service: §4 bars stock imagery, and remote URLs would put the
- * tutorial behind a network request on a screen that has to work on bad signal.
- */
-/** One photo per slide, spaced across the pool rather than taken off the front,
- * so consecutive cards in the cover flow don't look alike. Five stand-ins until
- * there are five photos actually *about* each step. */
-const SLIDE_IMAGES = Array.from(
-  { length: 5 },
-  (_, i) => EXAMPLE_PHOTOS[Math.floor((i * EXAMPLE_PHOTOS.length) / 5) % EXAMPLE_PHOTOS.length],
-);
+/** One picture per slide, in slide order. Local imports rather than remote
+ * URLs: this screen opens automatically on a first visit, often on riverbank
+ * signal, and shouldn't wait on the network to explain itself. */
+const SLIDE_IMAGES = [welcome, kamoTap, mainAndSub, plusTap, kamoCollection, kamogawaLog];
 
 const SLIDE_COUNT = SLIDE_IMAGES.length;
 const SWIPE_THRESHOLD_PX = 40;
 
-/** Cards further than this from the active one aren't drawn at all. */
-const VISIBLE_DEPTH = 2;
+/** Width of one slot in the track. The track slides by exactly this per step,
+ * so the active card always lands in the same place. */
+const SLIDE_WIDTH = 168;
 
 /**
- * §5.4 tutorial overlay.
+ * Help — what this app is and how to use it.
  *
- * The slides are a cover flow: the active card faces you, its neighbours are
- * turned away in 3D and stacked behind, and moving through them rotates the
- * whole rack. It replaced a static grey "photo / video" box, which told a
- * first-time visitor nothing and looked like something that had failed to load.
+ * A carousel rather than a stack: a track that slides one slot per step, with
+ * each card rotated and shrunk in proportion to how far it is from the active
+ * one, so the row reads as a fan of cards with one of them turned to face you.
+ * On a pointer device, hovering fans it out further — the neighbours splay and
+ * drop away, which shows there's more here without needing a caption to say so.
  *
- * Built with CSS transforms and transitions rather than an animation library.
- * The whole effect is one `transform` per card on a `preserve-3d` stage, so a
- * physics runtime would be ~50KB to do what six lines of CSS already do — and
- * this screen opens automatically on a first visit, often outdoors.
+ * Built with CSS transitions rather than a physics library. Every card's state
+ * is one `transform` and one `opacity` interpolated by the browser, which is
+ * what a spring runtime would be added to the bundle to do — and this screen
+ * opens on a first visit, outdoors, before anything else has loaded.
  */
 export function Tutorial({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [index, setIndex] = useState(0);
+  const [fanned, setFanned] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   function goTo(next: number) {
@@ -72,6 +68,10 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
     touchStartX.current = null;
   }
 
+  // Slide 3 is the only one that needs a second line -- it's naming two shapes,
+  // and running them together loses the pairing.
+  const body2 = t(`tutorial.slides.${index}.body2`, { defaultValue: '' });
+
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-kamo-ink/60 p-4">
       <div
@@ -93,47 +93,57 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* The stage. `perspective` lives here and `preserve-3d` on the rack, so
-            the rotated cards actually recede rather than just squashing. */}
+        {/* The viewport is one slot wide and centred; the track inside it is the
+            full row, shifted so the active card sits in that slot. */}
         <div
-          className="relative flex h-44 items-center justify-center overflow-hidden"
-          style={{ perspective: '1000px' }}
+          className="flex justify-center overflow-hidden pt-5"
+          onMouseEnter={() => setFanned(true)}
+          onMouseLeave={() => setFanned(false)}
         >
-          <div className="relative flex h-full w-full items-center justify-center [transform-style:preserve-3d]">
-            {SLIDE_IMAGES.map((src, i) => {
-              const offset = i - index;
-              const depth = Math.abs(offset);
-              if (depth > VISIBLE_DEPTH) return null;
-              const isActive = offset === 0;
-              const turn = isActive ? 0 : offset < 0 ? 38 : -38;
-
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => goTo(i)}
-                  aria-label={t(`tutorial.slides.${i}.title`)}
-                  aria-current={isActive}
-                  className="absolute w-[92px] overflow-hidden rounded-xl shadow-xl ring-1 ring-kamo-ink/10 transition-[transform,opacity] duration-500 ease-out"
-                  style={{
-                    aspectRatio: '3 / 4',
-                    zIndex: 100 - depth,
-                    opacity: 1 - depth * 0.3,
-                    transform: `translateX(${offset * 34}px) translateZ(${
-                      isActive ? 50 : -depth * 60
-                    }px) rotateY(${turn}deg) scale(${isActive ? 1.12 : 1 - depth * 0.08})`,
-                  }}
-                >
-                  <img
-                    src={src}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    draggable={false}
-                  />
-                  {!isActive && <span className="absolute inset-0 bg-kamo-ink/25" />}
-                </button>
-              );
-            })}
+          <div
+            className="relative flex h-[190px] items-center justify-start overflow-visible"
+            style={{ width: SLIDE_WIDTH }}
+          >
+            <div
+              className="flex w-fit items-center transition-transform duration-700 ease-out"
+              style={{ transform: `translateX(${-index * SLIDE_WIDTH}px)` }}
+            >
+              {SLIDE_IMAGES.map((src, i) => {
+                const diff = i - index;
+                const isActive = diff === 0;
+                return (
+                  <div
+                    key={i}
+                    className="flex shrink-0 flex-col items-center gap-2 transition-transform duration-700 ease-out"
+                    style={{
+                      width: SLIDE_WIDTH,
+                      zIndex: isActive ? 10 : 0,
+                      transform: `rotate(${diff * (fanned ? 14 : 4)}deg) translateY(${
+                        fanned ? diff * 20 : 0
+                      }px) scale(${isActive ? 1.04 : fanned ? 0.68 : 0.82})`,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => goTo(i)}
+                      aria-label={t(`tutorial.slides.${i}.title`)}
+                      aria-current={isActive}
+                      className="block h-[140px] w-[140px] overflow-hidden rounded-xl bg-white/60 shadow-lg ring-1 ring-kamo-ink/10 transition-opacity duration-500"
+                      style={{ opacity: isActive ? 1 : 0.55 }}
+                    >
+                      {/* contain, not cover: these are screenshots of the app,
+                          and cropping one is cropping the explanation. */}
+                      <img
+                        src={src}
+                        alt=""
+                        className="h-full w-full object-contain p-1"
+                        draggable={false}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -141,9 +151,14 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
           <h3 className="font-display text-lg text-kamo-ink">
             {t(`tutorial.slides.${index}.title`)}
           </h3>
-          <p className="mx-auto mt-2 max-w-[15rem] text-balance font-ui text-sm leading-relaxed text-kamo-ink/70">
+          <p className="mx-auto mt-2 max-w-[16rem] text-balance font-ui text-sm leading-relaxed text-kamo-ink/70">
             {t(`tutorial.slides.${index}.body`)}
           </p>
+          {body2 && (
+            <p className="mx-auto mt-1 max-w-[16rem] text-balance font-ui text-sm leading-relaxed text-kamo-ink/70">
+              {body2}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-center gap-3 px-4 pb-5 pt-3">
