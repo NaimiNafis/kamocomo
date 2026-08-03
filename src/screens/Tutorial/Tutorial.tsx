@@ -17,8 +17,14 @@ const SLIDE_COUNT = SLIDE_IMAGES.length;
 const SWIPE_THRESHOLD_PX = 40;
 
 /** Width of one slot in the track. The track slides by exactly this per step,
- * so the active card always lands in the same place. */
-const SLIDE_WIDTH = 168;
+ * so the active card always lands in the same place. Sized so the active card
+ * fills most of a phone's width -- these are screenshots of the app's own
+ * screens, and shrinking one to a thumbnail makes it a picture of a picture. */
+const SLIDE_WIDTH = 236;
+/** The card itself, a little taller than wide: the six screenshots run from
+ * 0.85 to 1.25 in aspect, and a squarish box wastes the least on all of them. */
+const CARD_W = 208;
+const CARD_H = 228;
 
 /**
  * Help — what this app is and how to use it.
@@ -73,9 +79,9 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
   const body2 = t(`tutorial.slides.${index}.body2`, { defaultValue: '' });
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-kamo-ink/60 p-4">
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-kamo-ink/60 p-3">
       <div
-        className="w-full max-w-sm overflow-hidden rounded-2xl bg-kamo-stone shadow-xl"
+        className="w-full max-w-md overflow-hidden rounded-2xl bg-kamo-stone shadow-xl"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -101,7 +107,7 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
           onMouseLeave={() => setFanned(false)}
         >
           <div
-            className="relative flex h-[190px] items-center justify-start overflow-visible"
+            className="relative flex h-[268px] items-center justify-start overflow-visible"
             style={{ width: SLIDE_WIDTH }}
           >
             <div
@@ -128,15 +134,15 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
                       onClick={() => goTo(i)}
                       aria-label={t(`tutorial.slides.${i}.title`)}
                       aria-current={isActive}
-                      className="block h-[140px] w-[140px] overflow-hidden rounded-xl bg-white/60 shadow-lg ring-1 ring-kamo-ink/10 transition-opacity duration-500"
-                      style={{ opacity: isActive ? 1 : 0.55 }}
+                      className="block overflow-hidden rounded-xl bg-white/60 shadow-lg ring-1 ring-kamo-ink/10 transition-opacity duration-500"
+                      style={{ width: CARD_W, height: CARD_H, opacity: isActive ? 1 : 0.55 }}
                     >
                       {/* contain, not cover: these are screenshots of the app,
                           and cropping one is cropping the explanation. */}
                       <img
                         src={src}
                         alt=""
-                        className="h-full w-full object-contain p-1"
+                        className="h-full w-full object-contain p-1.5"
                         draggable={false}
                       />
                     </button>
@@ -151,11 +157,11 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
           <h3 className="font-display text-lg text-kamo-ink">
             {t(`tutorial.slides.${index}.title`)}
           </h3>
-          <p className="mx-auto mt-2 max-w-[16rem] text-balance font-ui text-sm leading-relaxed text-kamo-ink/70">
+          <p className="mx-auto mt-2 max-w-[19rem] text-balance font-ui text-sm leading-relaxed text-kamo-ink/70">
             {t(`tutorial.slides.${index}.body`)}
           </p>
           {body2 && (
-            <p className="mx-auto mt-1 max-w-[16rem] text-balance font-ui text-sm leading-relaxed text-kamo-ink/70">
+            <p className="mx-auto mt-1 max-w-[19rem] text-balance font-ui text-sm leading-relaxed text-kamo-ink/70">
               {body2}
             </p>
           )}
