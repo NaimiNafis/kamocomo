@@ -42,8 +42,8 @@ export async function fetchPlaceMarkers(): Promise<MarkerPoint[]> {
         lng: place.lng,
         // Same generator for both, so lit and unlit are identical apart from
         // the halo -- no size to drift between them.
-        iconUrl: duckMarkerDataUri(index, duckColor(index), 0),
-        litIcon: (level) => duckMarkerDataUri(index, duckColor(index), level),
+        iconUrl: duckMarkerDataUri(duckColor(index), 0),
+        litIcon: (level) => duckMarkerDataUri(duckColor(index), level),
       },
     ];
   });

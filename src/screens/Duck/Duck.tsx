@@ -394,7 +394,7 @@ function StampSlot({
               {/* The duck sits behind the +, faint enough that the + reads as
                   the action and the duck as the subject. */}
               <img
-                src={duckSilhouetteDataUri(entry.number - 1, 96)}
+                src={duckSilhouetteDataUri(96)}
                 alt=""
                 className="absolute h-1/2 w-1/2 opacity-25"
                 draggable={false}

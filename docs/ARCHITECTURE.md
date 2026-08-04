@@ -72,7 +72,8 @@ supabase/
   seed.sql      demo activity types, events, duck spots (places ship in a migration)
 scripts/        generate-qr.ts, seed-demo-community.mjs, seed-demo-ducks.mjs
 img/
-  marks/        custom duck SVG mark, generated into 10 variants (no stock art)
+  marks/        custom duck + exclamation SVG marks (no stock art)
+  duck-icons/   the duck artwork, one PNG per active spot, named for its place
   kamogawa/     real Kamogawa photos, incl. the shared placeholder image
 ```
 
@@ -292,8 +293,8 @@ made taps land on the duck page or the board at random. Tapping a place plays
 a short cinematic — a pulsing framing highlight, a close fly-in, and a 45°
 camera sweep — then shows a popup with the place's name, a few of its current photos,
 and a button into `/toukou?place=<id>`. Duck spots render as per-spot **colored
-duck markers** (a shared 10-color palette, placeholder art until the real duck
-illustrations land); tapping one goes to `/duck`. A "duck collection" button
+duck markers** (the duck artwork filled in that spot's own palette colour);
+tapping one goes to `/duck`. A "duck collection" button
 also opens `/duck`; creating an activity happens inside a place's board, not on
 the map.
 
@@ -413,11 +414,20 @@ duck" view lives on each place's toukou board, so dropping the graph lost
 nothing — and because the board's photo "+" posts through the same RPC,
 photographing a duck from there also collects it when you're in range.
 
-The ducks are generated variants of one body (crest, ribbon, hat, speckles,
-scarf, spotted bill, sitting, raised wing, ducklings, plain) in `lib/ducks.ts`.
-Colour form and silhouette come from the same geometry, which is what makes a
-silhouette an honest clue rather than an unrelated shape. Placeholder quality;
-real artwork swaps in at `duckVariantDataUri` / `duckSilhouetteDataUri`.
+The ducks are **one shape in eight colours**, in `lib/ducks.ts`. The artwork
+lives in `img/duck-icons/` as one PNG per active spot, named for its place; the
+eight are the same drawing in eight flat colours, so `DUCK_PALETTE`'s first
+eight entries are read straight off those files and `DUCK_PATH` is that drawing
+traced once. Filling one path with the spot's own colour is what keeps a duck's
+body, its marker ring and its card the same colour rather than nearly.
+
+This replaced ten generated variants (crest, ribbon, hat, speckles, scarf,
+spotted bill, sitting, raised wing, ducklings, plain). Their point was that an
+unfound slot's silhouette hinted at WHICH duck was missing; with a shared shape
+it can only say that one is, so `duckSilhouetteDataUri` takes no index any more.
+`DUCK_PALETTE` keeps two extra colours past the eight because `duckColor` wraps
+— spots 9 and 10 are inactive, and reactivating one should get a colour of its
+own (and artwork) rather than silently sharing the Delta's.
 
 ## Data model
 

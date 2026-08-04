@@ -64,7 +64,7 @@ export function DuckSheet({ node, photoCount, busy, onCapture, onClose }: DuckSh
               ) : (
                 <>
                   <img
-                    src={duckSilhouetteDataUri(node.number - 1, 96)}
+                    src={duckSilhouetteDataUri(96)}
                     alt=""
                     className="absolute h-1/2 w-1/2 opacity-25"
                     draggable={false}

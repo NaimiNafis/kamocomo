@@ -1,24 +1,34 @@
 // The 10 ducks. Each duck spot (stamp location) IS a duck, and its color is
 // shared everywhere it appears: its map marker, its stamp-card slot, and its
-// node on the duck toukou graph. These are muted, on-brand PLACEHOLDER colors
-// for the current recolored-duck icon -- they get replaced wholesale once the
-// real 10-duck artwork is drawn (just swap `duckIconDataUri` for the art).
+// node on the duck toukou graph.
+//
+// The first eight are read straight off the artwork in `img/duck-icons/`, one
+// PNG per active spot, named for the place it belongs to. Those eight files are
+// the same duck drawn eight times in eight flat colors, so the color IS the
+// artwork -- taking the hexes from the files is what keeps a duck's body, its
+// marker ring and its card exactly the same color instead of nearly.
+//
+// The last two are the earlier placeholder colors, kept because `duckColor`
+// wraps: spots 9 and 10 (Shichijo, Jujo) are inactive, so nothing draws them
+// today, but leaving ten entries means reactivating one picks up a color of its
+// own rather than silently sharing the Delta's. A tenth spot would want its own
+// PNG here too.
 //
 // Consistency rule: everything that shows the 10 ducks must order the spots
 // the SAME way (lat descending, north-to-south) so duck N is always the same
 // color across the map, the stamp card, and the graph.
 
 export const DUCK_PALETTE = [
-  '#E0885E', // sunset
-  '#6E8CA0', // river
-  '#7C8C5A', // moss
-  '#C08552', // amber clay
-  '#8E6E8C', // muted plum
-  '#5B8A8A', // muted teal
-  '#A9834E', // ochre
-  '#6E7FA0', // slate blue
-  '#9C8C5A', // olive gold
-  '#B5705E', // terracotta
+  '#E5916B', // kamogawa-delta
+  '#568B9F', // demachiyanagi-bridge
+  '#689169', // kojin-bridge
+  '#B49861', // marutamachi-bridge
+  '#776485', // nijo-bridge
+  '#76A598', // sanjo-bridge
+  '#A6776F', // shijo-bridge
+  '#8C92B9', // gojo-bridge
+  '#9C8C5A', // olive gold -- no artwork; inactive spot
+  '#B5705E', // terracotta -- no artwork; inactive spot
 ] as const;
 
 /** Stable duck color for the Nth spot in the canonical (lat-desc) ordering. */
@@ -26,18 +36,67 @@ export function duckColor(index: number): string {
   return DUCK_PALETTE[index % DUCK_PALETTE.length];
 }
 
-const BEAK = '#2E3A59';
 const SURFACE = '#E9E4D8';
 
-/** The duck body/head/beak/eye, shared by every variant. */
+/**
+ * The duck, traced from the artwork in `img/duck-icons/`.
+ *
+ * The eight PNGs there are one drawing in eight flat colors, so only the
+ * outline carries information -- hence a path rather than eight embedded
+ * images. It stays a fraction of the size, scales to any marker, and can be
+ * filled with the spot's own color, which is what lets one shape serve the map
+ * marker, the board node and the empty-slot silhouette alike.
+ *
+ * Five subpaths: body, breast, head, tail, beak. The gaps between them are the
+ * white dividing lines of the original drawing, so they have to stay unfilled
+ * -- `evenodd` and the fact that they don't overlap both keep them that way.
+ *
+ * Authored on the same 64-unit box as everything else here, centred on (32,32)
+ * and sized so no point sits more than 25 units out -- inside the r=29 ring
+ * with room to spare. Regenerate rather than hand-edit if the art changes.
+ */
+const DUCK_PATH =
+  'M32.16 25.91 L35.43 25.93 L39.89 26.56 L42.55 27.15 L47.25 28.41 L48.33 28.59 L49.50 28.59 L49.93 28.93 L50.13 29.27 L50.52 29.52 L50.60 29.74 L50.60 31.50 L50.47 32.49 L49.80 36.01 L49.30 37.77 L49.07 39.44 L48.53 41.20 L48.12 43.05 L47.27 45.31 L46.68 46.48 L46.32 46.93 L45.31 47.81 L43.64 48.94 L40.43 50.65 L38.09 51.51 L33.08 52.55 L31.73 52.77 L27.80 53.09 L24.24 53.00 L22.25 52.63 L21.40 52.59 L20.61 51.76 L19.53 50.04 L18.76 48.33 L18.08 45.85 L17.59 42.87 L17.54 41.47 L17.72 39.48 L18.18 37.45 L18.89 35.34 L19.79 33.71 L20.93 32.18 L24.06 28.91 L25.01 28.14 L26.36 27.29 L28.08 26.47 L28.57 26.47 L30.74 26.02 L32.14 25.93Z' +
+  'M17.09 25.55 L17.29 25.52 L18.55 25.98 L23.93 26.39 L25.37 26.61 L26.23 26.61 L26.39 26.72 L26.31 27.06 L25.32 27.47 L23.79 28.55 L21.60 30.69 L20.66 31.78 L18.76 34.39 L18.08 35.84 L17.27 38.32 L16.96 40.03 L16.82 42.06 L16.96 43.95 L17.27 45.58 L17.90 47.79 L18.71 49.54 L20.11 51.49 L20.74 52.12 L20.79 52.43 L20.40 52.50 L19.91 52.41 L17.16 51.47 L15.26 50.43 L13.91 49.25 L12.40 47.51 L11.54 46.21 L10.78 44.54 L10.23 42.15 L10.01 39.80 L10.01 38.14 L10.42 35.34 L11.09 33.31 L11.54 32.36 L12.58 30.69 L13.84 28.98 L15.15 27.49 L17.07 25.57Z' +
+  'M23.32 10.93 L24.60 10.91 L25.46 11.05 L27.45 11.86 L28.48 12.58 L29.50 13.55 L30.03 14.22 L30.40 14.91 L30.80 16.25 L31.03 17.74 L30.98 18.79 L30.72 20.50 L29.95 22.80 L29.40 23.83 L28.59 24.83 L27.49 25.93 L26.76 26.43 L26.54 26.25 L21.76 25.93 L19.24 25.66 L17.65 25.30 L17.34 25.34 L17.27 25.19 L17.72 24.65 L17.77 24.10 L17.34 23.77 L16.73 23.65 L16.68 22.75 L16.15 21.17 L15.38 19.68 L14.43 18.55 L14.38 18.15 L15.01 16.80 L15.92 15.26 L16.78 14.18 L17.97 13.03 L19.01 12.27 L20.13 11.68 L21.72 11.18 L23.30 10.95Z' +
+  'M50.74 30.74 L51.08 30.72 L51.39 30.98 L52.16 31.21 L55.09 31.75 L55.21 31.91 L55.21 33.49 L54.71 36.01 L54.26 37.05 L52.68 39.44 L52.41 40.57 L51.96 41.43 L49.62 44.50 L47.47 46.41 L47.29 46.41 L47.22 46.21 L47.67 45.62 L48.17 44.68 L48.75 42.96 L49.66 38.00 L49.84 36.29 L50.38 34.39 L50.70 32.49 L50.72 30.76Z' +
+  'M14.16 18.79 L14.36 18.81 L14.70 19.24 L15.60 20.77 L16.19 22.35 L16.41 23.34 L16.37 23.70 L15.94 23.90 L13.59 24.44 L11.16 24.62 L9.81 24.36 L9.08 23.90 L8.79 23.47 L8.88 23.02 L9.31 22.59 L11.79 20.97 L13.28 19.71 L14.14 18.81Z';
+
+/**
+ * How much of its own box the duck takes up, scaled about the centre of the
+ * 64-unit box.
+ *
+ * `DUCK_PATH` is traced at the largest size that still clears the r=29 ring, so
+ * 1 is "as big as it can be" rather than "the right size" — at that size the
+ * duck crowds the ring it sits in. Kept as one number here, applied in
+ * `duckBody`, so the marker, the board node and the silhouette can't drift out
+ * of proportion with each other.
+ */
+const DUCK_SCALE = 0.85;
+
+/** The duck in one flat color, exactly as the artwork draws it. */
 function duckBody(color: string): string {
   return (
-    `<path d="M17 39c-0.6-9 7.6-16 17.4-15 8 0.8 13.4 6.4 12.4 12.6-1 6.3-9 9.6-17.6 8.7-6-0.6-11.8-2-12.2-6.3z" fill="${color}"/>` +
-    `<circle cx="39.5" cy="23.5" r="7.6" fill="${color}"/>` +
-    `<path d="M46.5 23 L54.5 20.5 L54 26.5 Z" fill="${BEAK}"/>` +
-    `<circle cx="41.5" cy="21.5" r="1.5" fill="${SURFACE}"/>`
+    `<g transform="translate(32 32) scale(${DUCK_SCALE}) translate(-32 -32)">` +
+    `<path d="${DUCK_PATH}" fill="${color}" fill-rule="evenodd"/>` +
+    `</g>`
   );
 }
+
+// =========================================================================
+// One duck, eight colours.
+//
+// There used to be ten hand-drawn variants here -- a crest, a ribbon, a hat --
+// so that each duck read as a different animal and an unfound collection slot
+// could show its silhouette as a clue to what you were looking for. The real
+// artwork settled that differently: it is one duck drawn eight times, and the
+// colour is the whole distinction. The variants went with it, since a clue
+// that promised a crest the duck doesn't have is worse than no clue.
+//
+// What this costs: an unfound slot can no longer say WHICH duck is missing,
+// only that one is. Colour still carries it everywhere the duck is shown as
+// itself, which is everywhere except that one silhouette.
+// =========================================================================
 
 /**
  * `width`/`height` here are load-bearing, not decoration. Google rasterizes
@@ -108,64 +167,6 @@ export function duckIconDataUri(color: string, sizePx = 64): string {
   );
 }
 
-// =========================================================================
-// The ten variants.
-//
-// The duck objects along the river each carry their own detail, and the point
-// of the collection is that finding out which is which is the fun. So the ten
-// have to read as different animals rather than ten recolours of one shape.
-//
-// Each variant is the shared body plus one distinguishing feature, described
-// as a path list so the SAME geometry can be rendered two ways: in colour when
-// a duck is shown as itself, and as a flat silhouette on a collection entry
-// you haven't found yet. Drawing them from one source is what keeps the
-// silhouette an honest clue to the thing you're looking for.
-//
-// Placeholder quality, and deliberately swappable: real illustrations replace
-// the bodies here without any caller changing.
-// =========================================================================
-
-/** The extra marks that distinguish variant N, as (path, isAccent) pairs. */
-function variantDetail(index: number, accent: string): string {
-  switch (index % 10) {
-    case 0: // plain — the reference duck
-      return '';
-    case 1: // crest
-      return `<path d="M37 16.5c-1.2-4 0.6-7 3.4-8.2-0.8 3 0.4 5 2.2 6.4z" fill="${accent}"/>`;
-    case 2: // ribbon at the neck
-      return `<path d="M33 30.5l5-2 0.8 3.4-5.2 1.8z" fill="${accent}"/><circle cx="36" cy="31" r="1.6" fill="${SURFACE}"/>`;
-    case 3: // flat hat
-      return `<path d="M31 15.5h17v2.4H31z" fill="${accent}"/><path d="M35 9.5h9v6h-9z" fill="${accent}"/>`;
-    case 4: // speckled back
-      return `<circle cx="26" cy="36" r="1.7" fill="${accent}"/><circle cx="33" cy="39.5" r="1.7" fill="${accent}"/><circle cx="39" cy="35.5" r="1.7" fill="${accent}"/>`;
-    case 5: // scarf
-      return `<path d="M32 29.5c4 2.5 8 2.5 11.5 0.5l1.5 3.5c-4.5 2.5-9.5 2.5-14-0.5z" fill="${accent}"/><path d="M31 33l-4.5 5 3.5 1.5 3-4.5z" fill="${accent}"/>`;
-    case 6: // spotted bill
-      return `<circle cx="50" cy="23" r="1.5" fill="${SURFACE}"/><circle cx="52.5" cy="24.5" r="1.1" fill="${SURFACE}"/>`;
-    case 7: // sitting — a shorter, rounder body reads as a different pose
-      return `<ellipse cx="30" cy="45" rx="14" ry="4.5" fill="${accent}" opacity="0.75"/>`;
-    case 8: // raised wing
-      return `<path d="M24 33c4-5 11-6 15-3-3.5 1-7 3-10 6.5z" fill="${accent}"/>`;
-    default: // 9 — ducklings following
-      return (
-        `<circle cx="14" cy="47" r="4" fill="${accent}"/><circle cx="16.5" cy="44" r="2.4" fill="${accent}"/>` +
-        `<circle cx="23" cy="48" r="3.4" fill="${accent}"/><circle cx="25" cy="45.4" r="2" fill="${accent}"/>`
-      );
-  }
-}
-
-/** A lighter shade of the duck's own colour, so a detail reads as part of the
- * same animal rather than as a sticker on top of it. */
-function accentOf(color: string): string {
-  const v = color.replace('#', '');
-  const mix = (c: number) => Math.round(c + (255 - c) * 0.45);
-  const part = (i: number) =>
-    mix(parseInt(v.slice(i, i + 2), 16))
-      .toString(16)
-      .padStart(2, '0');
-  return `#${part(0)}${part(2)}${part(4)}`;
-}
-
 /**
  * How strongly a duck marker is lit, from how close the visitor is. 0 is the
  * ordinary mark.
@@ -206,7 +207,6 @@ export const MARKER_PIXEL_SIZE = 80;
  * rings change, so nothing can drift.
  */
 export function duckMarkerDataUri(
-  index: number,
   color: string,
   level: ProximityLevel = 0,
   sizePx = MARKER_PIXEL_SIZE,
@@ -233,26 +233,20 @@ export function duckMarkerDataUri(
     `<g transform="translate(16 16)">` +
     `<circle cx="32" cy="32" r="29" fill="${SURFACE}" stroke="${color}" stroke-width="2.5"/>` +
     duckBody(color) +
-    variantDetail(index, accentOf(color)) +
     `</g>` +
     `</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 /**
- * Duck N as an unfound collection entry: the same geometry, flat, no colour.
+ * An unfound collection entry: the duck flat, with no colour.
  *
- * It's a clue rather than a reveal — you can see the shape and its detail, and
- * work out what to look for, but what the object actually IS only resolves when
- * you find it and your own photo takes this card's place.
+ * A placeholder rather than a clue. While the ducks had per-variant details it
+ * hinted at WHICH one was missing; now that they share a shape it can only say
+ * that one is, and the answer arrives when you find it and your own photo takes
+ * this card's place.
  */
-export function duckSilhouetteDataUri(index: number, sizePx = 64): string {
+export function duckSilhouetteDataUri(sizePx = 64): string {
   const ink = '#1C1C1A';
-  return svgDataUri(
-    `<g opacity="0.28">` +
-      duckBody(ink).replaceAll(BEAK, ink).replaceAll(SURFACE, ink) +
-      variantDetail(index, ink).replaceAll(SURFACE, ink) +
-      `</g>`,
-    sizePx,
-  );
+  return svgDataUri(`<g opacity="0.28">${duckBody(ink)}</g>`, sizePx);
 }
