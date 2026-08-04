@@ -29,10 +29,15 @@ function ThumbIcon({ down, filled }: { down?: boolean; filled: boolean }) {
  * One vote control: pill, lifts on hover, squashes on press, thumb fills and
  * takes the accent colour once cast.
  *
- * Two sizes, because it lives in two places. On a card it's icon and count
- * only -- two of them have to fit inside a 112px tile. In the detail sheet
- * there's room for the word, and it's the more important of the two: reading a
- * post in full is exactly the moment someone has an opinion about it.
+ * Icon and count only, no word -- on a card there are two of them sharing a
+ * 112px tile, and in the detail sheet the icon flipping and filling is
+ * already what "voted" looks like, in both languages, without a translation
+ * to keep in sync. `label` still exists, just for the accessible name.
+ *
+ * Two sizes because it lives in two places: a small pill on the card, a
+ * bigger one in the sheet, where it's the more important of the two --
+ * reading a post in full is exactly the moment someone has an opinion about
+ * it.
  */
 export function VoteButton({
   count,
@@ -40,7 +45,6 @@ export function VoteButton({
   active,
   accent,
   label,
-  showLabel,
   size = 'card',
   onClick,
 }: {
@@ -49,7 +53,6 @@ export function VoteButton({
   active: boolean;
   accent: string;
   label: string;
-  showLabel?: boolean;
   size?: 'card' | 'sheet';
   onClick: () => void;
 }) {
@@ -83,7 +86,6 @@ export function VoteButton({
           <ThumbIcon down={down} filled />
         </span>
       </span>
-      {showLabel && <span>{label}</span>}
       {count}
     </button>
   );

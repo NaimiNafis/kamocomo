@@ -148,7 +148,6 @@ export function NodeDetail({ detail, node, onLike, onDislike, onClose }: NodeDet
             <div className="flex items-center gap-2 pt-1">
               <VoteButton
                 size="sheet"
-                showLabel
                 count={node.likes}
                 active={node.myVote === 1}
                 accent={MOSS}
@@ -157,7 +156,6 @@ export function NodeDetail({ detail, node, onLike, onDislike, onClose }: NodeDet
               />
               <VoteButton
                 size="sheet"
-                showLabel
                 down
                 count={node.dislikes}
                 active={node.myVote === -1}
