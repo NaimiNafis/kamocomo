@@ -30,7 +30,7 @@ export default defineConfig({
         name: 'Kamogawa Commons',
         // What fits under a home-screen icon -- about twelve characters before
         // it truncates, which is exactly what the nickname is for.
-        short_name: 'KamoKomo',
+        short_name: 'KamoComo',
         lang: 'ja',
         theme_color: '#2E3A59',
         background_color: '#E9E4D8',
