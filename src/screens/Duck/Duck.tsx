@@ -17,8 +17,14 @@ import { LanguageToggle } from '../../components/LanguageToggle';
 import { StaleBanner } from '../../components/StaleBanner';
 import { BackIcon } from '../../components/icons';
 import { Certificate } from './Certificate';
+import { ConfirmRetake, StampPhoto } from './StampPhoto';
 
 type Status = 'loading' | 'ready' | 'error';
+
+/** Matches the boards' press-and-hold, so a hold feels the same everywhere. */
+const HOLD_MS = 320;
+/** Movement that reclassifies a hold as a scroll. */
+const HOLD_SLOP = 10;
 
 /**
  * Kamo Collection — a stamp sheet of the eight ducks along the river.
@@ -55,6 +61,9 @@ export function Duck() {
   const pendingSpotRef = useRef<string | null>(null);
 
   const [testMode, setTestMode] = useState(() => localStorage.getItem(TEST_MODE_KEY) === 'true');
+  /** A filled stamp asks before it overwrites; holding one shows the photo whole. */
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   // A duck-QR scan still routes through here and stashes its result.
   const [scanBanner, setScanBanner] = useState<StashedScanResult | null>(() => {
@@ -108,8 +117,24 @@ export function Duck() {
   }
 
   function pickPhotoFor(spotId: string) {
+    setConfirmId(null);
+    setViewingId(null);
     pendingSpotRef.current = spotId;
     photoInputRef.current?.click();
+  }
+
+  /** An empty stamp opens the camera; a filled one asks first, because there's
+   * only ever one photo per stamp and the new one replaces the old. */
+  function handleTap(entry: CollectionEntry) {
+    if (entry.photoUrl) setConfirmId(entry.id);
+    else pickPhotoFor(entry.id);
+  }
+
+  /** Holding a filled stamp shows the photo uncropped. Holding an empty one has
+   * nothing to show, so it falls through to the camera. */
+  function handleHold(entry: CollectionEntry) {
+    if (entry.photoUrl) setViewingId(entry.id);
+    else pickPhotoFor(entry.id);
   }
 
   async function handlePhotoChosen(file: File | undefined) {
@@ -146,6 +171,8 @@ export function Duck() {
   }
 
   const collectedCount = entries.filter((e) => e.collectedAt !== null).length;
+  const confirmEntry = confirmId ? entries.find((e) => e.id === confirmId) : undefined;
+  const viewingEntry = viewingId ? entries.find((e) => e.id === viewingId) : undefined;
 
 
   const fmtDate = (iso: string) =>
@@ -257,7 +284,8 @@ export function Duck() {
                       name={isJa ? entry.nameJa : entry.nameEn}
                       busy={busyId === entry.id}
                       dateLabel={entry.collectedAt ? fmtDate(entry.collectedAt) : null}
-                      onPhoto={() => pickPhotoFor(entry.id)}
+                      onTap={() => handleTap(entry)}
+                      onHold={() => handleHold(entry)}
                     />
                   ))}
                 </div>
@@ -305,6 +333,24 @@ export function Duck() {
         </>
       )}
 
+      {confirmEntry && (
+        <ConfirmRetake
+          name={isJa ? confirmEntry.nameJa : confirmEntry.nameEn}
+          onConfirm={() => pickPhotoFor(confirmEntry.id)}
+          onCancel={() => setConfirmId(null)}
+        />
+      )}
+
+      {viewingEntry && (
+        <StampPhoto
+          entry={viewingEntry}
+          name={isJa ? viewingEntry.nameJa : viewingEntry.nameEn}
+          dateLabel={viewingEntry.collectedAt ? fmtDate(viewingEntry.collectedAt) : null}
+          onRetake={() => pickPhotoFor(viewingEntry.id)}
+          onClose={() => setViewingId(null)}
+        />
+      )}
+
       {showCertificate && (
         <Certificate issuedAt={certIssuedAt} onClose={() => setShowCertificate(false)} />
       )}
@@ -326,24 +372,65 @@ function StampSlot({
   name,
   busy,
   dateLabel,
-  onPhoto,
+  onTap,
+  onHold,
 }: {
   entry: CollectionEntry;
   name: string;
   busy: boolean;
   dateLabel: string | null;
-  onPhoto: () => void;
+  onTap: () => void;
+  onHold: () => void;
 }) {
   const { t } = useTranslation();
   const collected = entry.collectedAt !== null;
 
+  // Tap and hold do different things here, so the press has to be timed. Same
+  // shape as the boards': a timer the first real movement cancels, and a flag
+  // so the tap doesn't also fire once the hold already has.
+  const hold = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
+  const held = useRef(false);
+
+  function cancelHold() {
+    if (!hold.current) return;
+    clearTimeout(hold.current.timer);
+    hold.current = null;
+  }
+
   return (
     <button
       type="button"
-      onClick={onPhoto}
+      onPointerDown={(e) => {
+        held.current = false;
+        hold.current = {
+          x: e.clientX,
+          y: e.clientY,
+          timer: setTimeout(() => {
+            hold.current = null;
+            held.current = true;
+            navigator.vibrate?.(12);
+            onHold();
+          }, HOLD_MS),
+        };
+      }}
+      onPointerMove={(e) => {
+        const h = hold.current;
+        if (h && Math.hypot(e.clientX - h.x, e.clientY - h.y) > HOLD_SLOP) cancelHold();
+      }}
+      onPointerUp={cancelHold}
+      onPointerCancel={cancelHold}
+      onClick={() => {
+        // The hold already acted; a click follows a long press on most
+        // browsers and would open the camera behind the sheet.
+        if (held.current) {
+          held.current = false;
+          return;
+        }
+        onTap();
+      }}
       disabled={busy}
       aria-label={collected ? name : `${t('collection.addTo')} ${name}`}
-      className="flex w-[8.25rem] flex-col items-center gap-2 text-center transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
+      className="kamo-holdable flex w-[8.25rem] flex-col items-center gap-2 text-center transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
     >
       <span className="relative block h-[8.25rem] w-[8.25rem]">
         <span

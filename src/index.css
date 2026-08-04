@@ -111,8 +111,13 @@ h3 {
  * holding raises the system callout (copy / look up / share) over the top of
  * the app's own press-and-hold. Both fire before any JavaScript runs, so they
  * can only be turned off in CSS.
+ *
+ * `.kamo-holdable` is the same treatment for anything else that answers to a
+ * press-and-hold -- a collection stamp, say -- where holding a photo would
+ * otherwise raise iOS's save-image sheet instead.
  */
-.kamo-board {
+.kamo-board,
+.kamo-holdable {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
