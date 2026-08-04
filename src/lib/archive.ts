@@ -1,12 +1,15 @@
 import { supabase } from './supabase';
+import { duckColor } from './ducks';
 import { subShade } from './toukou';
 
 export interface ArchivePlaceCard {
   id: string;
   nameEn: string;
   nameJa: string;
-  /** The most recent photo posted there, standing in for the place. */
-  photoUrl: string | null;
+  /** The place's duck colour, from its position along the river -- the same
+   * ordering the map markers and the collection use, so a place is the same
+   * colour wherever you meet it. */
+  color: string;
   mainCount: number;
 }
 
@@ -74,8 +77,9 @@ async function fetchPlaceMap(): Promise<Map<string, PlaceInfo>> {
  * are the question people actually have ("what happens at Sanjo?"), and they're
  * a fixed, small set, so they make a front page that doesn't grow.
  *
- * A place's picture is the most recent photo posted there, so the page ages
- * with the river rather than showing the same eight stills forever.
+ * Names and counts only, no photographs: eight places is a table of contents,
+ * and it should fit on one screen without scrolling rather than being eight
+ * pictures you have to travel through to see what's there.
  */
 export async function fetchArchivePlaces(): Promise<ArchivePlaceCard[]> {
   const [{ data: places, error: placesError }, { data: mains, error: mainsError }] =
@@ -87,29 +91,26 @@ export async function fetchArchivePlaces(): Promise<ArchivePlaceCard[]> {
         .order('lat', { ascending: false }),
       supabase
         .from('activities')
-        .select('place_id, photo_url, created_at')
+        .select('place_id')
         .eq('kind', 'main')
-        .eq('hidden', false)
-        .order('created_at', { ascending: false }),
+        .eq('hidden', false),
     ]);
   if (placesError) throw placesError;
   if (mainsError) throw mainsError;
 
   const counts = new Map<string, number>();
-  const newestPhoto = new Map<string, string>();
   for (const m of mains) {
     if (!m.place_id) continue;
     counts.set(m.place_id, (counts.get(m.place_id) ?? 0) + 1);
-    // Mains arrive newest-first, so the first photo seen for a place is its
-    // most recent one.
-    if (m.photo_url && !newestPhoto.has(m.place_id)) newestPhoto.set(m.place_id, m.photo_url);
   }
 
-  return places.map((p) => ({
+  // Ordered lat-desc above, so the index is the place's position along the
+  // river -- which is exactly what duckColor is keyed on elsewhere.
+  return places.map((p, i) => ({
     id: p.id,
     nameEn: p.name_en,
     nameJa: p.name_ja,
-    photoUrl: newestPhoto.get(p.id) ?? null,
+    color: duckColor(i),
     mainCount: counts.get(p.id) ?? 0,
   }));
 }

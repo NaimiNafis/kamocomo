@@ -59,6 +59,47 @@ function svgDataUri(inner: string, sizePx: number): string {
  * The plain duck mark recolored to `color` — used wherever the duck is being
  * shown as itself, with no claim about activity happening there.
  */
+/**
+ * Ink or stone, whichever stays readable on `hex`.
+ *
+ * The duck palette runs from pale sand to deep indigo, so anything that puts
+ * text on a place's own colour has to ask rather than assume. Plain relative
+ * luminance, which is enough for a palette this small.
+ */
+export function readableOn(hex: string): string {
+  const v = hex.replace('#', '');
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#1C1C1A' : '#E9E4D8';
+}
+
+/** How much of the colour survives when it's used as a surface. */
+const SOFT_FILL_ALPHA = 0.25;
+const STONE = [0xe9, 0xe4, 0xd8];
+
+/**
+ * A place's colour as a soft surface: the colour laid over stone at a quarter
+ * strength, composited rather than made translucent so it sits on any
+ * background.
+ *
+ * This is how a duck reads on the map -- a stone body with the colour as the
+ * marking, not a block of saturated paint -- and colouring a whole card in the
+ * raw palette broke that: mid-tones are the worst case for text, so the first
+ * attempt had to be darkened almost to brown before stone text was legible,
+ * which made the page heavier than anything else in the app.
+ *
+ * Pair with ink text: every colour in the palette lands above 10:1 this way,
+ * against the 4.5:1 the darkened version was scraping.
+ */
+export function softFill(hex: string): string {
+  const v = hex.replace('#', '');
+  const mix = (i: number, stone: number) =>
+    Math.round(parseInt(v.slice(i, i + 2), 16) * SOFT_FILL_ALPHA + stone * (1 - SOFT_FILL_ALPHA));
+  const [r, g, b] = [mix(0, STONE[0]), mix(2, STONE[1]), mix(4, STONE[2])];
+  return `#${[r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+}
+
 export function duckIconDataUri(color: string, sizePx = 64): string {
   return svgDataUri(
     `<circle cx="32" cy="32" r="29" fill="${SURFACE}" stroke="${color}" stroke-width="2.5"/>` +

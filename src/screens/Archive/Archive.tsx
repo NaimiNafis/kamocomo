@@ -14,6 +14,7 @@ import { LanguageToggle } from '../../components/LanguageToggle';
 import { BackIcon } from '../../components/icons';
 import { StaleBanner } from '../../components/StaleBanner';
 import { examplePhoto, thumb } from '../../lib/photos';
+import { softFill } from '../../lib/ducks';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -140,44 +141,62 @@ function PlaceGrid({ onOpen, onSeeAll }: { onOpen: (id: string) => void; onSeeAl
   return (
     <>
       <StaleBanner show={stale} />
-      <div className="p-4">
-        <p className="mb-4 font-ui text-sm text-kamo-ink/60">{t('archive.subtitle')}</p>
-        {/* Two across, four down for the eight places along the river, in the
-            order you'd walk them -- north to south, Delta to Gojo. */}
-        <div className="grid grid-cols-2 gap-3">
-          {places.map((place) => (
-            <button
-              key={place.id}
-              type="button"
-              onClick={() => onOpen(place.id)}
-              className="overflow-hidden rounded-xl bg-white/70 text-left shadow-sm transition-transform duration-150 active:scale-[0.98]"
-            >
-              <PhotoOrPlaceholder
-                id={place.id}
-                url={place.photoUrl}
-                className="aspect-[4/3] w-full"
-              />
-              <div className="p-2">
-                <p className="line-clamp-2 font-display text-sm leading-tight text-kamo-ink">
-                  {isJa ? place.nameJa : place.nameEn}
-                </p>
-                <p className="mt-0.5 font-ui text-[10px] text-kamo-ink/55">
-                  {t('archive.posts', { count: place.mainCount })}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
+      {/* Centred in what's left below the header, not pinned under it: eight
+          cells don't fill a phone, and a block of them hanging from the top
+          with a screen of nothing beneath reads as a page that failed to
+          finish loading. */}
+      <div className="flex min-h-[calc(100%-4rem)] items-center justify-center p-4">
+        {/* Fixed-width cells rather than fractions of the viewport, so the grid
+            is the same object on every screen and just gets more room around it
+            -- the same reasoning as the collection's stamp card.
 
-        {/* Bottom-right of the grid: the way out of the by-place framing. */}
-        <div className="mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={onSeeAll}
-            className="rounded-full border border-kamo-ink/15 bg-white/70 px-4 py-2 font-ui text-sm font-medium text-kamo-ink shadow-sm transition-transform duration-150 active:scale-[0.97]"
-          >
-            {t('archive.seeAll')} →
-          </button>
+            Two across, four down for the eight places along the river, in the
+            order you'd walk them: north to south, Delta to Gojo. Names and
+            counts, no photographs -- eight places is a table of contents, and
+            the whole of it should be readable at once rather than being eight
+            pictures to travel through. */}
+        <div className="w-fit">
+          <div className="grid grid-cols-2 gap-3">
+            {places.map((place) => (
+              <button
+                key={place.id}
+                type="button"
+                onClick={() => onOpen(place.id)}
+                style={{
+                  // Sized for an iPhone 16 Plus (430pt) and capped there, so it
+                  // stops growing on a desktop -- the original complaint --
+                  // while still shrinking to fit a narrower phone rather than
+                  // overflowing it. 2.75rem is the page padding plus the gap
+                  // between the two columns.
+                  width: 'min(11.5rem, calc((100vw - 2.75rem) / 2))',
+                  // The colour as a soft surface, the way a duck carries it on
+                  // the map -- stone with the colour in it, not a block of
+                  // paint. Ink on it clears 10:1 across the whole palette.
+                  backgroundColor: softFill(place.color),
+                  borderColor: place.color,
+                }}
+                className="flex h-[8.5rem] flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 text-center text-kamo-ink shadow-sm transition-transform duration-150 active:scale-[0.97]"
+              >
+                <span className="text-balance font-display text-base leading-tight">
+                  {isJa ? place.nameJa : place.nameEn}
+                </span>
+                <span className="font-ui text-[11px] text-kamo-ink/55">
+                  {t('archive.posts', { count: place.mainCount })}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Bottom-right of the grid: the way out of the by-place framing. */}
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={onSeeAll}
+              className="rounded-full border border-kamo-ink/15 bg-white/70 px-4 py-2 font-ui text-sm font-medium text-kamo-ink shadow-sm transition-transform duration-150 active:scale-[0.97]"
+            >
+              {t('archive.seeAll')} →
+            </button>
+          </div>
         </div>
       </div>
     </>

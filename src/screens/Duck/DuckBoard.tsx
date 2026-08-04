@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { duckIconDataUri, duckSilhouetteDataUri } from '../../lib/ducks';
+import { duckIconDataUri, duckSilhouetteDataUri, readableOn } from '../../lib/ducks';
 import { examplePhoto, thumb } from '../../lib/photos';
 import type { DuckGraph as DuckGraphData, DuckNode } from '../../lib/duck';
 import { useForceGraph, type GraphNode } from '../ToukouMap/useForceGraph';
@@ -242,7 +242,7 @@ function DuckCircle({
         width: DUCK_SIZE,
         height: DUCK_SIZE,
         backgroundColor: node.color,
-        color: readableText(node.color),
+        color: readableOn(node.color),
         ...pressStyle(pressed),
       }}
     >
@@ -299,15 +299,6 @@ function EmptySlot({
       </span>
     </button>
   );
-}
-
-/** Dark or light text depending on the background's luminance. */
-function readableText(hex: string): string {
-  const v = hex.replace('#', '');
-  const r = parseInt(v.slice(0, 2), 16);
-  const g = parseInt(v.slice(2, 4), 16);
-  const b = parseInt(v.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#1C1C1A' : '#E9E4D8';
 }
 
 /** Someone's photo of a duck. Square like a toukou sub, so the two boards read
