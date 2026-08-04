@@ -53,9 +53,20 @@ export function examplePhoto(seed: string): string {
  * `width` should be roughly twice the CSS size, so it still looks right on a
  * 2x/3x screen. Anything that isn't a Supabase public object URL -- a bundled
  * example photo, a blob: preview -- is handed back untouched.
+ *
+ * `resize=contain` is load-bearing, not a default worth trimming. Asking for a
+ * width and nothing else does NOT scale the image: the transformer sets the
+ * width to what you asked and leaves the HEIGHT AT THE ORIGINAL, so a
+ * 6000x3376 photo comes back 900x3376 -- the same picture squeezed to a
+ * seventh of its width. On screen that's a tall thin sliver of colour-bar,
+ * which is what "my photo is cut off" turned out to mean. `contain` scales the
+ * other side to match and returns 900x506.
+ *
+ * It is also eight times smaller: the squeezed version was 91KB of a
+ * 900x3376 canvas, against 11KB for the same photo at its real shape.
  */
 export function thumb(url: string, width: number): string {
   const marker = '/storage/v1/object/public/';
   if (!url.includes(marker)) return url;
-  return `${url.replace(marker, '/storage/v1/render/image/public/')}?width=${width}&quality=72`;
+  return `${url.replace(marker, '/storage/v1/render/image/public/')}?width=${width}&resize=contain&quality=72`;
 }
