@@ -70,8 +70,8 @@ const BUTTON_PX = 22;
  * are still separate marks; past that you're choosing a bold blob over a book.
  */
 const LINE_TARGET = {
-  'kamo-collection.png': 0.055,
-  'kamogawa-log.png': 0.035,
+  'kamo-collection.png': 0.050,
+  'kamogawa-log.png': 0.030,
   default: 0.06,
 };
 
