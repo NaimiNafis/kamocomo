@@ -90,7 +90,7 @@ const DUCK_ART =
  * and the things it collects read as the same animal.
  */
 export function DuckIcon({ size = 20, className }: IconProps) {
-  return tracedArt(size, className, DUCK_ART, 0.6);
+  return tracedArt(size, className, DUCK_ART, 1.2);
 }
 
 const BOOK_ART =
