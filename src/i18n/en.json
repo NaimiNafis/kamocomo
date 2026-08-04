@@ -6,8 +6,7 @@
   "common": {
     "retry": "Retry",
     "close": "Close",
-    "offlineStale": "You're offline. Showing saved content.",
-    "cancel": "Cancel"
+    "offlineStale": "You're offline. Showing saved content."
   },
   "onboarding": {
     "title": "A little about you",
@@ -173,9 +172,7 @@
     "takePhoto": "Take a photo",
     "retake": "Replace your photo",
     "photoCount_one": "{{count}} photo",
-    "photoCount_other": "{{count}} photos",
-    "replaceTitle": "Replace this photo?",
-    "replaceBody": "A stamp holds one photo, so a new one of {{name}} will replace the one you have."
+    "photoCount_other": "{{count}} photos"
   },
   "detail": {
     "postedAt": "Posted",

@@ -112,12 +112,12 @@ h3 {
  * the app's own press-and-hold. Both fire before any JavaScript runs, so they
  * can only be turned off in CSS.
  *
- * `.kamo-holdable` is the same treatment for anything else that answers to a
- * press-and-hold -- a collection stamp, say -- where holding a photo would
- * otherwise raise iOS's save-image sheet instead.
+ * `.kamo-nocallout` is the same treatment anywhere else the OS shouldn't take
+ * a press -- a collection stamp, say, where holding the photo would otherwise
+ * raise iOS's save-image sheet over the app.
  */
 .kamo-board,
-.kamo-holdable {
+.kamo-nocallout {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;

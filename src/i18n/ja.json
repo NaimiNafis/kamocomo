@@ -6,8 +6,7 @@
   "common": {
     "retry": "再試行",
     "close": "閉じる",
-    "offlineStale": "オフラインです。保存された内容を表示しています。",
-    "cancel": "キャンセル"
+    "offlineStale": "オフラインです。保存された内容を表示しています。"
   },
   "onboarding": {
     "title": "少しだけ教えてください",
@@ -170,9 +169,7 @@
     "addTo": "写真を追加：",
     "takePhoto": "写真を撮る",
     "retake": "写真を撮り直す",
-    "photoCount": "写真 {{count}}枚",
-    "replaceTitle": "写真を撮り直しますか？",
-    "replaceBody": "スタンプに残せる写真は1枚だけです。{{name}}を撮り直すと、いまの写真は置き換わります。"
+    "photoCount": "写真 {{count}}枚"
   },
   "detail": {
     "postedAt": "投稿日時",
