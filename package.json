@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "icons": "node scripts/icons-transparent.mjs",
+    "duck-photos": "node scripts/refresh-duck-photos.mjs"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.1",
