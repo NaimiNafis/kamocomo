@@ -70,3 +70,70 @@ export function thumb(url: string, width: number): string {
   if (!url.includes(marker)) return url;
   return `${url.replace(marker, '/storage/v1/render/image/public/')}?width=${width}&resize=contain&quality=72`;
 }
+
+/**
+ * The longest edge a stored photo needs. The biggest a photo is ever drawn is
+ * the detail sheet at 900px, so 1600 leaves room for a 2x screen and for
+ * cropping later without keeping a 6000px original nobody will ever see.
+ */
+const MAX_EDGE = 1600;
+const JPEG_QUALITY = 0.82;
+/** Below this, re-encoding costs more than it saves. */
+const SKIP_BELOW_BYTES = 600 * 1024;
+
+/**
+ * Shrink a camera photo to something a riverbank connection can actually send.
+ *
+ * Phones hand over enormous files -- the photos already in this app average
+ * 6.4MB and the largest is 15MB -- and the app was uploading them untouched.
+ * Over outdoor mobile signal that's a minute-long upload that can stall
+ * outright, which is what "I can't upload pictures" was. It's also waste:
+ * every one of those pixels is thrown away by the resize on the way back down.
+ *
+ * Failing safe matters more than shrinking here. Anything unexpected -- an
+ * animated GIF, a browser without `createImageBitmap`, a canvas that won't
+ * encode, a result that somehow came out bigger -- returns the original file
+ * and lets the upload proceed as it always did. A photo that uploads slowly is
+ * a nuisance; a photo that vanishes because the resize threw is a lost moment
+ * on the riverbank.
+ *
+ * `imageOrientation: 'from-image'` is what keeps phone photos the right way up:
+ * the EXIF rotation flag lives in the file, and drawing to a canvas without
+ * honouring it is the classic way to turn everyone's portrait shots sideways.
+ */
+export async function prepareForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  if (file.type === 'image/gif') return file; // re-encoding would drop the animation
+  if (file.size <= SKIP_BELOW_BYTES) return file;
+  if (typeof createImageBitmap !== 'function') return file;
+
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY),
+    );
+    if (!blob || blob.size >= file.size) return file;
+
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, '')}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    });
+  } catch {
+    return file;
+  }
+}

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { prepareForUpload } from './photos';
 
 // =========================================================================
 // Types
@@ -363,10 +364,13 @@ const EXT_BY_TYPE: Record<string, string> = {
 /** Uploads a photo to the public `photos` bucket under the user's own folder
  * (matching the storage RLS policy) and returns its public URL. */
 export async function uploadPhoto(userId: string, file: File): Promise<string> {
-  const ext = EXT_BY_TYPE[file.type] ?? 'jpg';
+  // Downscaled first: a phone hands over 6MB+ and outdoor signal can't reliably
+  // push that. Falls back to the original file if anything goes wrong.
+  const photo = await prepareForUpload(file);
+  const ext = EXT_BY_TYPE[photo.type] ?? 'jpg';
   const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from('photos').upload(path, file, {
-    contentType: file.type,
+  const { error } = await supabase.storage.from('photos').upload(path, photo, {
+    contentType: photo.type,
     upsert: false,
   });
   if (error) throw error;
