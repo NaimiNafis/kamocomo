@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Virtual Kamogawa",
-    "catchphrase": "Let's keep protecting everyone's Kamogawa"
+    "title": "KAMOGAWA COMMONS",
+    "catchphrase": "Everyday Moments by the Kamogawa"
   },
   "common": {
     "retry": "Retry",
@@ -53,7 +53,6 @@
   },
   "archive": {
     "title": "Kamogawa Log",
-    "subtitle": "How the river has been used, place by place.",
     "loading": "Loading the archive…",
     "error": "Couldn't load the archive.",
     "empty": "Nothing here yet. Activities will collect here over time.",

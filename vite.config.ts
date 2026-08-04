@@ -27,8 +27,10 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
       manifest: {
-        name: 'Virtual Kamogawa',
-        short_name: 'Kamogawa',
+        name: 'Kamogawa Commons',
+        // What fits under a home-screen icon -- about twelve characters before
+        // it truncates, which is exactly what the nickname is for.
+        short_name: 'KamoKomo',
         lang: 'ja',
         theme_color: '#2E3A59',
         background_color: '#E9E4D8',

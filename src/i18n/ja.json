@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Virtual Kamogawa",
-    "catchphrase": "皆んなの鴨川、守り続けよう"
+    "title": "KAMOGAWA COMMONS",
+    "catchphrase": "鴨川の日常を見つけよう"
   },
   "common": {
     "retry": "再試行",
@@ -44,7 +44,7 @@
     "archiveButton": "鴨川ログ",
     "back": "地図に戻る",
     "qrWelcome": "鴨川への隠れた入口を見つけました",
-    "dragHint": "ドラッグして周りを見渡そう",
+    "dragHint": "上下左右に動かして周りを見渡そう",
     "moreActivities": "活動を見る",
     "mapError": "地図を読み込めませんでした。",
     "placeActivityCount_other": "現在 {{count}} 件の活動",
@@ -52,7 +52,6 @@
   },
   "archive": {
     "title": "鴨川ログ",
-    "subtitle": "場所ごとに、鴨川がどう使われてきたか。",
     "loading": "アーカイブを読み込み中…",
     "error": "アーカイブを読み込めませんでした。",
     "empty": "まだ何もありません。活動は時間とともにここに集まります。",
@@ -61,8 +60,8 @@
     "history": "これまでの記録",
     "noSubs": "まだ追加はありません。",
     "archivedBadge": "アーカイブ済み",
-    "notFound": "この活動はもう利用できません。",
-    "seeAll": "すべて見る",
+    "notFound": "リンクを認識できませんでした。",
+    "seeAll": "See all",
     "allPosts": "すべての投稿"
   },
   "toukou": {
@@ -104,12 +103,12 @@
     "switchTo": "{{mode}}に切り替え"
   },
   "duck": {
-    "testMode": "テストモード:現地にいなくてもどのQRでも読み取れる",
+    "testMode": "テストモード：現地にいなくてもどのQRでも読み取れる",
     "viewCertificate": "証明書を見る"
   },
   "scan": {
     "locating": "現在地を確認中…",
-    "missingSpot": "このリンクにスポットコードがありません。"
+    "missingSpot": "このリンクは無効です。"
   },
   "certificate": {
     "heading": "Certificate of Completion",

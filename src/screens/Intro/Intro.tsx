@@ -25,10 +25,21 @@ export function Intro({ phase }: IntroProps) {
         className="absolute inset-0 flex items-center justify-center bg-kamo-indigo transition-opacity duration-1000"
         style={{ opacity: phase === 'reveal' ? 0 : 1 }}
       >
-        <div className="relative h-40 w-full max-w-sm px-6">
+        <div className="relative h-40 w-full max-w-md px-6">
+          {/* The name holds one line at any width. It's set in caps, where a
+              wrap reads as a mistake rather than a line break -- so the size
+              tracks the viewport between a floor and a ceiling instead of being
+              fixed and overflowing the narrow end. */}
           <h1
-            className="absolute inset-0 flex items-center justify-center text-center font-display text-4xl text-kamo-stone transition-opacity duration-700"
-            style={{ opacity: phase === 'title' ? 1 : 0 }}
+            className="absolute inset-0 flex items-center justify-center whitespace-nowrap text-center font-display leading-tight text-kamo-stone transition-opacity duration-700"
+            style={{
+              opacity: phase === 'title' ? 1 : 0,
+              fontSize: 'clamp(1.5rem, 7vw, 2.25rem)',
+              // Extra air between the two words, on top of the space already
+              // in the string. em-based so it scales with the clamp() above
+              // instead of going fixed at one size and cramped at another.
+              wordSpacing: '0.1em',
+            }}
           >
             {t('app.title')}
           </h1>
