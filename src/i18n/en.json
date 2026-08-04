@@ -6,7 +6,9 @@
   "common": {
     "retry": "Retry",
     "close": "Close",
-    "offlineStale": "You're offline. Showing saved content."
+    "offlineStale": "You're offline. Showing saved content.",
+    "updateReady": "A new version is ready.",
+    "updateAction": "Update"
   },
   "onboarding": {
     "title": "A little about you",

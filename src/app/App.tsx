@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useIdentityStore } from '../store/identityStore';
+import { UpdateBanner } from '../components/UpdateBanner';
 import { ErrorBoundary } from './ErrorBoundary';
 
 // Routes are code-split so only the map route pulls in the Google Maps 3D
@@ -51,6 +52,10 @@ export function App() {
             <Route path="/duck/scan" element={<DuckScan />} />
           </Routes>
         </Suspense>
+        {/* Outside Suspense and shared by every route: a deploy can land while
+            you're on any screen, and the banner shouldn't vanish behind a route
+            fallback when it does. */}
+        <UpdateBanner />
       </BrowserRouter>
     </ErrorBoundary>
   );

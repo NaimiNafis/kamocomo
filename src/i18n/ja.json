@@ -6,7 +6,9 @@
   "common": {
     "retry": "再試行",
     "close": "閉じる",
-    "offlineStale": "オフラインです。保存された内容を表示しています。"
+    "offlineStale": "オフラインです。保存された内容を表示しています。",
+    "updateReady": "新しいバージョンがあります。",
+    "updateAction": "更新"
   },
   "onboarding": {
     "title": "少しだけ教えてください",
