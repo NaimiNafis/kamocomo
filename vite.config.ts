@@ -5,6 +5,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Pinned, and made to fail rather than drift. Vite's default is to take the
+  // next free port when 5173 is busy, which is easy to miss -- and the Google
+  // Maps key is restricted by referrer, so a dev server that quietly came up
+  // on 5174 gets its map rejected and renders blank with nothing in the UI to
+  // say why. Better to refuse to start and name the conflict.
+  server: { port: 5173, strictPort: true },
   plugins: [
     react(),
     tailwindcss(),
