@@ -80,9 +80,12 @@ or `new Function` anywhere in `src/`.
   by Supabase's anonymous sign-in rate limit (~30/hour/IP). One vote per user
   per post is enforced; the cost of a fake voter is a sign-in.
 - **The Google Maps key is in the bundle** — unavoidable for a browser map.
-  It must carry an HTTP-referrer restriction to `kamokamo.vercel.app` in the
-  Google Cloud console, or anyone can spend the quota. *Not verifiable from the
-  repo — check it in the console.*
+  It must carry an HTTP-referrer restriction in the Google Cloud console, or
+  anyone can spend the quota. Every domain the app answers on needs its own
+  entry — currently `kamocomo.vercel.app` and `kamokamo.vercel.app`, the older
+  one kept alive because printed QR codes encode the host. A domain that is
+  live but unlisted doesn't degrade: the map fails to load entirely. *Not
+  verifiable from the repo — check it in the console.*
 - **`react-router-dom` 7.18.1** carries GHSA-qwww-vcr4-c8h2 (RSC-mode CSRF
   bypass). Not applicable: this is a client-only SPA with no RSC and no server
   actions. The advisory's fix is a downgrade to 7.11.0, a breaking change, so

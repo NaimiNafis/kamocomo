@@ -6,7 +6,7 @@ force-directed "toukou" web of activity posts people vote on, a cookpad-style
 archive of how spots have been used over time, and a QR-based duck-stamp
 scavenger hunt. Japanese-first, bilingual (JA/EN), no account required.
 
-**Live demo:** https://kamokamo.vercel.app
+**Live demo:** https://kamocomo.vercel.app
 
 ## Stack
 
@@ -56,8 +56,11 @@ settings, so don't skip steps 4 and 5.
 2. Enable the **Maps JavaScript API**.
 3. Create an API key and **restrict it** — this matters, because the key ships
    in client-side JS and can't be hidden:
-   - *Application restrictions* → HTTP referrers → `https://kamokamo.vercel.app/*`
-     and `http://localhost:5173/*`
+   - *Application restrictions* → HTTP referrers → `https://kamocomo.vercel.app/*`,
+     `https://kamokamo.vercel.app/*` (the previous domain, kept alive so printed
+     QR codes still resolve) and `http://localhost:5173/*`. Every domain the app
+     is served from needs its own entry — a referrer that isn't listed is
+     rejected and the map doesn't load at all.
    - *API restrictions* → Maps JavaScript API only
 4. **Upgrade to a paid billing account** before the trial credit expires. This
    sounds backwards, but the recurring monthly free tier is only granted to

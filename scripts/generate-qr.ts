@@ -36,7 +36,12 @@ async function main() {
     auth: { persistSession: false },
   });
 
-  const baseUrl = (process.env.VITE_APP_URL ?? 'https://kamokamo.vercel.app').replace(/\/$/, '');
+  // The host is baked into every code, so changing it invalidates any that are
+  // already printed. The `qr_token`s are NOT affected -- they live in the
+  // database and stay valid -- so a domain move means reprinting these images,
+  // never re-seeding the spots. Override without editing this:
+  //   VITE_APP_URL=https://example.com npx tsx scripts/generate-qr.ts
+  const baseUrl = (process.env.VITE_APP_URL ?? 'https://kamocomo.vercel.app').replace(/\/$/, '');
 
   const { data: spots, error } = await supabase
     .from('duck_spots')

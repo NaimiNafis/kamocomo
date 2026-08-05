@@ -10,7 +10,9 @@
 Virtual Kamogawa — a mobile-first web app that makes the tacit culture (暗黙知)
 of Kyoto's Kamogawa riverbank discoverable: a 3D Google Maps view of the river, a
 "toukou map" web of activity posts people can vote on, an archive, and a
-duck-spot QR stamp rally. Live at https://kamokamo.vercel.app.
+duck-spot QR stamp rally. Live at https://kamocomo.vercel.app (the older
+https://kamokamo.vercel.app stays pointed at the same deployment, because
+printed QR codes encode the host).
 
 ## Stack (fixed — do not substitute)
 
