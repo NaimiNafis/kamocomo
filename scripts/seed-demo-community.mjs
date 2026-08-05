@@ -258,23 +258,37 @@ async function uploadPhotos(ownerId) {
 async function redealExistingPhotos(photos, placeIds) {
   const { data, error } = await db
     .from('activities')
-    .select('id')
+    .select('id, kind, parent_id')
     .in('place_id', placeIds)
     .limit(5000);
   if (error) throw error;
 
-  const buckets = photos.map(() => []);
-  for (const row of data) buckets[Math.floor(Math.random() * photos.length)].push(row.id);
+  // Dealt per group rather than per row. An independent random pick per post
+  // says nothing about what its neighbours got, and neighbours are exactly
+  // what you see: the subs orbiting one main share a screen, so a repeat
+  // inside a group of eight drawn from thirteen is near certain and reads as
+  // a card that failed to load. Shuffling the pool per group and dealing
+  // without replacement keeps a group's photos distinct until the pool runs
+  // out. See scripts/spread-photos.mjs, which repairs boards already seeded.
+  const groups = new Map();
+  for (const row of data) {
+    const key = row.kind === 'sub' && row.parent_id ? `sub:${row.parent_id}` : 'main';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row.id);
+  }
 
-  for (let i = 0; i < photos.length; i++) {
-    if (!buckets[i].length) continue;
-    const { error: upErr } = await db
-      .from('activities')
-      .update({ photo_url: photos[i] })
-      .in('id', buckets[i]);
+  const buckets = new Map(photos.map((p) => [p, []]));
+  for (const [, ids] of groups) {
+    const deck = shuffled(photos);
+    ids.forEach((id, i) => buckets.get(deck[i % deck.length]).push(id));
+  }
+
+  for (const [photo, ids] of buckets) {
+    if (!ids.length) continue;
+    const { error: upErr } = await db.from('activities').update({ photo_url: photo }).in('id', ids);
     if (upErr) throw upErr;
   }
-  console.log(`  re-dealt photos across ${data.length} existing posts`);
+  console.log(`  re-dealt photos across ${data.length} existing posts (siblings kept distinct)`);
 }
 
 // ---------------------------------------------------------------------------

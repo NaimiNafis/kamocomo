@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview",
     "icons": "node scripts/icons-transparent.mjs",
-    "duck-photos": "node scripts/refresh-duck-photos.mjs"
+    "duck-photos": "node scripts/refresh-duck-photos.mjs",
+    "spread-photos": "node scripts/spread-photos.mjs"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.1",

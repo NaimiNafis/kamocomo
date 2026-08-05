@@ -218,10 +218,14 @@ for (const spot of spots) {
     continue;
   }
 
+  // Dealt from a shuffled deck rather than picked per row: every photo on one
+  // duck is seen at once, so an independent pick per post repeats often enough
+  // to look like a bug. Distinct until the pool runs out.
+  const deck = shuffled(photos);
   const rows = Array.from({ length: need }, (_, i) => ({
     author_id: pick(demo),
     duck_spot_id: spot.id,
-    photo_url: pick(photos),
+    photo_url: deck[i % deck.length],
     lat: spot.lat,
     lng: spot.lng,
     created_at: new Date(Date.now() - between(0, 6) * 86_400_000 - i * 3_600_000).toISOString(),
