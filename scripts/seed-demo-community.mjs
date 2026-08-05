@@ -352,6 +352,7 @@ async function main() {
       const daysAgo = between(0, 4);
       const createdAt = new Date(Date.now() - daysAgo * 86_400_000 - between(0, 20) * 3_600_000);
 
+      const mainPhoto = pick(photos);
       const { data: mainRow, error: mainError } = await db
         .from('activities')
         .insert({
@@ -361,7 +362,7 @@ async function main() {
           place_id: place.id,
           author_id: author.id,
           phrase: pick(MAIN_PHRASES),
-          photo_url: pick(photos),
+          photo_url: mainPhoto,
           lat: place.lat,
           lng: place.lng,
           created_at: createdAt.toISOString(),
@@ -376,6 +377,11 @@ async function main() {
       // rest get an ordinary handful.
       const subCount = i === 0 ? SUB_CAP : i === 1 ? SUB_CAP + 2 : between(2, 7);
 
+      // Dealt from a shuffled deck rather than picked per row: these subs are
+      // seen together around one main, so independent picks repeat often
+      // enough to read as cards that failed to load. Distinct until the pool
+      // runs out, and never the main's own picture.
+      const deck = shuffled(photos.filter((p) => p !== mainPhoto));
       const subs = [];
       for (let s = 0; s < subCount; s++) {
         subs.push({
@@ -385,7 +391,7 @@ async function main() {
           place_id: place.id,
           author_id: pick(roster).id,
           phrase: pick(SUB_PHRASES),
-          photo_url: pick(photos),
+          photo_url: deck[s % deck.length],
           lat: place.lat,
           lng: place.lng,
           created_at: new Date(createdAt.getTime() + (s + 1) * 900_000).toISOString(),

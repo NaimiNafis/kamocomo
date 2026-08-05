@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "icons": "node scripts/icons-transparent.mjs",
     "duck-photos": "node scripts/refresh-duck-photos.mjs",
-    "spread-photos": "node scripts/spread-photos.mjs"
+    "spread-photos": "node scripts/spread-photos.mjs",
+    "reset-to-seed": "node scripts/reset-to-seed.mjs"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.1",
