@@ -1,7 +1,7 @@
 # Architecture
 
-Technical reference for how Virtual Kamogawa is built and why. For setup and
-running the app, see the [README](../README.md). For the rules Claude Code (or
+Technical reference for how KAMOGAWA COMMONS is built and why. For setup and
+running the app, see [`SETUP.md`](SETUP.md). For the rules Claude Code (or
 any contributor) follows when working in this repo, see
 [`CLAUDE.md`](../CLAUDE.md).
 
@@ -21,7 +21,7 @@ any contributor) follows when working in this repo, see
 
 ## Concept
 
-Virtual Kamogawa turns the **暗黙知 (tacit knowledge)** of Kyoto's Kamogawa
+KAMOGAWA COMMONS turns the **暗黙知 (tacit knowledge)** of Kyoto's Kamogawa
 riverbank — the unwritten culture of how people actually use the river — into
 something visitors can *discover* rather than something they're told via
 signage. The app is a discovery layer over the real place:

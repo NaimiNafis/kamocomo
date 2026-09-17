@@ -1,4 +1,4 @@
-# CLAUDE.md — Virtual Kamogawa
+# CLAUDE.md — KAMOGAWA COMMONS
 
 > Claude Code reads this file automatically at the start of every session.
 > It's the rules for *how* to work in this repo. For *what* the app is and
@@ -7,7 +7,7 @@
 
 ## Project
 
-Virtual Kamogawa — a mobile-first web app that makes the tacit culture (暗黙知)
+KAMOGAWA COMMONS — a mobile-first web app that makes the tacit culture (暗黙知)
 of Kyoto's Kamogawa riverbank discoverable: a 3D Google Maps view of the river, a
 "toukou map" web of activity posts people can vote on, an archive, and a
 duck-spot QR stamp rally. Live at https://kamocomo.vercel.app (the older
