@@ -1,239 +1,204 @@
-# Virtual Kamogawa
+# KAMOGAWA COMMONS
 
-A mobile-first web app that makes the tacit culture (暗黙知) of Kyoto's Kamogawa
-riverbank discoverable rather than dictated: a 3D map of the river, a
-force-directed "toukou" web of activity posts people vote on, a cookpad-style
-archive of how spots have been used over time, and a QR-based duck-stamp
-scavenger hunt. Japanese-first, bilingual (JA/EN), no account required.
+**English** | [日本語](README.ja.md)
 
-**Live demo:** https://kamocomo.vercel.app
+*Everyday Moments by the Kamogawa.* A mobile web app that helps visitors learn
+the unwritten etiquette of Kyoto's Kamogawa riverbank. Visitors learn it by
+seeing what local people actually do there, not by reading rules.
 
-## Stack
+**Live:** https://kamocomo.vercel.app
 
-- **React 18 + Vite + TypeScript**, React Router, Zustand
-- **Google Maps Platform 3D Maps** (`Map3DElement`) for the 3D globe/map
-- **Supabase** (Postgres, anonymous auth, Storage, Realtime) — the only backend
-- **Tailwind CSS v4** with the design tokens documented in `docs/ARCHITECTURE.md`
-- **i18next** — every user-facing string is in `src/i18n/{en,ja}.json`
-- **d3-force** for the toukou activity web
-- **localforage** + a service worker (`vite-plugin-pwa`) for offline resilience
+<p align="center">
+  <img src="img/help/welcome-to-kamogawa.png" width="320" alt="The app's satellite map of the Kamogawa, with duck markers along the river">
+</p>
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how it's built (screens,
-data model, identity, event gating, anti-cheat) and [`CLAUDE.md`](CLAUDE.md)
-for the working rules this repo follows.
+A team project for インタラクションデザインⅡ (Interaction Design II), 2026.
 
-## Prerequisites
+## The problem
 
-- Node.js ≥ 20.19 (developed on 22)
-- A Supabase project (free tier is fine)
-- A Google Maps Platform API key (see below — a billing account is required)
+Kamogawa is a river where everyone spends time their own way. People read,
+play music, picnic, and walk dogs side by side. That shared freedom rests on
+暗黙知 (*anmokuchi*, tacit knowledge): habits that nobody writes down but most
+locals follow.
 
-## Setup
+- Sit at a comfortable distance from other groups.
+- Keep the path clear for people who walk or cycle.
+- Take your rubbish home.
+- Respect other people's quiet time.
 
-```bash
-git clone git@github.com:NaimiNafis/kamokamo.git
-cd kamokamo
-npm install
-cp .env.local.example .env.local   # then fill in the three values below
-```
+Overtourism is wearing these habits down. Some visitors swim in the river as if
+it were a beach, sit across the path, or play loud music. Signs and rules are
+the obvious fix. But rules would remove the freedom that makes the Kamogawa
+what it is.
 
-`.env.local`:
+The team's question: **how can the river stay free and still pass on its
+unwritten manners?**
 
-```
-VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
-VITE_SUPABASE_ANON_KEY=<your project's anon / publishable key>
-VITE_GOOGLE_MAPS_API_KEY=<your Google Maps Platform key>
-```
+| Now | Goal |
+|---|---|
+| ![Now: residents (地域住民) have a relationship of 用の美 with the river (鴨川). Visitors (観光客) have none, and their behavior damages (破壊) the residents' relationship.](docs/images/relationship-now.jpg) | ![Goal: residents protect (守る) their relationship with the river, and visitors build their own relationship of 用の美.](docs/images/relationship-goal.jpg) |
 
-### One-time Google Maps Platform configuration
+**Now:** residents (地域住民) use the river in a way that fits it, which the
+team calls 用の美 (beauty of use). Visitors (観光客) have no such relationship
+yet, and their behavior damages (破壊) the residents' one. **Goal:** residents
+protect (守る) their relationship, and visitors build their own.
 
-This project is run to cost **¥0**. That's achievable, but it depends on two
-settings, so don't skip steps 4 and 5.
+## Insight
 
-1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/)
-   and **enable billing**. A payment method is required to issue a Maps key at
-   all — there is no card-free path.
-2. Enable the **Maps JavaScript API**.
-3. Create an API key and **restrict it** — this matters, because the key ships
-   in client-side JS and can't be hidden:
-   - *Application restrictions* → HTTP referrers → `https://kamocomo.vercel.app/*`,
-     `https://kamokamo.vercel.app/*` (the previous domain, kept alive so printed
-     QR codes still resolve) and `http://localhost:5173/*`. Every domain the app
-     is served from needs its own entry — a referrer that isn't listed is
-     rejected and the map doesn't load at all.
-   - *API restrictions* → Maps JavaScript API only
-4. **Upgrade to a paid billing account** before the trial credit expires. This
-   sounds backwards, but the recurring monthly free tier is only granted to
-   upgraded accounts — if the trial simply lapses, the API stops and the map
-   breaks. On an upgraded account you are charged ¥0 as long as you stay under
-   the allowance.
-5. **Set a quota cap.** Go to
-   [Maps quotas](https://console.cloud.google.com/google/maps-apis/quotas),
-   pick **Maps JavaScript API**, and set **`3D Map loads per day`** to **160**
-   (it ships as `Unlimited`). ~160/day ≈ 4,960/month, just under the free
-   allowance — this is what actually guarantees no bill. `Map loads per day` is
-   the separate 2D counter and should stay at 0; leave it alone. Add a budget
-   alert as a backstop.
+Tacit knowledge is discovered, not taught.
 
-### What the free allowance is
+- **Teaching** means rules, notices, and signs. The river loses its freedom.
+- **Discovering** means watching the people nearby and reading the room.
+  Visitors then join the culture in their own way.
 
-3D map loads bill to the **Immersive Maps** SKU (`4816-83A2-9059`, Pro tier):
-**5,000 free loads per month**, resetting on the 1st, then $7.00 per 1,000.
+## Concept: design the experience of discovering culture
 
-A "load" is one `Map3DElement` creation, not a pan or zoom. Note that
-`MainMap` mounts fresh every time someone navigates back to `/`, so a visitor
-who tours a place, opens the duck page and returns can spend 3–5 loads. Budget
-roughly **1,200–1,600 visitor sessions per month**, not 5,000.
+The design has two parts. A physical object brings visitors in. A web app shows
+them what people do at each spot.
 
-Local development spends the same quota — every hot reload that remounts
-`MainMap` is another load. Keep the dev server closed when you aren't using it.
+### Kamo-Jizo (鴨地蔵): the way in
 
-The map is pinned to the Maps JS **`weekly`** (stable) channel in
-[`src/lib/map3d.ts`](src/lib/map3d.ts). **Do not set `v: 'alpha'`** — it renders
-a dismissible "For development purposes only" banner above the map that every
-visitor sees, and the channel can change without notice. The 3D/2D switch does
-not need it: 2D is the classic `google.maps.Map`, which is GA.
+<p align="center">
+  <img src="docs/images/kamo-jizo.jpg" width="420" alt="Kamo-Jizo: a grey duck figure wearing a checkered bib">
+</p>
 
-### One-time Supabase configuration
+A duck figure modeled on the jizo statues that stand on Kyoto street corners.
 
-1. **Enable anonymous sign-ins**: Supabase Dashboard → Authentication →
-   Providers → turn on **Anonymous Sign-Ins**. Without this the app can't
-   create the anonymous identities it relies on.
-2. **Apply the schema.** With the [Supabase CLI](https://supabase.com/docs/guides/cli):
-   ```bash
-   npx supabase login
-   npx supabase link --project-ref <your-project-ref>
-   npx supabase db push          # applies everything in supabase/migrations/
-   ```
-3. **Seed demo data.** `db push` does not run `seed.sql`; paste the contents of
-   `supabase/seed.sql` into the Studio SQL Editor and run it (it's idempotent).
-   This adds the 10 activity types, 3 events (one active), and the duck spots
-   (8 active, between the Delta and Gojo).
-4. **Seed demo content** (optional, but the app looks empty without it). Both
-   scripts need an RLS-bypassing key in `.env.local` —
-   `SUPABASE_SECRET_KEY=sb_secret_...`, never prefixed with `VITE_`:
-   ```bash
-   node scripts/seed-demo-community.mjs   # ~100 people, boards, votes
-   node scripts/seed-demo-ducks.mjs       # duck photos + your Delta stamp
-   ```
-   They create the demo accounts once and reuse them, because a vote is one row
-   per (user, post) — a like count is only as real as the number of accounts
-   behind it.
+- **Kyoto:** people in Kyoto have known and loved jizo for generations.
+- **Kamogawa:** a duck by the river makes people want to take a photo.
+- **Entry point:** taking that photo leads people to the app.
 
-The `photos` Storage bucket, RLS policies, triggers (10-sub archive cap,
-10-stamp certificate, vote counters), the event-gating policy, and the
-geofenced `scan_duck_spot` RPC are all created by the migrations — no manual
-dashboard setup beyond step 1.
+**Find it → photograph it → meet the river's culture.**
 
-## Run
+![Three Kamo-Jizo variations: sitting, standing, and a parent with a duckling](docs/images/kamo-jizo-variations.jpg)
 
-```bash
-npm run dev          # Vite dev server
-npm run build        # production build (tsc -b && vite build)
-npm run preview      # serve the production build (needed to test the PWA/offline)
-npm run lint         # ESLint
-npm run typecheck    # tsc --noEmit
-```
+### The web app: where residents and visitors meet
 
-## QR codes for the stamp rally
+![Storyboard. Top row, residents: an everyday moment by the river becomes a post. Bottom row, visitors: a visitor finds a Kamo-Jizo, photographs it, and finds that moment on the map.](docs/images/storyboard.jpg)
 
-Each active duck spot has its own QR image encoding the *same* app URL with
-that spot's opaque token: `https://<app>/duck/scan?spot=<qr_token>`. Generate
-them all:
+*Top row (residents): an everyday moment by the river becomes a post. Bottom
+row (visitors): a visitor finds a Kamo-Jizo, photographs it, and finds that
+moment on the map.*
 
-```bash
-npx tsx scripts/generate-qr.ts
-# or point them at a different deployment:
-VITE_APP_URL=https://your-domain npx tsx scripts/generate-qr.ts
-```
+**Residents share their everyday.** A main post (親投稿) records what someone
+does at a spot.
 
-PNGs land in `qr-codes/` (gitignored; reproducible).
+1. Choose a place on the map.
+2. Choose an activity type, such as reading or music.
+3. Write a short phrase.
+4. Add a photo.
 
-**Renaming or moving a spot does not invalidate its code.** A QR encodes
-`?spot=<qr_token>`, and the token lives on the `duck_spots` row untouched by
-either — only the PNG *filename*, which is derived from the name, goes stale.
-Re-run the generator after a rename and you get correctly-named files containing
-identical codes. Tokens are only ever reissued when `seed.sql` runs against a
-fresh database. The stamp scan is
-**server-authoritative**: the `scan_duck_spot` RPC recomputes the distance
-between the reported location and the spot and only grants the stamp within
-120 m — a client cannot self-grant a stamp (direct inserts to `stamps` are
-blocked by RLS).
+**Visitors discover it.** A visitor scans the QR code at a Kamo-Jizo to open
+the app. A 3D map shows the visitor's location and the places along the river.
+At each place, the visitor sees what people do there. The visitor then adds a
+sub post (子投稿) under an activity they like. The sub post stays attached to
+that main post.
 
-## Identity — the no-account trade-off
+### The community curates itself
 
-There is **no login**. On first load the app calls Supabase anonymous
-sign-in, and the returned user id (plus a cached profile) is the device's
-identity. Profile, stamp progress, posts, and votes are keyed to it.
+<p align="center">
+  <img src="img/help/main-and-sub-activity.png" width="400" alt="A place's board: a round main post in the center with square sub posts around it">
+</p>
 
-The trade-off: **clearing browser data or switching phones loses the
-identity** — there's no way to recover it, because there's no account to log
-back into. This is an intentional simplification for a low-friction public
-demo. If cross-device continuity is ever needed, an optional "link email" step
-can be added later without changing the model.
+The app has no report button. Votes do the work.
 
-## Offline behavior
+- **10 dislikes hide a post.** A database trigger hides it.
+- **Likes change a sub post's shape.** A sub card starts square and gets
+  rounder with each like. At 10 likes it is a circle, the same shape as its
+  main post.
 
-Feeds (toukou, duck, archive) cache their last good result in IndexedDB via
-localforage, and a service worker precaches the app shell. On flaky signal or
-airplane mode the app shows the cached content with an "offline" banner instead
-of a white screen. The 3D globe still needs live tiles, so the map itself is
-online-only; the feed screens are the ones that work offline.
+Unwanted behavior drops out of view. Welcome behavior becomes more visible.
+Over time, the boards build a record of the river's tacit knowledge.
 
-## Demo script (~3 minutes)
+### Kamo Collection
 
-1. **Open the app** → the intro sweeps from the far side of the globe, across
-   Japan and Kyoto, to the Kamogawa Delta, then lands on the 3D map. (First
-   visit also asks three quick onboarding questions and opens a 5-slide
-   tutorial; mobile gets a one-time "drag to look around" hint.)
-2. **Tap the language toggle** (EN/JA) — every string flips instantly.
-3. **Tap an ❗ marker** → a short cinematic (framing highlight → fly-in →
-   orbit) settles on that spot, then a popup shows its photo/phrase with a
-   button into **that place's own toukou web** — main activity in its type
-   color, subs orbiting. Thumbs up/down a post; tap **+** on the main to add
-   a sub with a photo; watch it animate in. Open a second browser
-   side-by-side to see posts/votes appear live. The report button (bottom
-   right of a card) asks for a reason.
-4. **Tap "See earlier posts"** on a busy main (or the **Archive** button) →
-   the cookpad-style history; open one to see its full sub timeline, archived
-   posts included.
-5. Back on the map, an active gathering shows a **"post an activity"** button
-   to add a new main of your own.
-6. **Tap a 🦆 marker** → the **duck page**: share a photo, and see the 10-slot
-   stamp card.
-7. **Scan a duck-spot QR** (`scripts/generate-qr.ts`) while standing near the
-   spot → the stamp is collected (try it from far away to see the geofence
-   reject it). Not near a spot? Flip **"Test mode: use Delta location"** on
-   the scan page to try the flow without traveling. Collect all 10 → the
-   **certificate** unlocks.
-8. **Turn on airplane mode and reload** a feed screen → cached content with an
-   offline banner, not a blank page.
+<p align="center">
+  <img src="img/help/kamo-collection.png" width="300" alt="The Kamo Collection stamp card with eight empty slots">
+</p>
 
-## Project layout
+Eight Kamo-Jizo spots line the river, from the Kamogawa Delta to Gojo Bridge.
+Visitors collect each spot by scanning its QR code or by taking a photo there.
+The server grants a stamp only within 120 m of the spot. Collecting all eight
+unlocks a certificate.
 
-```
-src/
-  app/          routes, error boundary
-  screens/      Intro, MainMap, Onboarding, Tutorial, ToukouMap, Archive, Duck
-  components/    shared UI (language toggle, map-style switch, stale banner)
-  lib/          supabase, identity, map3d, river, toukou, archive, duck, geo, cache
-  i18n/         en.json, ja.json
-  store/        zustand (identity)
-supabase/
-  migrations/   versioned SQL schema + policies + triggers + RPC
-  seed.sql      demo activity types, events, duck spots
-scripts/        generate-qr.ts, seed-demo-community.mjs, seed-demo-ducks.mjs
-img/marks/      custom duck + exclamation SVG marks
-img/kamogawa/   real Kamogawa photos, incl. the shared placeholder image
-```
+The team made several Kamo-Jizo designs, so each find can be a small surprise.
+Collecting their own photos of each figure gives visitors a reason to keep
+exploring.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what each screen does
-and how the data model fits together.
+## Field test
 
-## Contributing
+The team placed a Kamo-Jizo at the Kamogawa Delta in the evening. **2 of the 3
+groups that walked past stopped to photograph it.** The sample is small. The
+result suggests that the figure can draw people in without a sign.
 
-Small, focused commits; `npm run build && npm run lint && npm run typecheck`
-clean before committing. Schema changes are a new file in
-`supabase/migrations/` — never edit one that's already applied. See
-[`CLAUDE.md`](CLAUDE.md) for the fuller set of working rules (identity model,
-server-authoritative rules, design tokens) this repo follows.
+## Design principle: 用の美 (beauty of use)
+
+用の美 is a Japanese craft idea: beauty that comes from everyday use. The team
+checked both parts of the design against four qualities.
+
+| | Web app | Kamo-Jizo |
+|---|---|---|
+| **Time** (時間) | Posts build up, so the culture carries forward. | It stays in place and becomes part of the scenery. |
+| **Room to explore** (余白) | Visitors add their own experiences. | People choose how to engage: find it, photograph it, collect it. |
+| **Relationships** (間柄) | Main and sub posts connect residents and visitors. | It connects visitors with the river's culture. |
+| **People first** (人中心) | Culture passes on through what people do, not through rules. | Taking a photo leads people to the website. |
+
+## Try it
+
+Open https://kamocomo.vercel.app. The app is designed for phones. Switch
+languages with the EN/JA toggle.
+
+1. Watch the intro fly from space to the Kamogawa Delta. On a first visit,
+   answer three short questions and read the tutorial.
+2. Tap a duck marker. The camera flies to that place. Tap **More activities**
+   to open the place's board.
+3. On the board, like or dislike a sub post. Hold a card to see it in full. Tap
+   **+** to add a sub post, or **Post an activity** to add a main post.
+4. Back on the map, open the **Duck collection**. Turn on **Test mode** to
+   collect ducks without being at the river.
+5. Open the **Kamogawa Log** to see how each place has been used over time.
+
+## My role
+
+Engineer and designer, one of six team members. I built the whole app:
+frontend, database, map integration, and deployment. I also worked with the
+team on the concept and the interaction design.
+
+## Engineering highlights
+
+- **The database enforces the rules.** Postgres row-level security, triggers,
+  and RPCs enforce one vote per person, the 10-dislike hide, and the 120 m
+  distance check for stamps. They also cap each main post at 10 sub posts and
+  move older ones to the archive. The client's checks only improve the
+  interface.
+- **No accounts.** Supabase anonymous sign-in gives each device an identity.
+  Visitors use the app without signing up.
+- **A 3D map at ¥0 a month.** Google Maps `Map3DElement` renders the river. The
+  camera stays inside the Kamogawa corridor. A daily quota cap keeps map loads
+  inside Google's free allowance.
+- **Built for a weak signal.** Boards, the archive, and the collection save
+  their last result in IndexedDB. A service worker caches the app shell. When
+  the phone is offline, the app shows saved content instead of a blank page.
+- **Live, bilingual boards.** Supabase Realtime sends new posts and votes to
+  every open board. A d3-force layout arranges the posts. Every string exists
+  in Japanese and English.
+
+## Tech stack
+
+- React 18, TypeScript, Vite, React Router, Zustand
+- Google Maps Platform: `Map3DElement` for 3D, the classic Maps JavaScript API for 2D
+- Supabase: Postgres, anonymous auth, Storage, Realtime
+- Tailwind CSS v4, i18next, d3-force
+- localforage and `vite-plugin-pwa` for offline support
+- Hosted on Vercel
+
+## Team
+
+Team 2 (二班), インタラクションデザインⅡ, 2026:
+菊田 あやめ, 加谷 圭, 木村 美尋, 林 憲生, 服部 愛子, Muhammad Naimi Nafis bin Norlisam
+
+## More
+
+- [Setup guide](docs/SETUP.md): run the app locally or deploy your own copy
+- [Architecture](docs/ARCHITECTURE.md): screens, data model, and design tokens
+- [Security notes](docs/SECURITY.md): what was tested with a visitor's privileges
